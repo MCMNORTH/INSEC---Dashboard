@@ -2,6 +2,10 @@
 
 ## Projet : Intégration de la brique Dashboard de gestion administrative et académique
 
+> [!IMPORTANT]
+> Merci de respecter les tâches qui vous sont attribuées.
+> Chaque fonctionnalité doit être développée dans une branche dédiée et soumise via une Pull Request distincte avant toute intégration dans la branche principale.
+
 **Établissement :** INSEC (Centre associé CNAM INTEC)
 
 ---
