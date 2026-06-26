@@ -1,237 +1,120 @@
-# Cahier des Charges Fonctionnel et Technique
+# Cahier des Charges Fonctionnel et Technique (V2 — Révisée MVP)
 
-## Projet : Intégration de la brique Dashboard de gestion administrative et académique
-
-> [!IMPORTANT]
-> Merci de respecter les tâches qui vous sont attribuées.
-> Chaque fonctionnalité doit être développée dans une branche dédiée et soumise via une Pull Request distincte avant toute intégration dans la branche principale.
-
-**Établissement :** INSEC (Centre associé CNAM INTEC)
+## Projet : Tableau de Bord d'Administration et de Suivi Académique
+**Établissement :** INSEC (Centre associé CNAM INTEC)  
+**Auteurs :** Équipe Projet INSEC  
 
 ---
 
 ## 1. Contexte et Objectifs du Projet
-L'INSEC est un centre associé du CNAM INTEC. Dans le cadre de ses activités de formation, l'INSEC assure le suivi administratif et académique des étudiants inscrits aux différentes formations proposées.
+Dans le cadre de ses activités de formation, l'INSEC (Centre associé CNAM INTEC) assure le suivi de ses apprenants. Ce projet consiste à développer un **tableau de bord opérationnel centralisé** destiné à l'équipe administrative et au corps professoral. 
 
-L'objectif de ce projet est de mettre en place un tableau de bord centralisé permettant d'assurer le suivi des étudiants, des inscriptions, des paiements, des examens, des enseignants et des activités administratives de l'INSEC.
-
-Ce tableau de bord doit constituer un outil de gestion et de suivi opérationnel destiné à faciliter le travail quotidien de l'administration, plutôt qu'un simple outil de pilotage ou de présentation.
+L'outil vise à éradiquer l'éparpillement des données sur des supports isolés, à fiabiliser le suivi financier des inscriptions, et à proposer des indicateurs de synthèse fiables en temps réel pour la direction de l'établissement.
 
 ---
 
-## 2. Objectifs Métier et Problématiques à Résoudre
-Le système doit répondre de manière exhaustive aux besoins de l'administration de l'INSEC en résolvant les problématiques suivantes :
+## 2. Définition stricte du Périmètre du MVP (Version 1)
+Pour garantir une livraison rapide, fiable et conforme aux recommandations, le périmètre de la V1 a été volontairement restreint aux modules indispensables.
 
-- **Centralisation des données :** Éliminer l'éparpillement des informations relatives aux étudiants, aux enseignants et aux administrateurs sur des fichiers distincts.
-- **Suivi rigoureux des parcours :** Assurer la traçabilité des inscriptions initiales et l'historique des réinscriptions annuelles.
-- **Contrôle et recouvrement financier :** Suivre en temps réel la situation financière de chaque étudiant (montants dus, payés, soldes restants) afin de fiabiliser les encaissements.
-- **Pilotage académique et évaluations :** Gérer l'affectation des Unités d'Enseignement (UE) et automatiser l'organisation des examens, la saisie des notes et le calcul des moyennes.
-- **Conformité des dossiers (Gestion Documentaire) :** Suivre les statuts des pièces administratives requises pour valider réglementairement le dossier d'un étudiant.
+###  Ce qui est INCLUS dans le MVP :
+1. **Authentification et gestion des droits** pour les profils administratifs et enseignants.
+2. **Gestion complète du cycle de vie des Étudiants** Opérations CRUD complètes et sécurisées.
+3. **Cartographie et Affectation des Enseignants :** Gestion dynamique par année académique.
+4. **Suivi Rigoureux des Paiements :** Enregistrement des flux unitaires réels.
+5. **Tableau de Bord Principal :** Consolidation en temps réel des 5 indicateurs clés d'activité.
 
----
-
-## 3. Spécifications Fonctionnelles (Périmètre des Modules)
-
-### 3.1 Module de Gestion des Paiements
-Ce module assure la traçabilité financière complète. Pour chaque étudiant et par inscription, le système doit stocker et calculer :
-
-- Le montant total dû au titre de l'année académique.
-- Le montant cumulé déjà payé.
-- Le solde restant dû (**calculé automatiquement**) : `Montant Dû - Montant Payé`
-
-- L'historique chronologique détaillé de chaque transaction (dates et montants unitaires).
-- Le statut dynamique du paiement : 
-- **À jour** (solde égal à 0) 
-- **Partiellement payé** (solde > 0 et montant payé > 0) 
-- **Impayé** (montant payé = 0)
----
-
-### 3.2 Module de Gestion des Inscriptions
-Ce module structure le parcours de l'apprenant au sein de l'établissement :
-
-- Association obligatoire d'un étudiant à une formation et à une année académique spécifique.
-- Enregistrement de la date exacte d'inscription.
-- Suivi du statut de l'inscription (Active, Suspendue, Validée, Abandonnée).
-- Conservation de l'historique des réinscriptions successives pour l'analyse des parcours à long terme.
+###  Ce qui est HORS MVP (Reporté aux versions ultérieures) :
+* Espace de connexion ou rôle direct pour les **Étudiants**.
+* Module de gestion documentaire avancée.
+* Planification des sessions d'examens et calcul automatisé des moyennes semestrielles.
 
 ---
 
-### 3.3 Module de Gestion des Unités d'Enseignement (UE)
-Ce module assure le suivi pédagogique des matières enseignées :
+## 3. Spécifications Fonctionnelles des Modules
 
-- Cartographie des UE suivies par chaque étudiant en fonction de sa formation.
-- Suivi du statut de validation de l'UE (En cours, Validée).
-- Centralisation des notes obtenues par module et calcul automatisé des moyennes générales et par semestre.
+### 3.1 Authentification et Gestion des Rôles 
+Le système propose un écran de connexion unique distribuant deux profils d'utilisateurs via une table centrale commune (`USERS`) :
+* **Administrateur :** Accès total (Lecture/Écriture/Suppression sécurisée) sur l'ensemble de l'application (étudiants, enseignants, inscriptions, paiements).
+* **Enseignant :** Accès en lecture seule à son profil et aux listes d'étudiants rattachés aux matières qu'il dispense. Aucun accès aux modules financiers.
 
----
+### 3.2 Module : Gestion des Étudiants 
+L'application doit permettre aux administrateurs d'exécuter les cas d'utilisation suivants :
+* **Ajouter / Modifier :** Enregistrement d'un nouvel apprenant ou mise à jour de sa fiche.
+* **Supprimer :** Restreint par contrainte d'intégrité (interdit si un historique financier est existant).
+* **Rechercher :** Par recherche textuelle dynamique sur le `Nom` ou le `Prénom`.
+* **Filtrer :** Tri multicritère par `Formation` rattachée et par `Année académique`.
 
-### 3.4 Module de Gestion des Examens
-Ce module gère le cycle de vie des sessions de contrôle des connaissances :
+**Champs minimaux obligatoires par étudiant :**
+* Nom
+* Prénom
+* E-mail (Unique, vérifié par expression régulière)
+* Formation (Liaison dynamique)
+* Année académique (Format normalisé ex: `2025-2026`)
+* Statut (Valeurs harmonisées :  `Actif`, `Suspendu`, `Diplômé`, `Abandon`)
 
-- Planification et création des sessions d'examens (ex : Première session, Session de rattrapage).
-- Gestion des listes d'inscriptions des candidats par épreuve.
-- Enregistrement du statut de présence (Présent, Absent) lors de l'épreuve.
-- Saisie, publication officielle des notes et conservation de l'historique des résultats.
+###3.3 Module : Inscriptions et Suivi Financier
+Afin de garantir un modèle hautement normalisé et sans redondance, le système sépare l'engagement de facturation des flux réels :
+* **Facturation fixe :** Le montant global dû pour l'année scolaire est consigné une seule fois dans le dossier d'`INSCRIPTION`.
+* **Flux de transactions :** La table `PAIEMENT` fait office de carnet de reçus chronologique. Elle enregistre chaque versement unitaire effectif (`montant_verse`).
+* **Calculs dynamiques :** Le *Solde Restant à payer* et le *Statut financier global* ne sont pas stockés en base de données. Ils sont calculés à la volée par le code applicatif pour éviter tout risque d'incohérence comptable.
 
----
+**Champs obligatoires suivis en base :**
+* Montant dû initial (lié à l'inscription)
+* Montant versé (propre à chaque transaction unitaire)
+* Date de paiement (horodatage automatique)
+* Statut de la transaction (`Validée`, `Rejetée`, `En attente`)
 
-### 3.5 Module de Gestion Documentaire
-Ce module assure la conformité légale des dossiers administratifs des étudiants :
-
-- Indexation et stockage des pièces justificatives (Pièces d'identité, Diplômes antérieurs requis, Relevés de notes).
-- Enregistrement de la date de dépôt de chaque fichier.
-- Système d'alerte visuel permettant d'identifier immédiatement pour chaque dossier les pièces reçues et les pièces manquantes.
-
----
-
-## 4. Spécifications Techniques : Modèle Logique de Données (MLD)
-Pour implémenter ce système sur une base de données relationnelle (type MySQL/phpMyAdmin), l'architecture des tables doit suivre strictement les règles de normalisation et corriger les erreurs de couplage du schéma initial.
-
----
-
-### 4.1 Description Exhaustive des Tables
-
-#### Table : ETUDIANT
-- **id_etudiant** (Clé Primaire - PK) : Identifiant unique de l'étudiant.
-- **nom** (Varchar) : Nom de famille.
-- **prenom** (Varchar) : Prénom.
-- **date_naissance** (Date) : Date de naissance.
-- **email** (Varchar) : Adresse électronique unique.
-- **telephone** (Varchar) : Numéro de téléphone.
-- **adresse** (Varchar) : Adresse postale complète.
-- **date_creation** (DateTime) : Horodatage de la création du profil.
+### 3.4 Module : Tableau de Bord Principal 
+La page d'accueil de l'administration affiche instantanément une vue synthétique consolidée composée de **5 indicateurs obligatoires** :
+1.  **Nombre total d'étudiants :** Somme globale de tous les étudiants enregistrés en base.
+2.  **Étudiants actifs :** Nombre d'étudiants ayant le statut `Actif` sur l'année académique courante.
+3.  **Paiements encaissés :** Somme cumulée de toutes les transactions financières au statut `Validée`.
+4.  **Paiements en attente :** Somme cumulée de tous les soldes restants à recouvrer auprès des étudiants non à jour.
+5.  **Nombre d'enseignants :** Total des enseignants enregistrés dans le système.
 
 ---
 
-#### Table : ENSEIGNANT
-- **id_enseignant** (Clé Primaire - PK) : Identifiant unique du formateur.
-- **nom** (Varchar) : Nom de famille.
-- **prenom** (Varchar) : Prénom.
-- **email** (Varchar) : Adresse électronique professionnelle.
-- **telephone** (Varchar) : Numéro de téléphone.
-- **specialite** (Varchar) : Domaine d'expertise principal.
+## 4. Spécifications Techniques et Normalisation de la Base de Données
+
+Pour répondre aux exigences de cohérence et supprimer les redondances, le Modèle Logique de Données (MLD) cible est arrêté selon la structure normalisée suivante :
+
+### 4.1 Structure des Tables (MVP)
+* **USERS :** `id_user (PK)`, email (unique), password (haché), role (`admin`, `enseignant`), created_at.
+* **ADMINISTRATEUR :** `id_admin (PK)`, id_user (FK), nom, prenom, telephone.
+* **ENSEIGNANT :** `id_enseignant (PK)`, id_user (FK), nom, prenom, telephone, specialite.
+* **FORMATION :** `id_formation (PK)`, nom_formation , code_formation, niveau.
+* **ANNEE_ACADEMIQUE :** `id_annee` (PK), `annee_scolaire` (UNIQUE).
+* **INSCRIPTION :** `id_inscription (PK)`, id_etudiant (FK), id_formation (FK), id_annee (FK), date_inscription, montant_total_du, statut (`Active`, `Terminée`, `Abandon`).
+* **ETUDIANT :** `id_etudiant (PK)`, nom, prenom, email (unique), telephone, statut_etudiant (`Actif`, `Suspendu`, `Diplômé`).
+* **PAIEMENT :** `id_paiement (PK)`, id_inscription (FK), montant_verse, date_paiement, statut_transaction.
+* **UE :** `id_ue (PK)`, id_formation (FK), code_ue (unique), intitule, credit.
+* **AFFECTATION_ENSEIGNANT :** `id_affectation (PK)`, id_ue (FK), id_enseignant (FK), id_annee (FK).
+
+### 4.2 Règles d'Intégrité et Contraintes Métier 
+Pour sécuriser le stockage avant le développement, les verrous suivants sont configurés au niveau SQL :
+* **Unicité stricte :** L'adresse e-mail de l'utilisateur, l'e-mail de l'étudiant et le code de l'UE sont strictement uniques en base.
+* **Sécurisation Anti-Doublon :** Une contrainte d'unicité composite sur le triplet `(id_etudiant, id_formation, id_annee)` dans la table `INSCRIPTION` interdit à un étudiant d'être inscrit deux fois à la même formation pour une même année académique.
+* **Sécurité Comptable :** Application d’une règle `ON DELETE RESTRICT` sur les clés étrangères d'inscription et d'étudiant. Le SGBD bloque automatiquement toute tentative de suppression d'un profil si une transaction comptable lui est adossée dans la table `PAIEMENT`.
 
 ---
 
-#### Table : ADMINISTRATEUR
-- **id_admin** (Clé Primaire - PK) : Identifiant unique du gestionnaire.
-- **nom** (Varchar) : Nom de famille.
-- **prenom** (Varchar) : Prénom.
-- **email** (Varchar) : Adresse électronique de l'administration.
-- **role** (Varchar) : Niveau d'accréditation et fonction (ex: Secrétariat, Direction).
+### 4.3 Schéma Relationnel mis à jour
+Le graphique mis à jour respectant l'ensemble de ces spécifications et liaisons est intégré sous la nomenclature officielle :
 
----
-
-#### Table : FORMATION
-- **id_formation** (Clé Primaire - PK) : Identifiant unique de la formation.
-- **nom_formation** (Varchar) : Intitulé officiel du cursus.
-- **niveau** (Varchar) : Grade universitaire (Licence, Master, Certificat).
-- **duree** (Varchar) : Durée réglementaire du cursus.
-
----
-
-#### Table : UE (UNITÉ D'ENSEIGNEMENT)
-- **id_ue** (Clé Primaire - PK) : Identifiant unique du module.
-- **id_formation** (Clé Étrangère - FK) : Référence vers la formation de rattachement.
-- **id_enseignant** (Clé Étrangère - FK) : Référence vers l'enseignant responsable.
-- **code_ue** (Varchar) : Code d'identification académique.
-- **intitule** (Varchar) : Libellé de la matière.
-- **credits** (Integer) : Nombre de crédits ECTS associés.
-
----
-
-#### Table : INSCRIPTION
-- **id_inscription** (Clé Primaire - PK) : Identifiant unique de l'acte d'inscription.
-- **id_etudiant** (Clé Étrangère - FK) : Référence vers l'étudiant concerné.
-- **id_formation** (Clé Étrangère - FK) : Référence vers la formation suivie.
-- **annee_academique** (Varchar) : Année universitaire concernée (ex : 2026-2027).
-- **date_inscription** (Date) : Date d'enregistrement de l'inscription.
-- **statut** (Varchar) : État de l'inscription (Active, Terminée, Abandonnée).
-
----
-
-#### Table : PAIEMENT
-- **id_paiement** (Clé Primaire - PK) : Identifiant unique de la transaction.
-- **id_inscription** (Clé Étrangère - FK) : Référence obligatoire vers l'inscription annuelle rattachée (et non vers l'examen ou l'étudiant directement).
-- **montant_du** (Decimal) : Montant total facturé pour l'année.
-- **montant_paye** (Decimal) : Montant versé lors de cette transaction.
-- **solde_restant** (Decimal) : Reste à recouvrer.
-- **date_paiement** (DateTime) : Date et heure de l'encaissement.
-- **statut** (Varchar) : Indicateur du statut financier.
-
----
-
-#### Table : EXAMEN
-- **id_examen** (Clé Primaire - PK) : Identifiant unique de l'épreuve.
-- **id_ue** (Clé Étrangère - FK) : Référence vers l'UE sur laquelle porte l'examen.
-- **session** (Varchar) : Type de session (Principale, Rattrapage).
-- **date_examen** (DateTime) : Date et heure programmées de l'évaluation.
-
----
-
-#### Table : DOCUMENT
-- **id_document** (Clé Primaire - PK) : Identifiant unique du document.
-- **id_etudiant** (Clé Étrangère - FK) : Référence vers l'étudiant propriétaire de la pièce.
-- **type_document** (Varchar) : Nature de la pièce (CNI, Diplôme, Relevé).
-- **nom_fichier** (Varchar) : Lien ou nom physique du fichier stocké sur le serveur.
-- **date_depot** (DateTime) : Date de téléversement.
-- **statut** (Varchar) : État de validation (Reçu, Manquant, Rejeté).
-
----
-
-#### Table de liaison : SUIVRE_UE (Relation Plusieurs-à-Plusieurs entre Étudiant et UE)
-- **id_etudiant** (Clé Étrangère - FK) : Liaison vers l'étudiant.
-- **id_ue** (Clé Étrangère - FK) : Liaison vers l'unité d'enseignement.
-- **statut_ue** (Varchar) : État d'avancement (En cours, Validée).
-- **note_matiere** (Decimal) : Note finale calculée pour le module.
-
----
-
-#### Table de liaison : PARTICIPER_EXAMEN (Relation Plusieurs-à-Plusieurs entre Étudiant et Examen)
-- **id_etudiant** (Clé Étrangère - FK) : Liaison vers le candidat.
-- **id_examen** (Clé Étrangère - FK) : Liaison vers l'épreuve spécifique.
-- **presence** (Varchar) : Statut de présence (Présent, Absent).
-- **note_examen** (Decimal) : Note brute obtenue à l'examen.
-- **date_publication** (DateTime) : Date de mise à disposition de la note.
-
----
-
-### 4.2 Règles de Gestion et Cardinalités du Modèle
-Les relations structurant la base de données de l'INSEC s'appuient sur les règles métier et les couples de cardinalités suivants :
-
-- **Relation entre ETUDIANT et INSCRIPTION (Libellé : Possède)** : cardinalité **1,1** côté INSCRIPTION et **1,N** côté ETUDIANT.
-- **Relation entre FORMATION et INSCRIPTION (Libellé : Est suivie via)** : cardinalité **1,1** côté INSCRIPTION et **0,N** côté FORMATION.
-- **Relation entre FORMATION et UE (Libellé : Est composée de)** : cardinalité **1,1** côté UE et **1,N** côté FORMATION.
-- **Relation entre ENSEIGNANT et UE (Libellé : Dispense)** : cardinalité **1,1** côté UE et **0,N** côté ENSEIGNANT.
-- **Relation entre INSCRIPTION et PAIEMENT (Libellé : Génère)** : cardinalité **1,1** côté PAIEMENT et **1,N** côté INSCRIPTION.
-- **Relation entre UE et EXAMEN (Libellé : Fait l'objet de)** : cardinalité **1,1** côté EXAMEN et **0,N** côté UE.
-- **Relation entre ETUDIANT et DOCUMENT (Libellé : Dépose)** : cardinalité **1,1** côté DOCUMENT et **0,N** côté ETUDIANT.
-
-
-
-### 4.3 Diagramme Relationnel de la Base de Données
 ![Schéma Relationnel - INSEC](schema_relationnel_INSEC.png)
+---
 
-## 5. Choix Techniques et Pile Technologique (Stack)
+## 5. Pile Technologique (Stack Technique)
+* **Base de données :** `MySQL 8.0` (Moteur InnoDB requis pour la stricte exécution des clés étrangères et des contraintes d'intégrité relationnelles).
+* **Back-End (Framework) :** `PHP 8.2+` avec **Laravel 11**. Recours à l'ORM *Eloquent* pour sécuriser les requêtes contre les injections SQL et au package natif d'authentification pour scinder les sessions Admin/Enseignant.
+* **Front-End :** `HTML5` / `Tailwind CSS` (Interface d'administration adaptative et épurée) et bibliothèque `Chart.js` pour la mise en forme graphique des indicateurs financiers et volumétriques du Dashboard.
 
-Pour que le dashboard soit à la fois rapide, sécurisé et facile à faire évoluer par la suite, nous avons choisi de partir sur une pile technologique standard, moderne et très robuste. Voici ce qu'on compte utiliser pour le développement du MVP et des versions futures :
+---
 
-### 5.1 Base de données (SGBD)
-* **Notre choix :** MySQL (avec l'interface phpMyAdmin pour la gestion locale).
-* **Justification** C'est un système relationnel open-source qui a fait ses preuves. Comme notre modèle logique de données (MLD) repose sur beaucoup de relations et de clés étrangères, MySQL va nous permettre de gérer proprement les jointures. C'est indispensable pour l'application, notamment pour calculer automatiquement les soldes des paiements à partir des inscriptions ou pour sortir les moyennes de notes par UE.
+## 6. Règles de Contribution et Workflow GitHub 
+Afin de collaborer efficacement et de maintenir la stabilité de la branche principale, l'équipe s'astreint au respect de la méthodologie Git suivante :
 
-### 5.2 Back-End (Logique serveur et sécurité)
-* **Notre choix :** PHP 8.2 (ou version supérieure) avec le framework **Laravel (v11)**.
-* **Justification** Laravel est aujourd'hui incontournable pour développer des applications web robustes. Il possède des outils natifs qui vont nous faire gagner un temps précieux :
-  - L'ORM Eloquent, qui rend la communication avec la base MySQL hyper fluide et lisible dans le code.
-  - Un système de gestion des sessions et d'authentification déjà sécurisé (ce qui est parfait pour notre MVP qui demande de séparer les accès entre Administrateurs, Enseignants et Étudiants).
-  - Une gestion simplifiée des fichiers pour le module documentaire (stockage des pièces d'identité et diplômes).
-
-### 5.3 Front-End (Interface utilisateur et graphiques)
-* **Notre choix :** HTML5, CSS3 (avec le framework **Tailwind CSS**) et JavaScript.
-* **Justification** On veut une interface propre, moderne et surtout *responsive* (utilisable sur ordinateur comme sur tablette par l'administration de l'INSEC). Tailwind CSS nous permet de styliser les tableaux rapidement sans surcharger le code. 
-* Pour rendre le tableau de bord principal vivant et visuel, on va intégrer la bibliothèque **Chart.js**. Elle servira à afficher les graphiques dynamiques (comme les indicateurs des montants encaissés, la répartition des étudiants par formation ou le volume d'étudiants actifs).
-
-### 5.4 Outils de travail et environnement
-* **Versionnage :** Git et GitHub pour travailler proprement à deux avec Aminetou et vous partager l'avancement du code.
-* **Serveur local :** WAMP pour faire tourner l'environnement PHP/MySQL sur nos machines pendant la phase de dev.
+1.  **Isolation des développements :** Interdiction formelle de pousser (*push*) du code directement sur la branche principale (`main`). Chaque ticket ou tâche issue des problèmes GitHub doit faire l'objet d'une branche locale dédiée nommée selon le formalisme : `feature/nom-de-la-fonctionnalite` (ex: `feature/authentification-roles`).
+2.  **Soumission par Pull Request (PR) :** Le rapatriement du code sur la branche `main` s’effectue exclusivement par le biais d'une *Pull Request* sur l'interface GitHub.
+3.  **Nommage Explicite et Liaison :** Les titres des PR et des commits associés doivent être explicites et mentionner formellement le numéro du problème résolu (ex: `Feat: Implémentation du filtrage multi-critères, Closes #6`).
+4.  **Revue de Code et Intégration :** Aucune fusion (*merge*) ne sera tolérée sans une relecture croisée de l'encadrant et la résolution préalable d'éventuels conflits de fusion.
