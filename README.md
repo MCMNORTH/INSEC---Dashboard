@@ -1,120 +1,58 @@
-# Cahier des Charges Fonctionnel et Technique (V2 — Révisée MVP)
+<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
-## Projet : Tableau de Bord d'Administration et de Suivi Académique
-**Établissement :** INSEC (Centre associé CNAM INTEC)  
-**Auteurs :** Équipe Projet INSEC  
+<p align="center">
+<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+</p>
 
----
+## About Laravel
 
-## 1. Contexte et Objectifs du Projet
-Dans le cadre de ses activités de formation, l'INSEC (Centre associé CNAM INTEC) assure le suivi de ses apprenants. Ce projet consiste à développer un **tableau de bord opérationnel centralisé** destiné à l'équipe administrative et au corps professoral. 
+Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
 
-L'outil vise à éradiquer l'éparpillement des données sur des supports isolés, à fiabiliser le suivi financier des inscriptions, et à proposer des indicateurs de synthèse fiables en temps réel pour la direction de l'établissement.
+- [Simple, fast routing engine](https://laravel.com/docs/routing).
+- [Powerful dependency injection container](https://laravel.com/docs/container).
+- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
+- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
+- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
+- [Robust background job processing](https://laravel.com/docs/queues).
+- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
 
----
+Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-## 2. Définition stricte du Périmètre du MVP (Version 1)
-Pour garantir une livraison rapide, fiable et conforme aux recommandations, le périmètre de la V1 a été volontairement restreint aux modules indispensables.
+## Learning Laravel
 
-###  Ce qui est INCLUS dans le MVP :
-1. **Authentification et gestion des droits** pour les profils administratifs et enseignants.
-2. **Gestion complète du cycle de vie des Étudiants** Opérations CRUD complètes et sécurisées.
-3. **Cartographie et Affectation des Enseignants :** Gestion dynamique par année académique.
-4. **Suivi Rigoureux des Paiements :** Enregistrement des flux unitaires réels.
-5. **Tableau de Bord Principal :** Consolidation en temps réel des 5 indicateurs clés d'activité.
+Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
 
-###  Ce qui est HORS MVP (Reporté aux versions ultérieures) :
-* Espace de connexion ou rôle direct pour les **Étudiants**.
-* Module de gestion documentaire avancée.
-* Planification des sessions d'examens et calcul automatisé des moyennes semestrielles.
+In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
 
----
+You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
 
-## 3. Spécifications Fonctionnelles des Modules
+## Agentic Development
 
-### 3.1 Authentification et Gestion des Rôles 
-Le système propose un écran de connexion unique distribuant deux profils d'utilisateurs via une table centrale commune (`USERS`) :
-* **Administrateur :** Accès total (Lecture/Écriture/Suppression sécurisée) sur l'ensemble de l'application (étudiants, enseignants, inscriptions, paiements).
-* **Enseignant :** Accès en lecture seule à son profil et aux listes d'étudiants rattachés aux matières qu'il dispense. Aucun accès aux modules financiers.
+Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
 
-### 3.2 Module : Gestion des Étudiants 
-L'application doit permettre aux administrateurs d'exécuter les cas d'utilisation suivants :
-* **Ajouter / Modifier :** Enregistrement d'un nouvel apprenant ou mise à jour de sa fiche.
-* **Supprimer :** Restreint par contrainte d'intégrité (interdit si un historique financier est existant).
-* **Rechercher :** Par recherche textuelle dynamique sur le `Nom` ou le `Prénom`.
-* **Filtrer :** Tri multicritère par `Formation` rattachée et par `Année académique`.
+```bash
+composer require laravel/boost --dev
 
-**Champs minimaux obligatoires par étudiant :**
-* Nom
-* Prénom
-* E-mail (Unique, vérifié par expression régulière)
-* Formation (Liaison dynamique)
-* Année académique (Format normalisé ex: `2025-2026`)
-* Statut (Valeurs harmonisées :  `Actif`, `Suspendu`, `Diplômé`, `Abandon`)
+php artisan boost:install
+```
 
-###3.3 Module : Inscriptions et Suivi Financier
-Afin de garantir un modèle hautement normalisé et sans redondance, le système sépare l'engagement de facturation des flux réels :
-* **Facturation fixe :** Le montant global dû pour l'année scolaire est consigné une seule fois dans le dossier d'`INSCRIPTION`.
-* **Flux de transactions :** La table `PAIEMENT` fait office de carnet de reçus chronologique. Elle enregistre chaque versement unitaire effectif (`montant_verse`).
-* **Calculs dynamiques :** Le *Solde Restant à payer* et le *Statut financier global* ne sont pas stockés en base de données. Ils sont calculés à la volée par le code applicatif pour éviter tout risque d'incohérence comptable.
+Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
 
-**Champs obligatoires suivis en base :**
-* Montant dû initial (lié à l'inscription)
-* Montant versé (propre à chaque transaction unitaire)
-* Date de paiement (horodatage automatique)
-* Statut de la transaction (`Validée`, `Rejetée`, `En attente`)
+## Contributing
 
-### 3.4 Module : Tableau de Bord Principal 
-La page d'accueil de l'administration affiche instantanément une vue synthétique consolidée composée de **5 indicateurs obligatoires** :
-1.  **Nombre total d'étudiants :** Somme globale de tous les étudiants enregistrés en base.
-2.  **Étudiants actifs :** Nombre d'étudiants ayant le statut `Actif` sur l'année académique courante.
-3.  **Paiements encaissés :** Somme cumulée de toutes les transactions financières au statut `Validée`.
-4.  **Paiements en attente :** Somme cumulée de tous les soldes restants à recouvrer auprès des étudiants non à jour.
-5.  **Nombre d'enseignants :** Total des enseignants enregistrés dans le système.
+Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
 
----
+## Code of Conduct
 
-## 4. Spécifications Techniques et Normalisation de la Base de Données
+In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
 
-Pour répondre aux exigences de cohérence et supprimer les redondances, le Modèle Logique de Données (MLD) cible est arrêté selon la structure normalisée suivante :
+## Security Vulnerabilities
 
-### 4.1 Structure des Tables (MVP)
-* **USERS :** `id_user (PK)`, email (unique), password (haché), role (`admin`, `enseignant`), created_at.
-* **ADMINISTRATEUR :** `id_admin (PK)`, id_user (FK), nom, prenom, telephone.
-* **ENSEIGNANT :** `id_enseignant (PK)`, id_user (FK), nom, prenom, telephone, specialite.
-* **FORMATION :** `id_formation (PK)`, nom_formation , code_formation, niveau.
-* **ANNEE_ACADEMIQUE :** `id_annee` (PK), `annee_scolaire` (UNIQUE).
-* **INSCRIPTION :** `id_inscription (PK)`, id_etudiant (FK), id_formation (FK), id_annee (FK), date_inscription, montant_total_du, statut (`Active`, `Terminée`, `Abandon`).
-* **ETUDIANT :** `id_etudiant (PK)`, nom, prenom, email (unique), telephone, statut_etudiant (`Actif`, `Suspendu`, `Diplômé`).
-* **PAIEMENT :** `id_paiement (PK)`, id_inscription (FK), montant_verse, date_paiement, statut_transaction.
-* **UE :** `id_ue (PK)`, id_formation (FK), code_ue (unique), intitule, credit.
-* **AFFECTATION_ENSEIGNANT :** `id_affectation (PK)`, id_ue (FK), id_enseignant (FK), id_annee (FK).
+If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
 
-### 4.2 Règles d'Intégrité et Contraintes Métier 
-Pour sécuriser le stockage avant le développement, les verrous suivants sont configurés au niveau SQL :
-* **Unicité stricte :** L'adresse e-mail de l'utilisateur, l'e-mail de l'étudiant et le code de l'UE sont strictement uniques en base.
-* **Sécurisation Anti-Doublon :** Une contrainte d'unicité composite sur le triplet `(id_etudiant, id_formation, id_annee)` dans la table `INSCRIPTION` interdit à un étudiant d'être inscrit deux fois à la même formation pour une même année académique.
-* **Sécurité Comptable :** Application d’une règle `ON DELETE RESTRICT` sur les clés étrangères d'inscription et d'étudiant. Le SGBD bloque automatiquement toute tentative de suppression d'un profil si une transaction comptable lui est adossée dans la table `PAIEMENT`.
+## License
 
----
-
-### 4.3 Schéma Relationnel mis à jour
-Le graphique mis à jour respectant l'ensemble de ces spécifications et liaisons est intégré sous la nomenclature officielle :
-
-![Schéma Relationnel - INSEC](schema_relationnel_INSEC.png)
----
-
-## 5. Pile Technologique (Stack Technique)
-* **Base de données :** `MySQL 8.0` (Moteur InnoDB requis pour la stricte exécution des clés étrangères et des contraintes d'intégrité relationnelles).
-* **Back-End (Framework) :** `PHP 8.2+` avec **Laravel 11**. Recours à l'ORM *Eloquent* pour sécuriser les requêtes contre les injections SQL et au package natif d'authentification pour scinder les sessions Admin/Enseignant.
-* **Front-End :** `HTML5` / `Tailwind CSS` (Interface d'administration adaptative et épurée) et bibliothèque `Chart.js` pour la mise en forme graphique des indicateurs financiers et volumétriques du Dashboard.
-
----
-
-## 6. Règles de Contribution et Workflow GitHub 
-Afin de collaborer efficacement et de maintenir la stabilité de la branche principale, l'équipe s'astreint au respect de la méthodologie Git suivante :
-
-1.  **Isolation des développements :** Interdiction formelle de pousser (*push*) du code directement sur la branche principale (`main`). Chaque ticket ou tâche issue des problèmes GitHub doit faire l'objet d'une branche locale dédiée nommée selon le formalisme : `feature/nom-de-la-fonctionnalite` (ex: `feature/authentification-roles`).
-2.  **Soumission par Pull Request (PR) :** Le rapatriement du code sur la branche `main` s’effectue exclusivement par le biais d'une *Pull Request* sur l'interface GitHub.
-3.  **Nommage Explicite et Liaison :** Les titres des PR et des commits associés doivent être explicites et mentionner formellement le numéro du problème résolu (ex: `Feat: Implémentation du filtrage multi-critères, Closes #6`).
-4.  **Revue de Code et Intégration :** Aucune fusion (*merge*) ne sera tolérée sans une relecture croisée de l'encadrant et la résolution préalable d'éventuels conflits de fusion.
+The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
