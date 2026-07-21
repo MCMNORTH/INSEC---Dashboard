@@ -22,3 +22,22 @@ Route::get('/dashboard', function () {
 })->middleware(['auth'])->name('dashboard');
 
 require __DIR__.'/auth.php';
+
+
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/admin/dashboard', function () {
+        if (auth()->user()->role !== 'admin') {
+            abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
+        }
+        return view('admin.dashboard');
+    });
+
+
+    Route::get('/enseignant/dashboard', function () {
+        if (auth()->user()->role !== 'enseignant') {
+            abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
+        }
+        return view('enseignant.dashboard');
+    });
+});
