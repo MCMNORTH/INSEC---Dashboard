@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Espace INSEC - Mot de passe oublié</title>
-    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -64,18 +63,12 @@
         
         <div class="col-md-7 right-side">
             <h3 class="fw-bold mb-1" style="color: #1E2761;">Mot de passe oublié ?</h3>
-            <p class="text-muted mb-4" style="font-size: 13px;">
-                Aucun problème. Indiquez-nous votre adresse e-mail et nous vous enverremo un lien de réinitialisation.
+            <p class="text-muted mb-3" style="font-size: 13px;">
+                Entrez votre adresse e-mail pour recevoir le code de vérification.
             </p>
 
             
-            @if (session('status'))
-                <div class="alert alert-success mb-4" role="alert" style="font-size: 13px;">
-                    {{ session('status') }}
-                </div>
-            @endif
-
-            <form method="POST" action="{{ route('password.email') }}">
+            <form method="GET" action="{{ url('/verify-email-code') }}">
                 @csrf
 
                 <div class="mb-3">
@@ -84,7 +77,7 @@
                 </div>
 
                 <button type="submit" class="btn btn-custom py-2 fw-semibold mb-3">
-                    Envoyer le lien de réinitialisation
+                    Envoyer le code de vérification
                 </button>
 
                 <div class="text-center mt-3" style="font-size: 13px;">
