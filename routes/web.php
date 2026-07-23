@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\EtudiantController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,11 +34,13 @@ Route::middleware(['auth'])->group(function () {
         return view('admin.dashboard');
     });
 
-
     Route::get('/enseignant/dashboard', function () {
         if (auth()->user()->role !== 'enseignant') {
             abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
         }
         return view('enseignant.dashboard');
     });
+
+    Route::get('/etudiants', [EtudiantController::class, 'index'])->name('etudiants.index');
+    Route::get('/etudiants/{etudiant}', [EtudiantController::class, 'show'])->name('etudiants.show');
 });
