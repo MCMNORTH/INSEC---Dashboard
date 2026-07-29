@@ -41,6 +41,6 @@ Route::middleware(['auth'])->group(function () {
         return view('enseignant.dashboard');
     });
 
-    Route::get('/etudiants', [EtudiantController::class, 'index'])->name('etudiants.index');
-    Route::get('/etudiants/{etudiant}', [EtudiantController::class, 'show'])->name('etudiants.show');
+    Route::resource('etudiants', EtudiantController::class)
+        ->only(['index', 'show', 'create', 'store']);
 });
