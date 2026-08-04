@@ -4,6 +4,7 @@
 
         <div class="flex-1 p-6">
             <a href="{{ route('etudiants.index') }}" class="text-sm text-gray-500">&larr; Retour à la liste</a>
+            
 
             @php $inscription = $etudiant->inscriptions->last(); @endphp
 

@@ -84,4 +84,56 @@ class EtudiantController extends Controller
 
         return redirect()->route('etudiants.show', $etudiant)->with('status', 'Étudiant ajouté avec succès.');
     }
+
+    public function edit(Etudiant $etudiant)
+    {
+        $etudiant->load('inscriptions');
+        $formations = Formation::orderBy('nom')->get();
+        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
+        return view('etudiants.edit', compact('etudiant', 'formations', 'annees'));
+    }
+
+    public function update(Request $request, Etudiant $etudiant)
+    {
+        $validated = $request->validate([
+            'nom' => 'required|string|max:255',
+            'prenom' => 'required|string|max:255',
+            'email' => 'required|email|unique:etudiants,email,' . $etudiant->id_etudiant . ',id_etudiant',
+            'telephone' => 'nullable|string|max:30',
+            'statut_etudiant' => 'required|in:Actif,Suspendu,Diplômé,Abandon',
+            'formation_id' => 'required|exists:formations,id',
+            'annee_academique_id' => 'required|exists:annees_academiques,id',
+        ]);
+
+        $etudiant->update([
+            'nom' => $validated['nom'],
+            'prenom' => $validated['prenom'],
+            'email' => $validated['email'],
+            'telephone' => $validated['telephone'] ?? null,
+            'statut_etudiant' => $validated['statut_etudiant'],
+        ]);
+
+        $inscription = $etudiant->inscriptions->last();
+        if ($inscription) {
+            $inscription->update([
+                'id_formation' => $validated['formation_id'],
+                'id_annee_academique' => $validated['annee_academique_id'],
+            ]);
+        } else {
+            Inscription::create([
+                'id_etudiant' => $etudiant->id_etudiant,
+                'id_formation' => $validated['formation_id'],
+                'id_annee_academique' => $validated['annee_academique_id'],
+            ]);
+        }
+
+        return redirect()->route('etudiants.show', $etudiant)->with('status', 'Étudiant modifié avec succès.');
+    }
+
+    public function destroy(Etudiant $etudiant)
+    {
+        $etudiant->delete();
+
+        return redirect()->route('etudiants.index')->with('status', 'Étudiant supprimé.');
+    }
 }
