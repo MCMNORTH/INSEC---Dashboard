@@ -2,16 +2,12 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\EtudiantController;
+use App\Http\Controllers\EnseignantController;
 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
-|
 */
 
 Route::get('/', function () {
@@ -24,9 +20,10 @@ Route::get('/dashboard', function () {
 
 require __DIR__.'/auth.php';
 
-
-
+// Routes protégées par l'authentification
 Route::middleware(['auth'])->group(function () {
+    
+    // Dashboards selon les rôles
     Route::get('/admin/dashboard', function () {
         if (auth()->user()->role !== 'admin') {
             abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
@@ -41,6 +38,16 @@ Route::middleware(['auth'])->group(function () {
         return view('enseignant.dashboard');
     });
 
-    Route::resource('etudiants', EtudiantController::class)
-        ->only(['index', 'show', 'create', 'store']);
+    // Gestion des Étudiants (Toutes les fonctions CRUD)
+    Route::resource('etudiants', EtudiantController::class);
+
+    // Gestion des Enseignants (Toutes les fonctions CRUD)
+    Route::resource('enseignants', EnseignantController::class);
+
+    // Gestion des Affectations des Enseignants
+    Route::post('/enseignants/{enseignant}/affectations', [EnseignantController::class, 'storeAffectation'])
+        ->name('enseignants.affectations.store');
+
+    Route::delete('/affectations/{affectation}', [EnseignantController::class, 'destroyAffectation'])
+        ->name('affectations.destroy');  
 });

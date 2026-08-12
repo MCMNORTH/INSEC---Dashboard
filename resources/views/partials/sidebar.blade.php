@@ -10,7 +10,9 @@
         <a href="{{ route('etudiants.index') }}" class="block px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('etudiants.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}">
             Étudiants
         </a>
-        <span class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed">Enseignants</span>
+        <a href="{{ route('enseignants.index') }}" class="block px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('enseignants.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}">
+            Enseignants
+        </a>
         <span class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed">Finances</span>
     </nav>
 </aside>
