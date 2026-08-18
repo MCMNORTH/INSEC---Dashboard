@@ -88,6 +88,12 @@ class EtudiantController extends Controller
         return redirect()->route('etudiants.index')->with('status', 'Étudiant ajouté avec succès.');
     }
 
+    public function show(Etudiant $etudiant)
+    {
+    $etudiant->load(['inscriptions.formation', 'inscriptions.anneeAcademique']);
+    return view('etudiants.show', compact('etudiant'));
+    }
+
     public function edit(Etudiant $etudiant)
     {
         $etudiant->load('inscriptions');
@@ -137,9 +143,14 @@ class EtudiantController extends Controller
 
     public function destroy(Etudiant $etudiant)
     {
-        $etudiant->inscriptions()->delete();
-        $etudiant->delete();
+    $aUnHistoriqueFinancier = $etudiant->inscriptions()->whereHas('versements')->exists();
 
-        return redirect()->route('etudiants.index')->with('status', 'Étudiant supprimé avec succès.');
+    if ($aUnHistoriqueFinancier) {
+        return redirect()->route('etudiants.index')->with('error', "Impossible de supprimer cet étudiant : un historique financier existe.");
+    }
+
+    $etudiant->delete();
+
+    return redirect()->route('etudiants.index')->with('status', 'Étudiant supprimé.');
     }
 }

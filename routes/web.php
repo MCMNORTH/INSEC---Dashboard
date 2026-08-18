@@ -50,4 +50,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::delete('/affectations/{affectation}', [EnseignantController::class, 'destroyAffectation'])
         ->name('affectations.destroy');  
+
+    Route::get('/finances', [App\Http\Controllers\FinanceController::class, 'index'])->name('finances.index'); 
+    Route::post('/finances/{etudiant}/montant', [App\Http\Controllers\FinanceController::class, 'updateMontant'])->name('finances.montant.update');
+    Route::post('/finances/{etudiant}/versements', [App\Http\Controllers\FinanceController::class, 'storeVersement'])->name('finances.versements.store');
 });

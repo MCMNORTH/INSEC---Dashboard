@@ -3,6 +3,17 @@
         @include('partials.sidebar')
 
         <div class="flex-1 p-6">
+            @if (session('error'))
+                <div class="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4">
+                    {{ session('error') }}
+                </div>
+            @endif
+            @if (session('status'))
+                <div class="bg-green-50 text-green-700 text-sm p-3 rounded-lg mb-4">
+                    {{ session('status') }}
+                </div>
+            @endif
+
             <div class="flex items-center justify-between mb-4">
                 <h1 class="text-xl font-bold text-[#1E2761]">Gestion des étudiants</h1>
                 <a href="{{ route('etudiants.create') }}" class="bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-1 shadow-sm">
@@ -13,7 +24,7 @@
             <!-- Barre de Recherche et Filtres -->
             <form method="GET" action="{{ route('etudiants.index') }}" class="flex gap-2 mb-4">
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Rechercher un étudiant..." class="flex-1 border-gray-300 rounded-lg text-sm focus:ring-blue-500">
-                
+
                 <select name="formation_id" class="border-gray-300 rounded-lg text-sm text-gray-600 focus:ring-blue-500">
                     <option value="">Formation</option>
                     @foreach($formations as $formation)
@@ -47,7 +58,8 @@
                     <tbody class="divide-y divide-gray-100 text-sm">
                         @forelse ($etudiants as $etudiant)
                             @php $derniereInscription = $etudiant->inscriptions->last(); @endphp
-                            <tr class="hover:bg-gray-50 transition">
+                            <tr class="hover:bg-gray-50 transition cursor-pointer"
+                                onclick="window.location='{{ route('etudiants.show', $etudiant) }}'">
                                 <td class="p-3 font-medium text-gray-800">{{ $etudiant->nom }} {{ $etudiant->prenom }}</td>
                                 <td class="p-3 text-gray-600">{{ $etudiant->email }}</td>
                                 <td class="p-3 text-gray-600">{{ $derniereInscription?->formation?->nom ?? '-' }}</td>
@@ -61,10 +73,10 @@
                                         {{ $etudiant->statut_etudiant }}
                                     </span>
                                 </td>
-                                <td class="p-3 text-right whitespace-nowrap">
+                                <td class="p-3 text-right whitespace-nowrap" onclick="event.stopPropagation()">
                                     <a href="{{ route('etudiants.edit', $etudiant) }}" class="text-gray-400 hover:text-blue-600 mr-2">✏️</a>
-                                    <button type="button" 
-                                            onclick="confirmDelete('{{ route('etudiants.destroy', $etudiant) }}', '{{ addslashes($etudiant->nom.' '.$etudiant->prenom) }}')" 
+                                    <button type="button"
+                                            onclick="confirmDelete('{{ route('etudiants.destroy', $etudiant) }}', '{{ addslashes($etudiant->nom.' '.$etudiant->prenom) }}')"
                                             class="text-gray-400 hover:text-red-600">
                                         🗑️
                                     </button>
@@ -85,7 +97,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE CONFIRMATION DE SUPPRESSION (Conforme à votre Image 3) -->
+    <!-- MODAL DE CONFIRMATION DE SUPPRESSION -->
     <div id="deleteModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
         <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl transform transition-all">
             <div class="flex items-center gap-3 mb-3">
@@ -94,7 +106,7 @@
                 </div>
                 <h3 class="text-lg font-bold text-red-600">Confirmer la suppression</h3>
             </div>
-            
+
             <p class="text-sm text-gray-600 mb-6">
                 Voulez-vous vraiment supprimer <span id="deleteItemName" class="font-semibold text-gray-800"></span> ? Cette action est irréversible.
             </p>
