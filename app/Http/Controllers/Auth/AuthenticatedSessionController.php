@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
-use App\Providers\RouteServiceProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -28,24 +27,31 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request)
     {
+
         $request->authenticate();
 
+        
         $request->session()->regenerate();
 
         
         $user = Auth::user();
 
-
-        if ($user->role === 'admin') {
-            return redirect()->intended('/admin/dashboard'); 
-        } elseif ($user->role === 'enseignant') {
-            return redirect()->intended('/enseignant/dashboard'); 
+        
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            return redirect()->intended('/admin/dashboard');
         }
 
-        
-        return redirect()->intended(RouteServiceProvider::HOME);
+
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login')
+            ->withErrors([
+                'email' => 'Accès réservé aux administrateurs uniquement.',
+            ]);
     }
-    
 
     /**
      * Destroy an authenticated session.
