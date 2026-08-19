@@ -19,6 +19,13 @@ Route::get('/', function () {
 });
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('/dashboard', function () {
+        if (auth()->user()->role === 'admin') {
+            return view('admin.dashboard');
+        }
+        return view('enseignant.dashboard');
+    })->name('dashboard');
+
     Route::get('/admin/dashboard', function () {
         if (auth()->user()->role !== 'admin') {
             abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
@@ -28,7 +35,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/enseignant/dashboard', function () {
         if (auth()->user()->role !== 'enseignant') {
-            abort(403, "Vous n'êtes pas autorisé à accéder à هذه page.");
+            abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
         }
         return view('enseignant.dashboard');
     });
