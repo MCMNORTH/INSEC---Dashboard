@@ -30,13 +30,13 @@ Route::middleware(['auth'])->group(function () {
         if (auth()->user()->role !== 'admin') {
             abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
         }
-        return view('admin.dashboard');
+        return view('dashboard');
     });
     Route::get('/enseignant/dashboard', function () {
         if (auth()->user()->role !== 'enseignant') {
             abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
         }
-        return view('enseignant.dashboard');
+        return view('enseignants.dashboard');
     });
 
     // Gestion des Étudiants (Toutes les fonctions CRUD)
