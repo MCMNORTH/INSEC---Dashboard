@@ -3,56 +3,40 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Mail\WelcomeUserMail;
 use App\Models\User;
+use App\Providers\RouteServiceProvider;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
+use Illuminate\Validation\Rules;
 
 class RegisteredUserController extends Controller
 {
-    /**
-     * Display the registration view.
-     */
     public function create()
     {
         return view('auth.register');
     }
 
-    /**
-     * Handle an incoming registration request.
-     */
     public function store(Request $request)
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // Générer un mot de passe temporaire
-        $temporaryPassword = Str::random(10);
-
-        // Créer l'utilisateur
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($temporaryPassword),
+            'password' => Hash::make($request->password),
+            'role' => 'admin',
         ]);
 
         event(new Registered($user));
 
-        // Envoyer le mot de passe temporaire par e-mail
-        Mail::to($user->email)->send(
-            new WelcomeUserMail($user, $temporaryPassword)
-        );
+        Auth::login($user);
 
-        // Rediriger vers la page de connexion
-        return redirect()->route('login')
-            ->with(
-                'success',
-                'Votre compte a été créé. Le mot de passe a été envoyé à votre adresse e-mail.'
-            );
+        return redirect(RouteServiceProvider::HOME);
     }
 }
