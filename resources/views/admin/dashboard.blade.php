@@ -1,139 +1,151 @@
-<!DOCTYPE html>
-<html lang="fr" dir="ltr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>INSEC - Espace Admin</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <style>
-        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .sidebar { background-color: #ffffff; min-height: 100vh; border-right: 1px solid #eaeaea; padding: 20px; }
-        .brand-title { font-weight: 800; color: #1E2761; font-size: 20px; }
-        .brand-subtitle { font-size: 12px; color: #6c757d; margin-bottom: 30px; }
-        .nav-link-custom { display: flex; align-items: center; padding: 12px 15px; border-radius: 10px; color: #495057; text-decoration: none; font-weight: 500; margin-bottom: 5px; }
-        .nav-link-custom.active, .nav-link-custom:hover { background-color: #1E2761; color: #ffffff; }
-        .nav-link-custom i { margin-right: 12px; font-size: 18px; }
-        .main-content { padding: 30px; }
-        .card-metric { border: none; border-radius: 15px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); background: #ffffff; height: 100%; }
-        .card-metric .icon-box { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; background: #eef2f7; color: #1E2761; }
-        .metric-value { font-size: 24px; font-weight: 700; color: #1E2761; margin-bottom: 2px; }
-        .metric-label { font-size: 13px; color: #6c757d; }
-        .chart-card { background: #ffffff; border: none; border-radius: 15px; padding: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); height: 100%; }
-    </style>
-</head>
-<body>
+<x-app-layout>
+    <div class="flex min-h-screen bg-gray-100">
+        @include('partials.sidebar')
 
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 sidebar d-none d-md-block">
-                <div class="px-2">
-                    <div class="brand-title">INSEC</div>
-                    <div class="brand-subtitle">Espace admin</div>
-                </div>
-                <nav>
-                    <a href="#" class="nav-link-custom active"><i class="fa-solid fa-table-cells-large"></i> Tableau de bord</a>
-                    <a href="#" class="nav-link-custom"><i class="fa-solid fa-users"></i> Étudiants</a>
-                    <a href="#" class="nav-link-custom"><i class="fa-solid fa-wallet"></i> Finances</a>
-                </nav>
-            </div>
+        <div class="flex-1 p-6">
 
-            <!-- Main Content Area -->
-            <div class="col-md-9 col-lg-10 main-content">
-                <!-- Top Bar -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h4 class="fw-bold text-dark mb-0">Bonjour, Administrateur</h4>
-                    <div class="dropdown">
-                        <button class="btn btn-light border rounded-pill px-3 py-2 dropdown-toggle d-flex align-items-center" type="button" data-bs-toggle="dropdown">
-                            <span class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center me-2" style="width: 30px; height: 30px; font-size: 12px;">A</span>
-                            <span class="fw-semibold text-secondary" style="font-size: 14px;">Administrateur</span>
+           <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <h1 class="text-xl font-bold text-[#1E2761]">Bonjour, Administrateur</h1>
+    <div class="flex items-center gap-2">
+        <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" class="flex items-center gap-2 bg-white border border-[#D4AF37] rounded-full pl-1 pr-3 py-1 hover:bg-gray-50">
+                            <span class="w-7 h-7 rounded-full bg-[#1E2761] text-white flex items-center justify-center text-xs font-bold">
+                                {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                            </span>
+                            <span class="text-sm font-medium text-gray-700">Administrateur</span>
+                            <i class="fa-solid fa-chevron-down text-xs text-gray-400"></i>
                         </button>
-                    </div>
-                </div>
-
-                <!-- Metrics Row -->
-                <div class="row g-3 mb-4">
-                    <div class="col-xl-2 col-md-4 col-sm-6">
-                        <div class="card-metric">
-                            <div class="icon-box"><i class="fa-solid fa-users"></i></div>
-                            <div class="metric-value">312</div>
-                            <div class="metric-label">Étudiants total</div>
-                        </div>
-                    </div>
-                    <div class="col-xl-2 col-md-4 col-sm-6">
-                        <div class="card-metric">
-                            <div class="icon-box"><i class="fa-solid fa-check"></i></div>
-                            <div class="metric-value">268</div>
-                            <div class="metric-label">Étudiants actifs</div>
-                        </div>
-                    </div>
-                    <div class="col-xl-3 col-md-4 col-sm-6">
-                        <div class="card-metric">
-                            <div class="icon-box"><i class="fa-solid fa-wallet"></i></div>
-                            <div class="metric-value">18,4M</div>
-                            <div class="metric-label">Encaissés (MRU)</div>
-                        </div>
-                    </div>
-                    <div class="col-xl-3 col-md-4 col-sm-6">
-                        <div class="card-metric">
-                            <div class="icon-box"><i class="fa-solid fa-clock"></i></div>
-                            <div class="metric-value">3,1M</div>
-                            <div class="metric-label">En attente (MRU)</div>
-                        </div>
-                    </div>
-                    <div class="col-xl-2 col-md-4 col-sm-6">
-                        <div class="card-metric">
-                            <div class="icon-box"><i class="fa-solid fa-chalkboard-user"></i></div>
-                            <div class="metric-value">24</div>
-                            <div class="metric-label">Enseignants</div>
+                        <div x-show="open" @click.away="open = false" x-cloak class="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10">
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
+                                    Se déconnecter
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
 
-                <!-- Charts Row -->
-                <div class="row g-3">
-                    <div class="col-lg-8">
-                        <div class="chart-card">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h6 class="fw-bold text-secondary mb-0">Paiements encaissés par mois</h6>
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <button type="button" class="btn btn-dark active">7 mois</button>
-                                    <button type="button" class="btn btn-outline-secondary">12 mois</button>
-                                </div>
-                            </div>
-                            <div style="height: 220px; display: flex; align-items: flex-end; justify-content: space-around; padding-top: 20px;">
-                                <div class="bg-primary rounded-top" style="width: 35px; height: 40%;"></div>
-                                <div class="bg-primary rounded-top" style="width: 35px; height: 65%;"></div>
-                                <div class="bg-primary rounded-top" style="width: 35px; height: 55%;"></div>
-                                <div class="bg-primary rounded-top" style="width: 35px; height: 75%;"></div>
-                                <div class="bg-primary rounded-top" style="width: 35px; height: 60%;"></div>
-                                <div class="bg-primary rounded-top" style="width: 35px; height: 85%;"></div>
-                                <div class="bg-primary rounded-top" style="width: 35px; height: 70%;"></div>
-                            </div>
-                            <div class="d-flex justify-content-around text-muted mt-2" style="font-size: 12px;">
-                                <span>Fév</span><span>Mar</span><span>Avr</span><span>Mai</span><span>Jun</span><span>Jul</span><span>Aoû</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="chart-card text-center">
-                            <h6 class="fw-bold text-secondary mb-3 text-start">Répartition des statuts</h6>
-                            <div class="d-inline-flex justify-content-center align-items-center position-relative my-2" style="width: 150px; height: 150px; border: 15px solid #28a745; border-radius: 50%; border-top-color: #ffc107; border-right-color: #dc3545;">
-                            </div>
-                            <div class="d-flex justify-content-center gap-3 mt-3" style="font-size: 11px; font-weight: 600;">
-                                <span class="text-success">● Actif</span>
-                                <span class="text-warning">● Suspendu</span>
-                                <span class="text-danger">● Abandon</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<!-- Cartes de statistiques -->
 
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+    <!-- Étudiants total -->
+    <div class="bg-amber-100/60 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
+        <i class="fa-solid fa-users text-[#1E2761] text-xl mb-3 block"></i>
+        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $totalEtudiants }}</p>
+        <p class="text-sm text-gray-500">Étudiants total</p>
+    </div>
+
+    <!-- Étudiants actifs -->
+    <div class="bg-emerald-50 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
+        <i class="fa-solid fa-check text-[#1E2761] text-xl mb-3 block"></i>
+        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $etudiantsActifs }}</p>
+        <p class="text-sm text-gray-500">Étudiants actifs</p>
+    </div>
+
+    <!-- Encaissés -->
+    <div class="bg-amber-50 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
+        <i class="fa-solid fa-credit-card text-[#1E2761] text-xl mb-3 block"></i>
+        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $encaissesFormatted }}</p>
+        <p class="text-sm text-gray-500">Encaissés (MRU)</p>
+    </div>
+
+    <!-- En attente -->
+    <div class="bg-orange-50 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
+        <i class="fa-solid fa-clock text-[#1E2761] text-xl mb-3 block"></i>
+        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $enAttenteFormatted }}</p>
+        <p class="text-sm text-gray-500">En attente (MRU)</p>
+    </div>
+
+    <!-- Enseignants -->
+    <div class="bg-purple-100/60 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
+        <i class="fa-solid fa-display text-[#1E2761] text-xl mb-3 block"></i>
+        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $totalEnseignants }}</p>
+        <p class="text-sm text-gray-500">Enseignants</p>
+    </div>
+</div><!-- Graphiques -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- Graphique Paiements (Ajusté pour centrer le canvas) -->
+    <div class="lg:col-span-2 bg-white rounded-xl shadow p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-bold text-gray-600">Paiements encaissés par mois</h2>
+            <div class="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-medium">
+                <button id="btn6mois" onclick="afficherPeriode(6)" class="px-3 py-1.5 bg-[#1E2761] text-white">6 mois</button>
+                <button id="btn12mois" onclick="afficherPeriode(12)" class="px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50">12 mois</button>
             </div>
+        </div>
+        
+        <!-- Conteneur flex-1 avec my-auto pour centrer verticalement le canvas -->
+        <div class="flex-1 flex items-center justify-center my-auto">
+            <canvas id="paiementsChart" height="90"></canvas>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    <!-- Graphique Répartition des statuts -->
+    <div class="bg-white rounded-xl shadow p-5 flex flex-col justify-between">
+        <h2 class="text-sm font-bold text-gray-600 mb-3">Répartition des statuts</h2>
+        <div>
+            <canvas id="statutsChart" height="180"></canvas>
+        </div>
+        <div class="flex justify-center gap-3 mt-3 text-xs font-semibold">
+            <span class="text-emerald-600">● Actif</span>
+            <span class="text-amber-600">● Suspendu</span>
+            <span class="text-red-600">● Abandon</span>
+        </div>
+    </div>
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        const moisLabels12 = {!! json_encode($moisLabels12) !!};
+        const paiements12 = {!! json_encode($paiements12) !!};
+
+        const ctx = document.getElementById('paiementsChart');
+        const paiementsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: moisLabels12.slice(0, 6),
+                datasets: [{
+                    label: 'Encaissés (MRU)',
+                    data: paiements12.slice(0, 6),
+                    backgroundColor: '#1E2761',
+                    borderRadius: 6,
+                    maxBarThickness: 40,
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        function afficherPeriode(nbMois) {
+            paiementsChart.data.labels = moisLabels12.slice(0, nbMois);
+            paiementsChart.data.datasets[0].data = paiements12.slice(0, nbMois);
+            paiementsChart.update();
+
+            document.getElementById('btn6mois').className = nbMois === 6
+                ? 'px-3 py-1.5 bg-[#1E2761] text-white'
+                : 'px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50';
+            document.getElementById('btn12mois').className = nbMois === 12
+                ? 'px-3 py-1.5 bg-[#1E2761] text-white'
+                : 'px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50';
+        }
+
+        new Chart(document.getElementById('statutsChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Actif', 'Suspendu', 'Abandon'],
+                datasets: [{
+                    data: [{{ $statutActif }}, {{ $statutSuspendu }}, {{ $statutAbandon }}],
+                    backgroundColor: ['#65a30d', '#d97706', '#dc2626'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                cutout: '70%'
+            }
+        });
+    </script>
+</x-app-layout>
