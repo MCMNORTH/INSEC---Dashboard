@@ -3,22 +3,18 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\EtudiantController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\Auth\PasswordResetController;
-
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
 */
-
 // Page d'accueil (Login)
 Route::get('/', function () {
     return view('auth.login');
 });
-
 Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth'])->name('dashboard');
-
 Route::middleware(['auth'])->group(function () {
     // Dashboards selon les rôles
     Route::get('/admin/dashboard', function () {
@@ -33,7 +29,6 @@ Route::middleware(['auth'])->group(function () {
         }
         return view('enseignants.dashboard');
     });
-
     // Gestion des Étudiants (Toutes les fonctions CRUD)
     Route::resource('etudiants', EtudiantController::class);
     // Gestion des Enseignants (Toutes les fonctions CRUD)
@@ -46,8 +41,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/finances', [App\Http\Controllers\FinanceController::class, 'index'])->name('finances.index');
     Route::post('/finances/{etudiant}/montant', [App\Http\Controllers\FinanceController::class, 'updateMontant'])->name('finances.montant.update');
     Route::post('/finances/{etudiant}/versements', [App\Http\Controllers\FinanceController::class, 'storeVersement'])->name('finances.versements.store');
+    Route::get('/finances/{etudiant}/facture', [App\Http\Controllers\FinanceController::class, 'facture'])->name('finances.facture');
+    Route::put('/finances/versements/{versement}', [App\Http\Controllers\FinanceController::class, 'updateVersement'])->name('finances.versements.update');
+    Route::delete('/finances/versements/{versement}', [App\Http\Controllers\FinanceController::class, 'destroyVersement'])->name('finances.versements.destroy');
 });
-
 // Réinitialisation de mot de passe (Custom)
 Route::controller(PasswordResetController::class)->group(function () {
     Route::get('forgot-password', 'showForgotForm')->name('password.request');
@@ -57,5 +54,4 @@ Route::controller(PasswordResetController::class)->group(function () {
     Route::get('reset-password-custom', 'showResetForm')->name('password.reset.form');
     Route::post('reset-password-custom', 'updatePassword')->name('password.update.custom');
 });
-
 require __DIR__.'/auth.php';

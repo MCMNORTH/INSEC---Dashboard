@@ -24,6 +24,15 @@
             {{-- Onglet Étudiants --}}
             <div id="panel-etudiants" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div class="lg:col-span-2 bg-white rounded-xl shadow overflow-hidden">
+                    <div class="p-3 border-b space-y-2">
+                        <input type="text" id="rechercheEtudiant" onkeyup="filtrerEtudiants()" placeholder="🔍 Rechercher un étudiant par nom..." class="w-full rounded-lg border-gray-300 text-sm">
+                        <div class="flex gap-2">
+                            <button type="button" onclick="filtrerParStatut('tous', this)" class="filtre-statut px-3 py-1 rounded-full text-xs font-medium bg-[#1E2761] text-white">Tous</button>
+                            <button type="button" onclick="filtrerParStatut('Soldé', this)" class="filtre-statut px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Soldé</button>
+                            <button type="button" onclick="filtrerParStatut('Partiel', this)" class="filtre-statut px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Partiel</button>
+                            <button type="button" onclick="filtrerParStatut('Impayé', this)" class="filtre-statut px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Impayé</button>
+                        </div>
+                    </div>
                     <table class="w-full text-sm border-collapse">
                         <thead>
                             <tr class="bg-[#1E2761] text-white">
@@ -34,14 +43,18 @@
                         </thead>
                         <tbody>
                             @forelse ($etudiants as $etudiant)
-                                @php $inscription = $etudiant->inscriptions->last(); @endphp
-                                <tr class="border-b hover:bg-gray-50 cursor-pointer {{ $etudiantSelectionne?->id_etudiant === $etudiant->id_etudiant ? 'bg-blue-50' : '' }}"
+                                @php
+                                    $inscription = $etudiant->inscriptions->last();
+                                    $statut = $inscription?->statut_paiement ?? 'Non inscrit';
+                                @endphp
+                                <tr class="ligne-etudiant border-b hover:bg-gray-50 cursor-pointer {{ $etudiantSelectionne?->id_etudiant === $etudiant->id_etudiant ? 'bg-blue-50' : '' }}"
+                                    data-nom="{{ strtolower($etudiant->nom.' '.$etudiant->prenom) }}"
+                                    data-statut="{{ $statut }}"
                                     onclick="window.location='{{ route('finances.index', ['etudiant' => $etudiant->id_etudiant]) }}'">
                                     <td class="p-3 text-gray-900">{{ $etudiant->nom }} {{ $etudiant->prenom }}</td>
                                     <td class="p-3 text-gray-700">{{ number_format($inscription?->solde_restant ?? 0, 0, ',', ' ') }}</td>
                                     <td class="p-3">
                                         @php
-                                            $statut = $inscription?->statut_paiement ?? 'Non inscrit';
                                             $styles = ['Soldé' => 'bg-green-100 text-green-700', 'Partiel' => 'bg-amber-100 text-amber-700', 'Impayé' => 'bg-red-100 text-red-700'];
                                         @endphp
                                         <span class="inline-block px-3 py-1 text-xs font-medium rounded-full {{ $styles[$statut] ?? 'bg-gray-100 text-gray-700' }}">
@@ -71,6 +84,10 @@
                             <p class="text-xs text-blue-200 mt-4">Solde restant (calculé)</p>
                             <p class="text-lg font-bold text-amber-400">{{ number_format($inscriptionSelectionnee->solde_restant, 0, ',', ' ') }} MRU</p>
 
+                            <a href="{{ route('finances.facture', $etudiantSelectionne) }}" target="_blank" class="block w-full text-center bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-2 rounded-lg mt-4">
+                                📄 Voir / Imprimer la facture
+                            </a>
+
                             <form method="POST" action="{{ route('finances.montant.update', $etudiantSelectionne) }}" class="border-t border-blue-400/30 mt-4 pt-4 flex items-end gap-2">
                                 @csrf
                                 <div class="flex-1">
@@ -86,10 +103,37 @@
                                 <p class="text-xs text-blue-200 mb-2">Derniers versements</p>
                                 <div class="space-y-2 mb-4">
                                     @forelse ($inscriptionSelectionnee->versements->sortByDesc('date_versement') as $versement)
-                                        <div class="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2 text-xs">
-                                            <span>{{ \Carbon\Carbon::parse($versement->date_versement)->format('d/m/Y') }}</span>
-                                            <span>{{ number_format($versement->montant, 0, ',', ' ') }}</span>
-                                            <span class="{{ $versement->statut === 'Validée' ? 'text-green-400' : 'text-amber-400' }}">{{ $versement->statut }}</span>
+                                        <div class="bg-white/10 rounded-lg px-3 py-2 text-xs">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <span>{{ \Carbon\Carbon::parse($versement->date_versement)->format('d/m/Y') }}</span>
+                                                <span>{{ number_format($versement->montant, 0, ',', ' ') }}</span>
+                                                <span class="{{ $versement->statut === 'Validée' ? 'text-green-400' : 'text-amber-400' }}">{{ $versement->statut }}</span>
+                                            </div>
+                                            <div class="flex gap-2 justify-end mt-1">
+                                                <button type="button" onclick="document.getElementById('edit-versement-{{ $versement->id }}').classList.toggle('hidden')" class="text-blue-200 hover:text-white underline">
+                                                    Modifier
+                                                </button>
+                                                <form method="POST" action="{{ route('finances.versements.destroy', $versement) }}" onsubmit="return confirm('Supprimer ce versement ?');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="text-red-300 hover:text-red-100 underline">
+                                                        Supprimer
+                                                    </button>
+                                                </form>
+                                            </div>
+                                            <form id="edit-versement-{{ $versement->id }}" method="POST" action="{{ route('finances.versements.update', $versement) }}" class="hidden mt-2 space-y-1 bg-white/10 p-2 rounded-lg">
+                                                @csrf
+                                                @method('PUT')
+                                                <input type="number" name="montant" min="1" value="{{ $versement->montant }}" class="w-full rounded-lg text-gray-900 text-xs" required>
+                                                <input type="date" name="date_versement" value="{{ $versement->date_versement }}" class="w-full rounded-lg text-gray-900 text-xs" required>
+                                                <select name="statut" class="w-full rounded-lg text-gray-900 text-xs" required>
+                                                    <option value="Validée" @selected($versement->statut === 'Validée')>Validée</option>
+                                                    <option value="En attente" @selected($versement->statut === 'En attente')>En attente</option>
+                                                </select>
+                                                <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white text-xs font-medium px-3 py-1 rounded-lg">
+                                                    Enregistrer
+                                                </button>
+                                            </form>
                                         </div>
                                     @empty
                                         <p class="text-xs text-blue-200">Aucun versement.</p>
@@ -183,6 +227,28 @@
     </div>
 
     <script>
+        let statutActif = 'tous';
+
+        function filtrerEtudiants() {
+            const recherche = document.getElementById('rechercheEtudiant').value.toLowerCase();
+            document.querySelectorAll('.ligne-etudiant').forEach(function (ligne) {
+                const nom = ligne.getAttribute('data-nom');
+                const statut = ligne.getAttribute('data-statut');
+                const matchNom = nom.includes(recherche);
+                const matchStatut = statutActif === 'tous' || statut === statutActif;
+                ligne.style.display = (matchNom && matchStatut) ? '' : 'none';
+            });
+        }
+
+        function filtrerParStatut(statut, bouton) {
+            statutActif = statut;
+            document.querySelectorAll('.filtre-statut').forEach(function (btn) {
+                btn.className = 'filtre-statut px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600';
+            });
+            bouton.className = 'filtre-statut px-3 py-1 rounded-full text-xs font-medium bg-[#1E2761] text-white';
+            filtrerEtudiants();
+        }
+
         function showTab(tab) {
             document.getElementById('panel-etudiants').classList.toggle('hidden', tab !== 'etudiants');
             document.getElementById('panel-reversement').classList.toggle('hidden', tab !== 'reversement');

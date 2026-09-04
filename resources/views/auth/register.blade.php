@@ -59,7 +59,7 @@
 
     <div class="main-container row g-0">
 
-        <!-- الجانب الأيسر -->
+        <!-- Le panneau de gauche -->
         <div class="col-md-5 left-side text-center">
 
             <h3 class="fw-bold mb-3">
@@ -83,7 +83,7 @@
         </div>
 
 
-        <!-- الجانب الأيمن -->
+        <!-- Le panneau de droite -->
         <div class="col-md-7 right-side">
 
             <h3 class="fw-bold mb-1" style="color: #1E2761;">
@@ -95,7 +95,7 @@
             </p>
 
 
-            <!-- رسائل الأخطاء -->
+            <!-- Messages d'erreur -->
             @if ($errors->any())
 
                 <div
@@ -129,13 +129,13 @@
             @endif
 
 
-            <!-- نموذج التسجيل -->
+            <!-- Formulaire d'inscription -->
             <form method="POST" action="{{ route('register') }}">
 
                 @csrf
 
 
-                <!-- الاسم الكامل -->
+                <!-- Nom complet -->
                 <div class="mb-3">
 
                     <label
@@ -157,7 +157,7 @@
                 </div>
 
 
-                <!-- البريد الإلكتروني -->
+                <!-- Adresse e-mail -->
                 <div class="mb-3">
 
                     <label
@@ -178,7 +178,47 @@
                 </div>
 
 
-                <!-- زر التسجيل -->
+                <!-- Mot de passe -->
+                <div class="mb-3">
+
+                    <label
+                        for="password"
+                        class="form-label text-secondary"
+                        style="font-size: 13px;">
+                        Mot de passe
+                    </label>
+
+                    <input
+                        type="password"
+                        class="form-control"
+                        id="password"
+                        name="password"
+                        required>
+
+                </div>
+
+
+                <!-- Confirmation du mot de passe -->
+                <div class="mb-3">
+
+                    <label
+                        for="password_confirmation"
+                        class="form-label text-secondary"
+                        style="font-size: 13px;">
+                        Confirmer le mot de passe
+                    </label>
+
+                    <input
+                        type="password"
+                        class="form-control"
+                        id="password_confirmation"
+                        name="password_confirmation"
+                        required>
+
+                </div>
+
+
+                <!-- Bouton d'inscription -->
                 <button
                     type="submit"
                     class="btn btn-custom py-2 fw-semibold mb-3">
@@ -186,7 +226,7 @@
                 </button>
 
 
-                <!-- الانتقال إلى تسجيل الدخول -->
+                <!-- Lien vers la connexion -->
                 <div
                     class="text-center mt-2"
                     style="font-size: 13px;">
@@ -195,7 +235,7 @@
                         Vous avez déjà un compte ?
                     </span>
 
-                    <a
+                    
                         href="{{ route('login') }}"
                         class="text-decoration-none fw-bold"
                         style="color: #1E2761;">
