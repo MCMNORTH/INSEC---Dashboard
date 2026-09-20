@@ -108,10 +108,6 @@
 
                 <button type="submit" class="btn btn-custom py-2 fw-semibold mb-3">Se connecter</button>
 
-                <div class="text-center mt-3" style="font-size: 13px;">
-                    <span class="text-muted">Vous n'avez pas de compte ?</span> 
-                    <a href="{{ route('register') }}" class="text-decoration-none fw-bold" style="color: #1E2761;">S'inscrire</a>
-                </div>
             </form>
         </div>
 

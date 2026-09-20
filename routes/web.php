@@ -16,19 +16,12 @@ Route::get('/', function () {
 });
 
 Route::get('/dashboard', [App\Http\Controllers\AdminDashboardController::class, 'index'])
-    ->middleware(['auth'])
+    ->middleware(['auth', 'admin'])
     ->name('dashboard');
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'admin'])->group(function () {
     // Dashboards selon les rôles
        Route::get('/admin/dashboard', [App\Http\Controllers\AdminDashboardController::class, 'index'])
         ->name('admin.dashboard');
-    Route::get('/enseignant/dashboard', function () {
-        if (auth()->user()->role !== 'enseignant') {
-            abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
-        }
-        return view('enseignants.dashboard');
-    });
-
     // Gestion des Étudiants (Toutes les fonctions CRUD)
     Route::resource('etudiants', EtudiantController::class);
     // Gestion des Enseignants (Toutes les fonctions CRUD)

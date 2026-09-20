@@ -11,7 +11,7 @@ class AdminDashboardController extends Controller
 {
     public function index()
     {
-        if (auth()->user()->role !== 'admin') {
+        if (! in_array(auth()->user()->role, ['admin', 'super_admin'], true)) {
             abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
         }
 
