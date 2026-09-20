@@ -10,6 +10,7 @@ use App\Models\Ue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Services\EmailService;
 
 class ExamenController extends Controller
 {
@@ -44,6 +45,9 @@ class ExamenController extends Controller
             $examen->resultats()->createMany($eligible->map(fn ($id) => ['inscription_id' => $id, 'presence' => 'Convoqué'])->all());
             return $examen;
         });
+        $examen->load(['ue','resultats.inscription.etudiant']);
+        foreach($examen->resultats as $resultat){ $e=$resultat->inscription->etudiant; app(EmailService::class)->envoyer($e->email,$e->prenom.' '.$e->nom,'Convocation','Convocation à un examen INSEC','Nouvelle convocation',
+            'Vous êtes convoqué(e) à l’examen ci-dessous.',['UE'=>$examen->ue->code,'Session'=>$examen->session,'Date'=>$examen->date_examen->format('d/m/Y à H:i'),'Salle'=>$examen->salle?:'À confirmer']); }
         return redirect()->route('examens.show', $examen)->with('status', 'Examen créé et étudiants éligibles convoqués.');
     }
 
@@ -65,6 +69,8 @@ class ExamenController extends Controller
         }
         if ($validated['presence'] !== 'Présent') $validated['note'] = null;
         $resultat->update($validated);
+        if($resultat->note!==null){ $resultat->load(['inscription.etudiant','examen.ue']); $e=$resultat->inscription->etudiant; app(EmailService::class)->envoyer($e->email,$e->prenom.' '.$e->nom,'Résultat','Publication d’un résultat INSEC','Votre résultat est disponible',
+            'Une note vient d’être publiée dans votre dossier académique.',['UE'=>$resultat->examen->ue->code,'Note'=>$resultat->note.'/'.$resultat->examen->note_sur,'Décision'=>$resultat->valide?'Validée':'Non validée'],route('portail.etudiant'),'Consulter mon espace'); }
         return redirect()->route('examens.show', $examen)->with('status', 'Résultat enregistré.');
     }
 }

@@ -7,6 +7,7 @@ use App\Models\Etudiant;
 use App\Models\Inscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\EmailService;
 
 class FinanceController extends Controller
 {
@@ -52,10 +53,16 @@ class FinanceController extends Controller
             'statut' => ['required', 'in:Validée,En attente,Rejetée'], 'mode_paiement' => ['required', 'in:Espèces,Virement,Chèque,Carte,Mobile Money'],
             'reference' => ['nullable', 'string', 'max:100'], 'note' => ['nullable', 'string', 'max:1000'],
         ]);
-        DB::transaction(function () use ($inscription, $validated) {
+        $versement = DB::transaction(function () use ($inscription, $validated) {
             $versement = $inscription->versements()->create($validated);
             $versement->update(['numero_recu' => 'REC-'.now()->format('Ym').'-'.str_pad((string) $versement->id, 6, '0', STR_PAD_LEFT)]);
+            return $versement;
         });
+        if ($versement->statut === 'Validée') {
+            $etudiant=$inscription->etudiant;
+            app(EmailService::class)->envoyer($etudiant->email,$etudiant->prenom.' '.$etudiant->nom,'Paiement','Confirmation de votre paiement INSEC','Paiement validé',
+                'Votre versement a été validé et enregistré dans votre dossier financier.',['Reçu'=>$versement->numero_recu,'Montant'=>number_format($versement->montant,0,',',' ').' MRU','Date'=>$versement->date_versement->format('d/m/Y')]);
+        }
         return $this->backToInscription($inscription, 'Versement enregistré avec un numéro de reçu.');
     }
 

@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\AlerteController;
 use App\Http\Controllers\CompteController;
 use App\Http\Controllers\CandidatureController;
+use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\EtudiantController;
@@ -57,6 +58,7 @@ Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {
     Route::get('/candidatures/{candidature}', [CandidatureController::class, 'show'])->name('candidatures.show');
     Route::put('/candidatures/{candidature}', [CandidatureController::class, 'update'])->name('candidatures.update');
     Route::post('/candidatures/{candidature}/convertir', [CandidatureController::class, 'convertir'])->name('candidatures.convertir');
+    Route::get('/communications', [CommunicationController::class, 'index'])->name('communications.index');
 });
 
 Route::middleware(['auth', 'role:admin,super_admin,finance'])->group(function () {

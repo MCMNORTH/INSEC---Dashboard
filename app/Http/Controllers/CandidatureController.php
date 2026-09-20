@@ -7,6 +7,7 @@ use App\Models\Etudiant;
 use App\Models\Formation;
 use App\Models\Inscription;
 use App\Models\Ue;
+use App\Services\EmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -14,6 +15,7 @@ use Illuminate\Validation\Rule;
 
 class CandidatureController extends Controller
 {
+    public function __construct(private EmailService $emails) {}
     public function create()
     {
         return view('candidatures.create', ['formations'=>Formation::where('active',true)->orderBy('code')->get(), 'annees'=>AnneeAcademique::orderByDesc('libelle')->get()]);
@@ -24,6 +26,10 @@ class CandidatureController extends Controller
         $data=$request->validate(['nom'=>'required|string|max:100','prenom'=>'required|string|max:100','email'=>'required|email|max:255','telephone'=>'required|string|max:40','date_naissance'=>'nullable|date|before:today','dernier_diplome'=>'required|string|max:150','formation_id'=>'required|exists:formations,id','annee_academique_id'=>['required','exists:annees_academiques,id',Rule::unique('candidatures')->where(fn($q)=>$q->where('email',$request->email))],'motivation'=>'nullable|string|max:2000']);
         $data['reference']='ADM-'.now()->format('ymd').'-'.Str::upper(Str::random(6));
         $candidature=Candidature::create($data);
+        $this->emails->envoyer($candidature->email, $candidature->prenom.' '.$candidature->nom, 'Candidature',
+            'Votre candidature INSEC a bien été reçue', 'Candidature enregistrée',
+            'Votre demande de préinscription est maintenant enregistrée et sera étudiée par notre équipe.',
+            ['Référence'=>$candidature->reference,'Diplôme'=>$candidature->formation->code,'Année'=>$candidature->anneeAcademique->libelle]);
         return redirect()->route('candidatures.confirmation',$candidature->reference);
     }
 
@@ -48,7 +54,12 @@ class CandidatureController extends Controller
     {
         abort_if($candidature->statut==='Inscrite',422,'Cette candidature est déjà convertie.');
         $data=$request->validate(['statut'=>'required|in:Nouvelle,En étude,Admissible,Rejetée','note_interne'=>'nullable|string|max:2000']);
+        $ancienStatut=$candidature->statut;
         $candidature->update($data+['traitee_at'=>now()]);
+        if($ancienStatut!==$candidature->statut){
+            $this->emails->envoyer($candidature->email,$candidature->prenom.' '.$candidature->nom,'Admission','Mise à jour de votre candidature INSEC','Décision d’admission',
+                'Le statut de votre candidature a été mis à jour.',['Référence'=>$candidature->reference,'Nouveau statut'=>$candidature->statut,'Diplôme'=>$candidature->formation->code]);
+        }
         return back()->with('success','Décision enregistrée.');
     }
 
@@ -67,6 +78,8 @@ class CandidatureController extends Controller
             $candidature->update(['statut'=>'Inscrite','etudiant_id'=>$etudiant->id_etudiant,'traitee_at'=>now()]);
             return $etudiant;
         });
+        $this->emails->envoyer($candidature->email,$candidature->prenom.' '.$candidature->nom,'Inscription','Votre inscription INSEC est confirmée','Inscription définitive confirmée',
+            'Votre dossier étudiant et votre inscription ont été créés avec succès.',['Diplôme'=>$candidature->formation->code,'Année académique'=>$candidature->anneeAcademique->libelle,'N° INTEC'=>$data['numero_inscription_intec']??'En attente']);
         return redirect()->route('etudiants.show',$etudiant)->with('status','Candidature convertie en étudiant et inscription créée.');
     }
 }
