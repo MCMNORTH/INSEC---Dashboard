@@ -30,4 +30,9 @@ class Ue extends Model
             ->withPivot('statut')
             ->withTimestamps();
     }
+
+    public function examens()
+    {
+        return $this->hasMany(Examen::class);
+    }
 }

@@ -56,7 +56,7 @@ class EtudiantController extends Controller
 
     public function show(Etudiant $etudiant)
     {
-        $etudiant->load(['inscriptions' => fn ($q) => $q->with(['formation', 'anneeAcademique', 'ues', 'versements'])->latest()]);
+        $etudiant->load(['inscriptions' => fn ($q) => $q->with(['formation', 'anneeAcademique', 'ues', 'versements', 'resultatsExamens.examen.ue'])->latest()]);
         return view('etudiants.show', compact('etudiant'));
     }
 

@@ -29,6 +29,9 @@
         <a href="{{ route('formations.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('formations.*') ? 'bg-[#1E2761] text-white border-l-4 border-[#D4AF37]' : 'text-gray-600 hover:bg-gray-100' }}">
             <i class="fa-solid fa-graduation-cap w-4 text-center"></i> Diplômes & UE
         </a>
+        <a href="{{ route('examens.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('examens.*') ? 'bg-[#1E2761] text-white border-l-4 border-[#D4AF37]' : 'text-gray-600 hover:bg-gray-100' }}">
+            <i class="fa-solid fa-clipboard-check w-4 text-center"></i> Examens & résultats
+        </a>
         {{-- Temporairement masqué à la demande de l'encadrant --}}
         {{-- <a href="{{ route('enseignants.index') }}" ...>Enseignants</a> --}}
         <a href="{{ route('finances.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('finances.*') ? 'bg-[#1E2761] text-white border-l-4 border-[#D4AF37]' : 'text-gray-600 hover:bg-gray-100' }}">

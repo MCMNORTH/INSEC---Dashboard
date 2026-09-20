@@ -4,6 +4,7 @@ use App\Http\Controllers\EtudiantController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\FormationController;
 use App\Http\Controllers\InscriptionController;
+use App\Http\Controllers\ExamenController;
 use App\Http\Controllers\Auth\PasswordResetController;
 
 /*
@@ -31,6 +32,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/inscriptions/{inscription}/edit', [InscriptionController::class, 'edit'])->name('inscriptions.edit');
     Route::put('/inscriptions/{inscription}', [InscriptionController::class, 'update'])->name('inscriptions.update');
     Route::get('/formations', [FormationController::class, 'index'])->name('formations.index');
+    Route::resource('examens', ExamenController::class)->only(['index', 'create', 'store', 'show']);
+    Route::put('/examens/{examen}/resultats/{resultat}', [ExamenController::class, 'updateResultat'])->name('examens.resultats.update');
     // Gestion des Enseignants (Toutes les fonctions CRUD)
     Route::resource('enseignants', EnseignantController::class);
     // Gestion des Affectations des Enseignants

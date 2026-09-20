@@ -41,6 +41,16 @@ class Inscription extends Model
         return $this->hasMany(Echeance::class)->orderBy('date_echeance');
     }
 
+    public function resultatsExamens()
+    {
+        return $this->hasMany(ResultatExamen::class);
+    }
+
+    public function getCreditsValidesAttribute(): int
+    {
+        return (int) $this->resultatsExamens->filter->valide->pluck('examen.ue')->filter()->unique('id')->sum('credits');
+    }
+
     public function ues()
     {
         return $this->belongsToMany(Ue::class, 'inscription_ue')
