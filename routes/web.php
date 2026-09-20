@@ -5,6 +5,7 @@ use App\Http\Controllers\AlerteController;
 use App\Http\Controllers\CompteController;
 use App\Http\Controllers\CandidatureController;
 use App\Http\Controllers\CommunicationController;
+use App\Http\Controllers\ExcelController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\EtudiantController;
@@ -59,6 +60,12 @@ Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {
     Route::put('/candidatures/{candidature}', [CandidatureController::class, 'update'])->name('candidatures.update');
     Route::post('/candidatures/{candidature}/convertir', [CandidatureController::class, 'convertir'])->name('candidatures.convertir');
     Route::get('/communications', [CommunicationController::class, 'index'])->name('communications.index');
+    Route::get('/excel', [ExcelController::class, 'index'])->name('excel.index');
+    Route::get('/excel/modele', [ExcelController::class, 'modele'])->name('excel.modele');
+    Route::get('/excel/etudiants', [ExcelController::class, 'etudiants'])->name('excel.etudiants');
+    Route::get('/excel/finances', [ExcelController::class, 'finances'])->name('excel.finances');
+    Route::get('/excel/resultats', [ExcelController::class, 'resultats'])->name('excel.resultats');
+    Route::post('/excel/importer', [ExcelController::class, 'importer'])->name('excel.importer');
 });
 
 Route::middleware(['auth', 'role:admin,super_admin,finance'])->group(function () {
