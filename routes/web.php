@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\AlerteController;
 use App\Http\Controllers\CompteController;
+use App\Http\Controllers\CandidatureController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\EtudiantController;
@@ -14,6 +15,9 @@ use App\Http\Controllers\PortalController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => view('auth.login'));
+Route::get('/admission', [CandidatureController::class, 'create'])->name('candidatures.create');
+Route::post('/admission', [CandidatureController::class, 'store'])->name('candidatures.store');
+Route::get('/admission/confirmation/{reference}', [CandidatureController::class, 'confirmation'])->name('candidatures.confirmation');
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [PortalController::class, 'redirect'])->name('dashboard');
@@ -49,6 +53,10 @@ Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {
     Route::get('/comptes', [CompteController::class, 'index'])->name('comptes.index');
     Route::post('/comptes', [CompteController::class, 'store'])->name('comptes.store');
     Route::put('/comptes/{user}/statut', [CompteController::class, 'toggle'])->name('comptes.toggle');
+    Route::get('/candidatures', [CandidatureController::class, 'index'])->name('candidatures.index');
+    Route::get('/candidatures/{candidature}', [CandidatureController::class, 'show'])->name('candidatures.show');
+    Route::put('/candidatures/{candidature}', [CandidatureController::class, 'update'])->name('candidatures.update');
+    Route::post('/candidatures/{candidature}/convertir', [CandidatureController::class, 'convertir'])->name('candidatures.convertir');
 });
 
 Route::middleware(['auth', 'role:admin,super_admin,finance'])->group(function () {

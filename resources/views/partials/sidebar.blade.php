@@ -14,6 +14,7 @@
             @if($alertesNonLues)<span class="text-xs rounded-full px-2 py-0.5 {{ request()->routeIs('alertes.*') ? 'bg-white text-[#1E2761]' : 'bg-red-100 text-red-700' }}">{{ $alertesNonLues }}</span>@endif
         </a>
         @if(in_array(auth()->user()->role, ['admin','super_admin'], true))
+            <a href="{{ route('candidatures.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('candidatures.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-file-signature w-4 text-center"></i> Admissions</a>
             <a href="{{ route('etudiants.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('etudiants.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-user w-4 text-center"></i> Étudiants</a>
             <a href="{{ route('formations.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('formations.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-graduation-cap w-4 text-center"></i> Diplômes & UE</a>
             <a href="{{ route('examens.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('examens.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-clipboard-check w-4 text-center"></i> Examens & résultats</a>

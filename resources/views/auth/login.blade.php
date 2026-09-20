@@ -108,6 +108,8 @@
 
                 <button type="submit" class="btn btn-custom py-2 fw-semibold mb-3">Se connecter</button>
 
+                <a href="{{ route('candidatures.create') }}" class="btn btn-outline-secondary w-100 py-2">Déposer une candidature</a>
+
             </form>
         </div>
 
