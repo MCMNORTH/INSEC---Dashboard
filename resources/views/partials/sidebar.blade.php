@@ -8,6 +8,11 @@
     </div>
     <nav class="space-y-1">
         <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100"><i class="fa-solid fa-table-cells-large w-4 text-center"></i> Tableau de bord</a>
+        <a href="{{ route('alertes.index') }}" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('alertes.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}">
+            <span class="flex items-center gap-3"><i class="fa-solid fa-bell w-4 text-center"></i> Alertes</span>
+            @php($alertesNonLues = auth()->user()->alertes()->where('active', true)->whereNull('lue_at')->whereNull('archivee_at')->count())
+            @if($alertesNonLues)<span class="text-xs rounded-full px-2 py-0.5 {{ request()->routeIs('alertes.*') ? 'bg-white text-[#1E2761]' : 'bg-red-100 text-red-700' }}">{{ $alertesNonLues }}</span>@endif
+        </a>
         @if(in_array(auth()->user()->role, ['admin','super_admin'], true))
             <a href="{{ route('etudiants.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('etudiants.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-user w-4 text-center"></i> Étudiants</a>
             <a href="{{ route('formations.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('formations.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-graduation-cap w-4 text-center"></i> Diplômes & UE</a>

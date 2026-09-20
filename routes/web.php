@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\AlerteController;
 use App\Http\Controllers\CompteController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EnseignantController;
@@ -18,6 +19,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [PortalController::class, 'redirect'])->name('dashboard');
     Route::get('/portail/etudiant', [PortalController::class, 'etudiant'])->middleware('role:etudiant')->name('portail.etudiant');
     Route::get('/portail/enseignant', [PortalController::class, 'enseignant'])->middleware('role:enseignant')->name('portail.enseignant');
+    Route::get('/alertes', [AlerteController::class, 'index'])->name('alertes.index');
+    Route::put('/alertes/tout-lire', [AlerteController::class, 'toutLire'])->name('alertes.tout-lire');
+    Route::put('/alertes/{alerte}/lire', [AlerteController::class, 'lire'])->name('alertes.lire');
+    Route::put('/alertes/{alerte}/archiver', [AlerteController::class, 'archiver'])->name('alertes.archiver');
 });
 
 Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {
