@@ -2,67 +2,65 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Etudiant;
+use App\Models\AnneeAcademique;
 use App\Models\Enseignant;
+use App\Models\Etudiant;
+use App\Models\Examen;
+use App\Models\Inscription;
+use App\Models\ResultatExamen;
 use App\Models\Versement;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class AdminDashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        if (! in_array(auth()->user()->role, ['admin', 'super_admin'], true)) {
-            abort(403, "Vous n'êtes pas autorisé à accéder à cette page.");
-        }
+        $annees = AnneeAcademique::orderByDesc('libelle')->get();
+        $anneeId = $request->integer('annee_id') ?: $annees->first()?->id;
+        if ($anneeId && ! $annees->contains('id', $anneeId)) abort(422, 'Année académique invalide.');
 
-        $totalEtudiants = Etudiant::count();
-        $etudiantsActifs = Etudiant::where('statut_etudiant', 'Actif')->count();
-        $totalEnseignants = Enseignant::count();
+        $inscriptions = Inscription::with(['etudiant', 'formation', 'versements', 'echeances', 'resultatsExamens.examen.ue'])
+            ->when($anneeId, fn ($q) => $q->where('id_annee_academique', $anneeId))->get();
+        $inscriptionIds = $inscriptions->pluck('id');
 
-        $encaisses = Versement::where('statut', 'Validée')->sum('montant');
-        $enAttente = Versement::where('statut', 'En attente')->sum('montant');
+        $montantFacture = $inscriptions->sum->montant_net;
+        $encaisses = $inscriptions->sum->total_verse;
+        $resteARecouvrer = $inscriptions->sum->solde_restant;
+        $montantEnRetard = $inscriptions->sum->montant_en_retard;
+        $tauxRecouvrement = $montantFacture > 0 ? round($encaisses / $montantFacture * 100, 1) : 0;
 
-        // Paiements validés, Janvier à Décembre de l'année en cours
-        $anneeActuelle = Carbon::now()->year;
-        $moisLabels12 = collect();
-        $paiements12 = collect();
-        for ($m = 1; $m <= 12; $m++) {
-            $date = Carbon::create($anneeActuelle, $m, 1);
-            $moisLabels12->push(ucfirst($date->locale('fr')->isoFormat('MMM')));
-            $total = Versement::where('statut', 'Validée')
-                ->whereYear('date_versement', $anneeActuelle)
-                ->whereMonth('date_versement', $m)
-                ->sum('montant');
-            $paiements12->push((float) $total);
-        }
+        $resultats = ResultatExamen::with('examen.ue')->whereIn('inscription_id', $inscriptionIds)->whereNotNull('note')->get();
+        $tauxReussite = $resultats->count() ? round($resultats->filter->valide->count() / $resultats->count() * 100, 1) : 0;
 
-        // Répartition des étudiants par statut
-        $repartition = Etudiant::selectRaw('statut_etudiant, count(*) as total')
-            ->groupBy('statut_etudiant')
-            ->pluck('total', 'statut_etudiant');
+        $performanceDiplomes = $inscriptions->groupBy(fn ($i) => $i->formation?->code ?? '—')->map(function ($groupe, $code) {
+            $notes = $groupe->flatMap->resultatsExamens->whereNotNull('note');
+            return ['code' => $code, 'inscrits' => $groupe->pluck('id_etudiant')->unique()->count(), 'notes' => $notes->count(),
+                'valides' => $notes->filter->valide->count(), 'taux' => $notes->count() ? round($notes->filter->valide->count() / $notes->count() * 100, 1) : 0];
+        })->values();
 
-        return view('admin.dashboard', [
-            'totalEtudiants'      => $totalEtudiants,
-            'etudiantsActifs'     => $etudiantsActifs,
-            'totalEnseignants'    => $totalEnseignants,
-            'encaissesFormatted'  => $this->formatMontant($encaisses),
-            'enAttenteFormatted'  => $this->formatMontant($enAttente),
-            'moisLabels12'        => $moisLabels12,
-            'paiements12'         => $paiements12,
-            'statutActif'         => $repartition['Actif'] ?? 0,
-            'statutSuspendu'      => $repartition['Suspendu'] ?? 0,
-            'statutAbandon'       => $repartition['Abandon'] ?? 0,
+        $performanceUes = $resultats->groupBy('examen.ue_id')->map(function ($notes) {
+            $ue = $notes->first()->examen->ue;
+            return ['code' => $ue->code, 'libelle' => $ue->libelle, 'notes' => $notes->count(),
+                'moyenne' => round($notes->avg('note'), 2), 'taux' => round($notes->filter->valide->count() / $notes->count() * 100, 1)];
+        })->sortByDesc('taux')->values()->take(8);
+
+        $impayes = $inscriptions->filter(fn ($i) => $i->solde_restant > 0)->sortByDesc('montant_en_retard')->take(8);
+        $examensProchains = Examen::with('ue')->when($anneeId, fn ($q) => $q->where('annee_academique_id', $anneeId))
+            ->where('statut', 'Planifié')->whereBetween('date_examen', [now(), now()->addDays(30)])->orderBy('date_examen')->take(6)->get();
+
+        $anneeCivile = now()->year;
+        $versementsParMois = Versement::where('statut', 'Validée')->whereIn('inscription_id', $inscriptionIds)
+            ->whereYear('date_versement', $anneeCivile)->get()->groupBy(fn ($v) => $v->date_versement->month)->map->sum('montant');
+        $moisLabels12 = collect(range(1, 12))->map(fn ($m) => ucfirst(Carbon::create($anneeCivile, $m, 1)->locale('fr')->isoFormat('MMM')));
+        $paiements12 = collect(range(1, 12))->map(fn ($m) => (float) ($versementsParMois[$m] ?? 0));
+        $repartition = Etudiant::selectRaw('statut_etudiant, count(*) as total')->groupBy('statut_etudiant')->pluck('total', 'statut_etudiant');
+
+        return view('admin.dashboard', compact('annees', 'anneeId', 'montantFacture', 'encaisses', 'resteARecouvrer', 'montantEnRetard',
+            'tauxRecouvrement', 'resultats', 'tauxReussite', 'performanceDiplomes', 'performanceUes', 'impayes', 'examensProchains',
+            'moisLabels12', 'paiements12', 'repartition') + [
+            'totalEtudiants' => Etudiant::count(), 'etudiantsActifs' => Etudiant::where('statut_etudiant', 'Actif')->count(),
+            'totalEnseignants' => Enseignant::count(), 'inscriptionsActives' => $inscriptions->where('statut', 'active')->count(),
         ]);
-    }
-
-    private function formatMontant($valeur)
-    {
-        if ($valeur >= 1000000) {
-            return number_format($valeur / 1000000, 1, ',', ' ') . 'M';
-        }
-        if ($valeur >= 1000) {
-            return number_format($valeur / 1000, 1, ',', ' ') . 'K';
-        }
-        return number_format($valeur, 0, ',', ' ');
     }
 }

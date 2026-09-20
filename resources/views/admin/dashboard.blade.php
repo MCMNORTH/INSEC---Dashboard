@@ -1,151 +1,25 @@
-<x-app-layout>
-    <div class="flex min-h-screen bg-gray-100">
-        @include('partials.sidebar')
+<x-app-layout><div class="flex min-h-screen bg-gray-100">@include('partials.sidebar')
+<main class="flex-1 p-6 lg:p-8 min-w-0">
+<div class="flex flex-wrap items-end justify-between gap-4 mb-6"><div><p class="text-sm text-gray-500">Pilotage INSEC</p><h1 class="text-2xl font-bold text-[#1E2761]">Tableau de bord décisionnel</h1></div><form method="GET" class="flex items-center gap-2 bg-white border rounded-lg p-2"><label class="text-sm text-gray-500 pl-2">Année</label><select name="annee_id" onchange="this.form.submit()" class="border-0 py-1 pr-8 text-sm font-semibold focus:ring-0">@forelse($annees as $annee)<option value="{{ $annee->id }}" @selected($anneeId === $annee->id)>{{ $annee->libelle }}</option>@empty<option>Aucune année</option>@endforelse</select></form></div>
 
-        <div class="flex-1 p-6">
+<section class="grid grid-cols-2 xl:grid-cols-6 gap-4 mb-6">@foreach([
+['Étudiants actifs',$etudiantsActifs,'fa-users','bg-blue-50'],['Inscriptions actives',$inscriptionsActives,'fa-id-card','bg-indigo-50'],
+['Encaissé',number_format($encaisses,0,',',' ').' MRU','fa-money-bill-wave','bg-emerald-50'],['À recouvrer',number_format($resteARecouvrer,0,',',' ').' MRU','fa-wallet','bg-amber-50'],
+['Taux recouvrement',$tauxRecouvrement.' %','fa-chart-line','bg-cyan-50'],['Taux de réussite',$tauxReussite.' %','fa-graduation-cap','bg-purple-50']] as $c)
+<article class="{{ $c[3] }} rounded-xl border border-white p-4 shadow-sm"><i class="fa-solid {{ $c[2] }} text-[#1E2761] mb-3"></i><p class="text-xl font-bold text-[#1E2761]">{{ $c[1] }}</p><p class="text-xs text-gray-500 mt-1">{{ $c[0] }}</p></article>@endforeach</section>
 
-           <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-    <h1 class="text-xl font-bold text-[#1E2761]">Bonjour, Administrateur</h1>
-    <div class="flex items-center gap-2">
-        <div class="relative" x-data="{ open: false }">
-                        <button @click="open = !open" class="flex items-center gap-2 bg-white border border-[#D4AF37] rounded-full pl-1 pr-3 py-1 hover:bg-gray-50">
-                            <span class="w-7 h-7 rounded-full bg-[#1E2761] text-white flex items-center justify-center text-xs font-bold">
-                                {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
-                            </span>
-                            <span class="text-sm font-medium text-gray-700">Administrateur</span>
-                            <i class="fa-solid fa-chevron-down text-xs text-gray-400"></i>
-                        </button>
-                        <div x-show="open" @click.away="open = false" x-cloak class="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10">
-                            <form method="POST" action="{{ route('logout') }}">
-                                @csrf
-                                <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
-                                    Se déconnecter
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
+@if($montantEnRetard > 0)<div class="mb-6 bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 flex justify-between"><span><i class="fa-solid fa-triangle-exclamation mr-2"></i><strong>{{ number_format($montantEnRetard,0,',',' ') }} MRU</strong> actuellement en retard.</span><a href="{{ route('finances.index') }}" class="text-sm font-semibold">Traiter →</a></div>@endif
 
-<!-- Cartes de statistiques -->
+<section class="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6"><article class="xl:col-span-2 bg-white rounded-xl border p-5"><div class="flex justify-between mb-4"><h2 class="font-bold text-[#1E2761]">Encaissements mensuels</h2><span class="text-xs text-gray-400">{{ now()->year }}</span></div><canvas id="paiementsChart" height="90"></canvas></article><article class="bg-white rounded-xl border p-5"><h2 class="font-bold text-[#1E2761] mb-4">Situation des étudiants</h2><canvas id="statutsChart" height="190"></canvas></article></section>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-    <!-- Étudiants total -->
-    <div class="bg-amber-100/60 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
-        <i class="fa-solid fa-users text-[#1E2761] text-xl mb-3 block"></i>
-        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $totalEtudiants }}</p>
-        <p class="text-sm text-gray-500">Étudiants total</p>
-    </div>
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+<article class="bg-white rounded-xl border overflow-hidden"><header class="p-5 border-b"><h2 class="font-bold text-[#1E2761]">Performance par diplôme</h2></header><div class="p-5 space-y-5">@forelse($performanceDiplomes as $l)<div><div class="flex justify-between text-sm mb-2"><span><strong>{{ $l['code'] }}</strong> · {{ $l['inscrits'] }} étudiant(s)</span><span class="font-bold">{{ $l['taux'] }} %</span></div><div class="h-2 bg-gray-100 rounded-full"><div class="h-2 bg-[#1E2761] rounded-full" style="width:{{ min($l['taux'],100) }}%"></div></div><p class="text-xs text-gray-400 mt-1">{{ $l['valides'] }} UE validée(s) sur {{ $l['notes'] }} résultat(s)</p></div>@empty<p class="text-sm text-gray-500">Aucun résultat publié.</p>@endforelse</div></article>
+<article class="bg-white rounded-xl border overflow-hidden"><header class="p-5 border-b"><h2 class="font-bold text-[#1E2761]">Réussite par UE</h2></header><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50 text-gray-500"><tr><th class="text-left p-3">UE</th><th class="text-right p-3">Moyenne</th><th class="text-right p-3">Réussite</th></tr></thead><tbody>@forelse($performanceUes as $ue)<tr class="border-t"><td class="p-3"><strong>{{ $ue['code'] }}</strong><span class="block text-xs text-gray-400 truncate max-w-xs">{{ $ue['libelle'] }}</span></td><td class="p-3 text-right">{{ $ue['moyenne'] }}/20</td><td class="p-3 text-right font-semibold {{ $ue['taux']>=50?'text-green-600':'text-red-600' }}">{{ $ue['taux'] }} %</td></tr>@empty<tr><td colspan="3" class="p-6 text-center text-gray-400">Aucune note disponible.</td></tr>@endforelse</tbody></table></div></article></section>
 
-    <!-- Étudiants actifs -->
-    <div class="bg-emerald-50 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
-        <i class="fa-solid fa-check text-[#1E2761] text-xl mb-3 block"></i>
-        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $etudiantsActifs }}</p>
-        <p class="text-sm text-gray-500">Étudiants actifs</p>
-    </div>
-
-    <!-- Encaissés -->
-    <div class="bg-amber-50 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
-        <i class="fa-solid fa-credit-card text-[#1E2761] text-xl mb-3 block"></i>
-        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $encaissesFormatted }}</p>
-        <p class="text-sm text-gray-500">Encaissés (MRU)</p>
-    </div>
-
-    <!-- En attente -->
-    <div class="bg-orange-50 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
-        <i class="fa-solid fa-clock text-[#1E2761] text-xl mb-3 block"></i>
-        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $enAttenteFormatted }}</p>
-        <p class="text-sm text-gray-500">En attente (MRU)</p>
-    </div>
-
-    <!-- Enseignants -->
-    <div class="bg-purple-100/60 rounded-xl shadow-sm p-4 border-t-4 border-[#D4AF37]">
-        <i class="fa-solid fa-display text-[#1E2761] text-xl mb-3 block"></i>
-        <p class="text-2xl font-bold text-[#1E2761] whitespace-nowrap">{{ $totalEnseignants }}</p>
-        <p class="text-sm text-gray-500">Enseignants</p>
-    </div>
-</div><!-- Graphiques -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-    <!-- Graphique Paiements (Ajusté pour centrer le canvas) -->
-    <div class="lg:col-span-2 bg-white rounded-xl shadow p-5 flex flex-col justify-between">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-sm font-bold text-gray-600">Paiements encaissés par mois</h2>
-            <div class="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-medium">
-                <button id="btn6mois" onclick="afficherPeriode(6)" class="px-3 py-1.5 bg-[#1E2761] text-white">6 mois</button>
-                <button id="btn12mois" onclick="afficherPeriode(12)" class="px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50">12 mois</button>
-            </div>
-        </div>
-        
-        <!-- Conteneur flex-1 avec my-auto pour centrer verticalement le canvas -->
-        <div class="flex-1 flex items-center justify-center my-auto">
-            <canvas id="paiementsChart" height="90"></canvas>
-        </div>
-    </div>
-
-    <!-- Graphique Répartition des statuts -->
-    <div class="bg-white rounded-xl shadow p-5 flex flex-col justify-between">
-        <h2 class="text-sm font-bold text-gray-600 mb-3">Répartition des statuts</h2>
-        <div>
-            <canvas id="statutsChart" height="180"></canvas>
-        </div>
-        <div class="flex justify-center gap-3 mt-3 text-xs font-semibold">
-            <span class="text-emerald-600">● Actif</span>
-            <span class="text-amber-600">● Suspendu</span>
-            <span class="text-red-600">● Abandon</span>
-        </div>
-    </div>
-</div>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script>
-        const moisLabels12 = {!! json_encode($moisLabels12) !!};
-        const paiements12 = {!! json_encode($paiements12) !!};
-
-        const ctx = document.getElementById('paiementsChart');
-        const paiementsChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: moisLabels12.slice(0, 6),
-                datasets: [{
-                    label: 'Encaissés (MRU)',
-                    data: paiements12.slice(0, 6),
-                    backgroundColor: '#1E2761',
-                    borderRadius: 6,
-                    maxBarThickness: 40,
-                }]
-            },
-            options: {
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-
-        function afficherPeriode(nbMois) {
-            paiementsChart.data.labels = moisLabels12.slice(0, nbMois);
-            paiementsChart.data.datasets[0].data = paiements12.slice(0, nbMois);
-            paiementsChart.update();
-
-            document.getElementById('btn6mois').className = nbMois === 6
-                ? 'px-3 py-1.5 bg-[#1E2761] text-white'
-                : 'px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50';
-            document.getElementById('btn12mois').className = nbMois === 12
-                ? 'px-3 py-1.5 bg-[#1E2761] text-white'
-                : 'px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50';
-        }
-
-        new Chart(document.getElementById('statutsChart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Actif', 'Suspendu', 'Abandon'],
-                datasets: [{
-                    data: [{{ $statutActif }}, {{ $statutSuspendu }}, {{ $statutAbandon }}],
-                    backgroundColor: ['#65a30d', '#d97706', '#dc2626'],
-                    borderWidth: 0,
-                }]
-            },
-            options: {
-                plugins: { legend: { display: false } },
-                cutout: '70%'
-            }
-        });
-    </script>
-</x-app-layout>
+<section class="grid grid-cols-1 xl:grid-cols-3 gap-5"><article class="xl:col-span-2 bg-white rounded-xl border overflow-hidden"><header class="p-5 border-b flex justify-between"><h2 class="font-bold text-[#1E2761]">Dossiers financiers à suivre</h2><a href="{{ route('finances.index') }}" class="text-sm font-semibold">Voir tout</a></header><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50 text-gray-500"><tr><th class="text-left p-3">Étudiant</th><th class="text-left p-3">Diplôme</th><th class="text-right p-3">Reste</th><th class="text-right p-3">Retard</th></tr></thead><tbody>@forelse($impayes as $i)<tr class="border-t"><td class="p-3 font-medium">{{ $i->etudiant->prenom }} {{ $i->etudiant->nom }}</td><td class="p-3">{{ $i->formation->code }}</td><td class="p-3 text-right">{{ number_format($i->solde_restant,0,',',' ') }}</td><td class="p-3 text-right font-semibold {{ $i->montant_en_retard>0?'text-red-600':'text-gray-400' }}">{{ number_format($i->montant_en_retard,0,',',' ') }}</td></tr>@empty<tr><td colspan="4" class="p-6 text-center text-gray-400">Aucun solde restant.</td></tr>@endforelse</tbody></table></div></article>
+<article class="bg-white rounded-xl border"><header class="p-5 border-b"><h2 class="font-bold text-[#1E2761]">Examens dans les 30 jours</h2></header><div class="divide-y">@forelse($examensProchains as $e)<a href="{{ route('examens.show',$e) }}" class="block p-4 hover:bg-gray-50"><div class="flex justify-between"><strong class="text-sm">{{ $e->ue->code }}</strong><span class="text-xs text-gray-400">{{ $e->date_examen->format('d/m') }}</span></div><p class="text-xs text-gray-500 mt-1">{{ $e->date_examen->format('H:i') }} · {{ $e->salle?:'Salle à définir' }}</p></a>@empty<p class="p-6 text-sm text-center text-gray-400">Aucun examen proche.</p>@endforelse</div></article></section>
+</main></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script><script>
+new Chart(document.getElementById('paiementsChart'),{type:'bar',data:{labels:@json($moisLabels12),datasets:[{data:@json($paiements12),backgroundColor:'#1E2761',borderRadius:5,maxBarThickness:34}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true},x:{grid:{display:false}}}}});
+new Chart(document.getElementById('statutsChart'),{type:'doughnut',data:{labels:['Actif','Suspendu','Diplômé','Abandon'],datasets:[{data:[{{ $repartition['Actif']??0 }},{{ $repartition['Suspendu']??0 }},{{ $repartition['Diplômé']??0 }},{{ $repartition['Abandon']??0 }}],backgroundColor:['#16a34a','#d97706','#2563eb','#dc2626'],borderWidth:0}]},options:{cutout:'68%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,usePointStyle:true}}}}});
+</script></x-app-layout>
