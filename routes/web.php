@@ -6,6 +6,7 @@ use App\Http\Controllers\CompteController;
 use App\Http\Controllers\CandidatureController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\ExcelController;
+use App\Http\Controllers\AuditController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\EtudiantController;
@@ -66,6 +67,7 @@ Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {
     Route::get('/excel/finances', [ExcelController::class, 'finances'])->name('excel.finances');
     Route::get('/excel/resultats', [ExcelController::class, 'resultats'])->name('excel.resultats');
     Route::post('/excel/importer', [ExcelController::class, 'importer'])->name('excel.importer');
+    Route::get('/audit', [AuditController::class, 'index'])->name('audit.index');
 });
 
 Route::middleware(['auth', 'role:admin,super_admin,finance'])->group(function () {

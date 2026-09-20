@@ -6,6 +6,7 @@ use App\Models\Etudiant;
 use App\Models\PieceAdministrative;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Services\AuditService;
 
 class DocumentController extends Controller
 {
@@ -35,6 +36,7 @@ class DocumentController extends Controller
     public function download(PieceAdministrative $piece)
     {
         abort_unless(Storage::exists($piece->chemin), 404);
+        AuditService::manuel('download','Téléchargement du document '.$piece->nom_original,$piece,['type'=>$piece->type,'etudiant_id'=>$piece->etudiant_id]);
         return Storage::download($piece->chemin, $piece->nom_original);
     }
 

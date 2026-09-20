@@ -13,6 +13,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Services\AuditService;
 
 class ExcelController extends Controller
 {
@@ -20,6 +21,7 @@ class ExcelController extends Controller
 
     public function modele(): StreamedResponse
     {
+        AuditService::manuel('export','Téléchargement du modèle d’import étudiants');
         $classeur=$this->classeur('Modèle import étudiants',['Prénom','Nom','E-mail','Téléphone','Statut']);
         $feuille=$classeur->getActiveSheet();
         $feuille->fromArray([['Awa','Ba','awa@example.com','22000000','Actif']],null,'A2');
@@ -30,6 +32,7 @@ class ExcelController extends Controller
 
     public function etudiants(): StreamedResponse
     {
+        AuditService::manuel('export','Export Excel des étudiants');
         $headers=['ID','Prénom','Nom','E-mail','Téléphone','Statut étudiant','Diplôme actuel','Année académique','Année parcours','N° INTEC','Statut inscription'];
         $classeur=$this->classeur('Étudiants',$headers); $s=$classeur->getActiveSheet(); $ligne=2;
         Etudiant::with(['derniereInscription.formation','derniereInscription.anneeAcademique'])->orderBy('nom')->each(function($e)use($s,&$ligne){$i=$e->derniereInscription;$this->ecrire($s,$ligne++,[$e->id_etudiant,$e->prenom,$e->nom,$e->email,$e->telephone,$e->statut_etudiant,$i?->formation?->code,$i?->anneeAcademique?->libelle,$i?->annee_parcours,$i?->numero_inscription_intec,$i?->statut]);});
@@ -38,6 +41,7 @@ class ExcelController extends Controller
 
     public function finances(): StreamedResponse
     {
+        AuditService::manuel('export','Export Excel des finances');
         $headers=['Étudiant','E-mail','Diplôme','Année académique','Montant dû','Remise','Montant net','Total versé','Solde restant','Montant en retard','Statut paiement'];
         $classeur=$this->classeur('Finances',$headers); $s=$classeur->getActiveSheet(); $ligne=2;
         Inscription::with(['etudiant','formation','anneeAcademique','versements','echeances'])->latest()->get()->each(function($i)use($s,&$ligne){$this->ecrire($s,$ligne++,[$i->etudiant->prenom.' '.$i->etudiant->nom,$i->etudiant->email,$i->formation->code,$i->anneeAcademique->libelle,(float)$i->montant_du,(float)$i->montant_remise,(float)$i->montant_net,(float)$i->total_verse,(float)$i->solde_restant,(float)$i->montant_en_retard,$i->statut_paiement]);});
@@ -46,6 +50,7 @@ class ExcelController extends Controller
 
     public function resultats(): StreamedResponse
     {
+        AuditService::manuel('export','Export Excel des résultats');
         $headers=['Étudiant','E-mail','Diplôme','UE','Libellé UE','Session','Date examen','Présence','Note','Note sur','Décision'];
         $classeur=$this->classeur('Résultats',$headers); $s=$classeur->getActiveSheet(); $ligne=2;
         ResultatExamen::with(['inscription.etudiant','inscription.formation','examen.ue'])->whereNotNull('note')->get()->each(function($r)use($s,&$ligne){$this->ecrire($s,$ligne++,[$r->inscription->etudiant->prenom.' '.$r->inscription->etudiant->nom,$r->inscription->etudiant->email,$r->inscription->formation->code,$r->examen->ue->code,$r->examen->ue->libelle,$r->examen->session,$r->examen->date_examen->format('d/m/Y H:i'),$r->presence,(float)$r->note,(float)$r->examen->note_sur,$r->valide?'Validée':'Non validée']);});
@@ -64,6 +69,7 @@ class ExcelController extends Controller
             if($v->fails()){$erreurs[]='Ligne '.$numero.' : '.implode(' ',$v->errors()->all());continue;}
             $existant=Etudiant::where('email',$data['email'])->first(); if($existant&&$request->mode==='ignorer'){$ignores++;continue;} if($existant){$existant->update($data);$misAJour++;}else{Etudiant::create($data);$crees++;}
         }
+        AuditService::manuel('import','Import Excel des étudiants',null,['créés'=>$crees,'mis_à_jour'=>$misAJour,'ignorés'=>$ignores,'erreurs'=>count($erreurs)]);
         return back()->with('import_resultat',compact('crees','misAJour','ignores','erreurs'));
     }
 
