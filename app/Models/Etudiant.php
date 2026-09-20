@@ -20,4 +20,9 @@ class Etudiant extends Model
     {
         return $this->hasMany(Inscription::class, 'id_etudiant');
     }
+
+    public function derniereInscription()
+    {
+        return $this->hasOne(Inscription::class, 'id_etudiant')->latestOfMany();
+    }
 }

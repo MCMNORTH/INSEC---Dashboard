@@ -34,7 +34,7 @@
                         </thead>
                         <tbody>
                             @forelse ($etudiants as $etudiant)
-                                @php $inscription = $etudiant->inscriptions->last(); @endphp
+                                @php $inscription = $etudiant->derniereInscription; @endphp
                                 <tr class="border-b hover:bg-gray-50 cursor-pointer {{ $etudiantSelectionne?->id_etudiant === $etudiant->id_etudiant ? 'bg-blue-50' : '' }}"
                                     onclick="window.location='{{ route('finances.index', ['etudiant' => $etudiant->id_etudiant]) }}'">
                                     <td class="p-3 text-gray-900">{{ $etudiant->nom }} {{ $etudiant->prenom }}</td>

@@ -11,14 +11,14 @@ class FinanceController extends Controller
 {
     public function index(Request $request)
     {
-        $etudiants = Etudiant::with(['inscriptions.versements'])->orderBy('nom')->get();
+        $etudiants = Etudiant::with(['derniereInscription.versements'])->orderBy('nom')->get();
 
         $etudiantSelectionne = null;
         $inscriptionSelectionnee = null;
 
         if ($request->filled('etudiant')) {
-            $etudiantSelectionne = Etudiant::with('inscriptions.versements')->find($request->query('etudiant'));
-            $inscriptionSelectionnee = $etudiantSelectionne ? $etudiantSelectionne->inscriptions->last() : null;
+            $etudiantSelectionne = Etudiant::with('derniereInscription.versements')->find($request->query('etudiant'));
+            $inscriptionSelectionnee = $etudiantSelectionne?->derniereInscription;
         }
 
         $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();

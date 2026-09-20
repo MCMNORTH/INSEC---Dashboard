@@ -57,7 +57,7 @@
                     </thead>
                     <tbody class="divide-y divide-gray-100 text-sm">
                         @forelse ($etudiants as $etudiant)
-                            @php $derniereInscription = $etudiant->inscriptions->last(); @endphp
+                            @php $derniereInscription = $etudiant->derniereInscription; @endphp
                             <tr class="hover:bg-gray-50 transition cursor-pointer"
                                 onclick="window.location='{{ route('etudiants.show', $etudiant) }}'">
                                 <td class="p-3 font-medium text-gray-800">{{ $etudiant->nom }} {{ $etudiant->prenom }}</td>

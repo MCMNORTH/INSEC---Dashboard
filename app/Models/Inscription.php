@@ -6,7 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class Inscription extends Model
 {
-    protected $fillable = ['id_etudiant', 'id_formation', 'id_annee_academique', 'montant_du'];
+    protected $fillable = [
+        'id_etudiant', 'id_formation', 'id_annee_academique', 'annee_parcours',
+        'date_inscription', 'numero_inscription_intec', 'statut', 'montant_du',
+    ];
+
+    protected $casts = [
+        'date_inscription' => 'date',
+    ];
 
     public function etudiant()
     {
@@ -26,6 +33,14 @@ class Inscription extends Model
     public function versements()
     {
         return $this->hasMany(Versement::class);
+    }
+
+    public function ues()
+    {
+        return $this->belongsToMany(Ue::class, 'inscription_ue')
+            ->withPivot('statut')
+            ->withTimestamps()
+            ->orderBy('ordre');
     }
 
     public function getTotalVerseAttribute()

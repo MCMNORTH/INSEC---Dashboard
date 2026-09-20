@@ -23,4 +23,11 @@ class Ue extends Model
     {
         return $this->hasMany(AffectationEnseignant::class);
     }
+
+    public function inscriptions()
+    {
+        return $this->belongsToMany(Inscription::class, 'inscription_ue')
+            ->withPivot('statut')
+            ->withTimestamps();
+    }
 }

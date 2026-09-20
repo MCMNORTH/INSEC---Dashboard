@@ -2,155 +2,110 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AnneeAcademique;
 use App\Models\Etudiant;
 use App\Models\Formation;
-use App\Models\AnneeAcademique;
-use App\Models\Inscription;
+use App\Models\Ue;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class EtudiantController extends Controller
 {
     public function index(Request $request)
     {
-        // 1. Initialiser la requête avec les relations pour éviter le N+1
-        $query = Etudiant::with(['inscriptions.formation', 'inscriptions.anneeAcademique']);
-
-        // 2. Filtre par barre de recherche (Nom, Prénom ou Email)
+        $query = Etudiant::with(['derniereInscription.formation', 'derniereInscription.anneeAcademique']);
         if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('nom', 'like', "%{$search}%")
-                  ->orWhere('prenom', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            });
+            $query->where(fn ($q) => $q->where('nom', 'like', "%{$search}%")->orWhere('prenom', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
         }
-
-        // 3. Filtre par Formation
         if ($request->filled('formation_id')) {
-            $formationId = $request->input('formation_id');
-            $query->whereHas('inscriptions', function ($q) use ($formationId) {
-                $q->where('id_formation', $formationId);
-            });
+            $query->whereHas('inscriptions', fn ($q) => $q->where('id_formation', $request->input('formation_id')));
         }
-
-        // 4. Filtre par Année Académique
         if ($request->filled('annee_id')) {
-            $anneeId = $request->input('annee_id');
-            $query->whereHas('inscriptions', function ($q) use ($anneeId) {
-                $q->where('id_annee_academique', $anneeId);
-            });
+            $query->whereHas('inscriptions', fn ($q) => $q->where('id_annee_academique', $request->input('annee_id')));
         }
-
-        // 5. Récupération des étudiants filtrés avec pagination (et conservation des filtres dans les liens)
         $etudiants = $query->orderBy('nom')->paginate(10)->withQueryString();
-
-        // 6. Récupération des listes pour les menus déroulants
-        $formations = Formation::orderBy('nom')->get();
+        $formations = Formation::where('active', true)->orderBy('nom')->get();
         $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
-
         return view('etudiants.index', compact('etudiants', 'formations', 'annees'));
     }
 
     public function create()
     {
-        $formations = Formation::orderBy('nom')->get();
+        $formations = Formation::with('ues')->where('active', true)->orderBy('nom')->get();
         $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
-
         return view('etudiants.create', compact('formations', 'annees'));
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'nom' => 'required|string|max:255',
-            'prenom' => 'required|string|max:255',
-            'email' => 'required|email|unique:etudiants,email',
-            'telephone' => 'nullable|string|max:30',
-            'statut_etudiant' => 'required|in:Actif,Suspendu,Diplômé,Abandon',
-            'formation_id' => 'required|exists:formations,id',
-            'annee_academique_id' => 'required|exists:annees_academiques,id',
-        ]);
-
-        $etudiant = Etudiant::create([
-            'nom' => $validated['nom'],
-            'prenom' => $validated['prenom'],
-            'email' => $validated['email'],
-            'telephone' => $validated['telephone'] ?? null,
-            'statut_etudiant' => $validated['statut_etudiant'],
-        ]);
-
-        Inscription::create([
-            'id_etudiant' => $etudiant->id_etudiant,
-            'id_formation' => $validated['formation_id'],
-            'id_annee_academique' => $validated['annee_academique_id'],
-        ]);
-
-        return redirect()->route('etudiants.index')->with('status', 'Étudiant ajouté avec succès.');
+        $validated = $this->validateStudentAndEnrollment($request);
+        $etudiant = DB::transaction(function () use ($validated) {
+            $etudiant = Etudiant::create([
+                'nom' => $validated['nom'], 'prenom' => $validated['prenom'], 'email' => $validated['email'],
+                'telephone' => $validated['telephone'] ?? null, 'statut_etudiant' => $validated['statut_etudiant'],
+            ]);
+            $inscription = $etudiant->inscriptions()->create($this->enrollmentAttributes($validated));
+            $inscription->ues()->sync($validated['ue_ids']);
+            return $etudiant;
+        });
+        return redirect()->route('etudiants.show', $etudiant)->with('status', 'Étudiant et première inscription enregistrés.');
     }
 
     public function show(Etudiant $etudiant)
     {
-    $etudiant->load(['inscriptions.formation', 'inscriptions.anneeAcademique']);
-    return view('etudiants.show', compact('etudiant'));
+        $etudiant->load(['inscriptions' => fn ($q) => $q->with(['formation', 'anneeAcademique', 'ues', 'versements'])->latest()]);
+        return view('etudiants.show', compact('etudiant'));
     }
 
-    public function edit(Etudiant $etudiant)
-    {
-        $etudiant->load('inscriptions');
-        $formations = Formation::orderBy('nom')->get();
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
-
-        return view('etudiants.edit', compact('etudiant', 'formations', 'annees'));
-    }
+    public function edit(Etudiant $etudiant) { return view('etudiants.edit', compact('etudiant')); }
 
     public function update(Request $request, Etudiant $etudiant)
     {
         $validated = $request->validate([
-            'nom' => 'required|string|max:255',
-            'prenom' => 'required|string|max:255',
-            'email' => 'required|email|unique:etudiants,email,' . $etudiant->id_etudiant . ',id_etudiant',
-            'telephone' => 'nullable|string|max:30',
-            'statut_etudiant' => 'required|in:Actif,Suspendu,Diplômé,Abandon',
-            'formation_id' => 'required|exists:formations,id',
-            'annee_academique_id' => 'required|exists:annees_academiques,id',
+            'nom' => ['required', 'string', 'max:255'], 'prenom' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', Rule::unique('etudiants', 'email')->ignore($etudiant->id_etudiant, 'id_etudiant')],
+            'telephone' => ['nullable', 'string', 'max:30'],
+            'statut_etudiant' => ['required', Rule::in(['Actif', 'Suspendu', 'Diplômé', 'Abandon'])],
         ]);
-
-        $etudiant->update([
-            'nom' => $validated['nom'],
-            'prenom' => $validated['prenom'],
-            'email' => $validated['email'],
-            'telephone' => $validated['telephone'] ?? null,
-            'statut_etudiant' => $validated['statut_etudiant'],
-        ]);
-
-        $inscription = $etudiant->inscriptions()->latest()->first();
-        
-        if ($inscription) {
-            $inscription->update([
-                'id_formation' => $validated['formation_id'],
-                'id_annee_academique' => $validated['annee_academique_id'],
-            ]);
-        } else {
-            Inscription::create([
-                'id_etudiant' => $etudiant->id_etudiant,
-                'id_formation' => $validated['formation_id'],
-                'id_annee_academique' => $validated['annee_academique_id'],
-            ]);
-        }
-
-        return redirect()->route('etudiants.index')->with('status', 'Étudiant modifié avec succès.');
+        $etudiant->update($validated);
+        return redirect()->route('etudiants.show', $etudiant)->with('status', 'Identité mise à jour sans modifier l’historique.');
     }
 
     public function destroy(Etudiant $etudiant)
     {
-    $aUnHistoriqueFinancier = $etudiant->inscriptions()->whereHas('versements')->exists();
-
-    if ($aUnHistoriqueFinancier) {
-        return redirect()->route('etudiants.index')->with('error', "Impossible de supprimer cet étudiant : un historique financier existe.");
+        if ($etudiant->inscriptions()->whereHas('versements')->exists()) {
+            return redirect()->route('etudiants.index')->with('error', 'Impossible de supprimer cet étudiant : un historique financier existe.');
+        }
+        $etudiant->delete();
+        return redirect()->route('etudiants.index')->with('status', 'Étudiant supprimé.');
     }
 
-    $etudiant->delete();
+    private function validateStudentAndEnrollment(Request $request): array
+    {
+        $validated = $request->validate([
+            'nom' => ['required', 'string', 'max:255'], 'prenom' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'unique:etudiants,email'], 'telephone' => ['nullable', 'string', 'max:30'],
+            'statut_etudiant' => ['required', Rule::in(['Actif', 'Suspendu', 'Diplômé', 'Abandon'])],
+            'formation_id' => ['required', 'exists:formations,id'], 'annee_academique_id' => ['required', 'exists:annees_academiques,id'],
+            'annee_parcours' => ['required', 'integer', 'min:1'], 'date_inscription' => ['required', 'date'],
+            'numero_inscription_intec' => ['nullable', 'string', 'max:100'], 'ue_ids' => ['required', 'array', 'min:1'],
+            'ue_ids.*' => ['integer', 'distinct', 'exists:ues,id'],
+        ]);
+        $formation = Formation::findOrFail($validated['formation_id']);
+        $count = Ue::where('formation_id', $formation->id)->where('annee_parcours', $validated['annee_parcours'])->whereIn('id', $validated['ue_ids'])->count();
+        if ($validated['annee_parcours'] > $formation->duree_annees || $count !== count($validated['ue_ids'])) {
+            throw ValidationException::withMessages(['ue_ids' => 'Les UE choisies doivent appartenir au diplôme et à l’année de parcours sélectionnés.']);
+        }
+        return $validated;
+    }
 
-    return redirect()->route('etudiants.index')->with('status', 'Étudiant supprimé.');
+    private function enrollmentAttributes(array $validated): array
+    {
+        return ['id_formation' => $validated['formation_id'], 'id_annee_academique' => $validated['annee_academique_id'],
+            'annee_parcours' => $validated['annee_parcours'], 'date_inscription' => $validated['date_inscription'],
+            'numero_inscription_intec' => $validated['numero_inscription_intec'] ?? null, 'statut' => 'active'];
     }
 }

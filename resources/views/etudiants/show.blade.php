@@ -1,42 +1,5 @@
-<x-app-layout>
-    <div class="flex min-h-screen bg-gray-100">
-        @include('partials.sidebar')
-
-        <div class="flex-1 p-6">
-            <a href="{{ route('etudiants.index') }}" class="text-sm text-gray-500">&larr; Retour à la liste</a>
-
-            @php $inscription = $etudiant->inscriptions->last(); @endphp
-
-            <div class="bg-white rounded-xl shadow p-6 mt-4 max-w-3xl">
-                <div class="flex items-center gap-4 mb-6">
-                    <div class="w-12 h-12 rounded-full bg-[#1E2761] text-white flex items-center justify-center font-bold">
-                        {{ strtoupper(substr($etudiant->prenom, 0, 1) . substr($etudiant->nom, 0, 1)) }}
-                    </div>
-                    <div>
-                        <h1 class="text-lg font-bold text-[#1E2761]">{{ $etudiant->nom }} {{ $etudiant->prenom }}</h1>
-                        <x-statut-badge :statut="$etudiant->statut_etudiant" />
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <p class="text-xs text-gray-500">Formation</p>
-                        <p class="font-medium">{{ $inscription?->formation?->nom ?? '—' }}</p>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <p class="text-xs text-gray-500">Année académique</p>
-                        <p class="font-medium">{{ $inscription?->anneeAcademique?->libelle ?? '—' }}</p>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <p class="text-xs text-gray-500">E-mail</p>
-                        <p class="font-medium">{{ $etudiant->email }}</p>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <p class="text-xs text-gray-500">Téléphone</p>
-                        <p class="font-medium">{{ $etudiant->telephone ?? '—' }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</x-app-layout>
+<x-app-layout><div class="flex min-h-screen bg-gray-100">@include('partials.sidebar')<main class="flex-1 p-6"><a href="{{ route('etudiants.index') }}" class="text-sm text-gray-500">&larr; Retour à la liste</a>
+@if(session('status'))<div class="bg-green-50 text-green-700 p-3 rounded-lg mt-4">{{ session('status') }}</div>@endif
+<section class="bg-white rounded-xl shadow p-6 mt-4"><div class="flex flex-wrap justify-between gap-4"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-[#1E2761] text-white flex items-center justify-center font-bold">{{ strtoupper(substr($etudiant->prenom,0,1).substr($etudiant->nom,0,1)) }}</div><div><h1 class="text-lg font-bold text-[#1E2761]">{{ $etudiant->prenom }} {{ $etudiant->nom }}</h1><x-statut-badge :statut="$etudiant->statut_etudiant" /></div></div><div class="flex gap-2"><a href="{{ route('etudiants.edit',$etudiant) }}" class="bg-gray-100 px-4 py-2 rounded-lg">Modifier l’identité</a><a href="{{ route('etudiants.inscriptions.create',$etudiant) }}" class="bg-amber-500 text-white px-4 py-2 rounded-lg">Nouvelle inscription</a></div></div><div class="grid md:grid-cols-2 gap-4 mt-5"><div class="bg-gray-50 p-4 rounded-lg"><p class="text-xs text-gray-500">E-mail</p>{{ $etudiant->email }}</div><div class="bg-gray-50 p-4 rounded-lg"><p class="text-xs text-gray-500">Téléphone</p>{{ $etudiant->telephone ?? '—' }}</div></div></section>
+<div class="flex items-center justify-between mt-8 mb-3"><h2 class="text-lg font-bold text-[#1E2761]">Historique des inscriptions</h2><span class="text-sm text-gray-500">{{ $etudiant->inscriptions->count() }} inscription(s)</span></div>
+<div class="space-y-4">@forelse($etudiant->inscriptions as $inscription)<article class="bg-white rounded-xl shadow p-5"><div class="flex flex-wrap justify-between gap-3"><div><h3 class="font-semibold text-[#1E2761]">{{ $inscription->formation?->code }} — {{ $inscription->anneeAcademique?->libelle }}</h3><p class="text-sm text-gray-500">Année {{ $inscription->annee_parcours ?? '—' }} · {{ ucfirst($inscription->statut) }} · Inscrit le {{ $inscription->date_inscription?->format('d/m/Y') ?? '—' }}</p>@if($inscription->numero_inscription_intec)<p class="text-sm">N° INTEC : <strong>{{ $inscription->numero_inscription_intec }}</strong></p>@endif</div><a href="{{ route('inscriptions.edit',$inscription) }}" class="text-sm text-blue-700">Modifier</a></div><div class="mt-4"><p class="text-xs uppercase tracking-wide text-gray-500 mb-2">UE suivies</p><div class="flex flex-wrap gap-2">@forelse($inscription->ues as $ue)<span class="bg-blue-50 text-blue-800 rounded-full px-3 py-1 text-sm">{{ $ue->code }} · {{ $ue->libelle }}</span>@empty<span class="text-sm text-amber-700">Aucune UE renseignée (ancienne inscription).</span>@endforelse</div></div><div class="mt-4 border-t pt-3 text-sm"><strong>Situation financière :</strong> {{ number_format($inscription->total_verse,0,',',' ') }} / {{ number_format($inscription->montant_du,0,',',' ') }} payés · Solde {{ number_format($inscription->solde_restant,0,',',' ') }}</div></article>@empty<div class="bg-white rounded-xl p-6 text-gray-500">Aucune inscription.</div>@endforelse</div></main></div></x-app-layout>
