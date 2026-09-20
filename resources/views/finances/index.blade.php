@@ -17,7 +17,7 @@
                     Étudiants
                 </button>
                 <button onclick="showTab('reversement')" id="tab-reversement" class="px-4 py-2 rounded-lg text-sm font-medium bg-white text-gray-600 border">
-                    Reversement INTEC
+                    Synthèse annuelle
                 </button>
             </div>
 
@@ -59,11 +59,23 @@
 
                 @if ($etudiantSelectionne)
                     <div class="bg-[#1E2761] text-white rounded-xl shadow p-5">
-                        <p class="text-amber-400 text-xs font-bold uppercase tracking-wide">Inscription — {{ $etudiantSelectionne->nom }} {{ $etudiantSelectionne->prenom }}</p>
+                        <p class="text-amber-400 text-xs font-bold uppercase tracking-wide">Dossier — {{ $etudiantSelectionne->nom }} {{ $etudiantSelectionne->prenom }}</p>
+
+                        <div class="flex flex-wrap gap-2 mt-3">
+                            @foreach ($etudiantSelectionne->inscriptions as $dossier)
+                                <a href="{{ route('finances.index', ['etudiant' => $etudiantSelectionne->id_etudiant, 'inscription' => $dossier->id]) }}"
+                                   class="text-xs px-2 py-1 rounded {{ $inscriptionSelectionnee?->id === $dossier->id ? 'bg-amber-500 text-white' : 'bg-white/10 text-blue-100' }}">
+                                    {{ $dossier->formation?->code }} {{ $dossier->anneeAcademique?->libelle }}
+                                </a>
+                            @endforeach
+                        </div>
 
                         @if ($inscriptionSelectionnee)
-                            <p class="text-xs text-blue-200 mt-4">Montant dû (année)</p>
+                            <p class="text-xs text-blue-200 mt-4">Montant brut</p>
                             <p class="text-2xl font-bold">{{ number_format($inscriptionSelectionnee->montant_du, 0, ',', ' ') }} MRU</p>
+
+                            <p class="text-xs text-blue-200 mt-3">Remise · Montant net</p>
+                            <p class="text-sm"><span class="text-amber-300">- {{ number_format($inscriptionSelectionnee->montant_remise, 0, ',', ' ') }}</span> · <strong>{{ number_format($inscriptionSelectionnee->montant_net, 0, ',', ' ') }} MRU</strong></p>
 
                             <p class="text-xs text-blue-200 mt-4">Total versé</p>
                             <p class="text-lg font-bold text-green-400">{{ number_format($inscriptionSelectionnee->total_verse, 0, ',', ' ') }} MRU</p>
@@ -71,32 +83,47 @@
                             <p class="text-xs text-blue-200 mt-4">Solde restant (calculé)</p>
                             <p class="text-lg font-bold text-amber-400">{{ number_format($inscriptionSelectionnee->solde_restant, 0, ',', ' ') }} MRU</p>
 
-                            <form method="POST" action="{{ route('finances.montant.update', $etudiantSelectionne) }}" class="border-t border-blue-400/30 mt-4 pt-4 flex items-end gap-2">
+                            @if ($inscriptionSelectionnee->montant_en_retard > 0)
+                                <p class="mt-2 rounded bg-red-500/20 p-2 text-xs text-red-200">En retard : {{ number_format($inscriptionSelectionnee->montant_en_retard, 0, ',', ' ') }} MRU</p>
+                            @endif
+
+                            <form method="POST" action="{{ route('finances.inscriptions.update', $inscriptionSelectionnee) }}" class="border-t border-blue-400/30 mt-4 pt-4 space-y-2">
                                 @csrf
-                                <div class="flex-1">
-                                    <label class="text-xs text-blue-200">Modifier le montant dû</label>
-                                    <input type="number" name="montant_du" min="0" value="{{ $inscriptionSelectionnee->montant_du }}" class="w-full rounded-lg mt-1 text-gray-900" required>
+                                @method('PUT')
+                                <div class="flex gap-2">
+                                    <div class="flex-1"><label class="text-xs text-blue-200">Montant brut</label><input type="number" name="montant_du" min="0" value="{{ $inscriptionSelectionnee->montant_du }}" class="w-full rounded-lg mt-1 text-gray-900 text-xs" required></div>
+                                    <div class="flex-1"><label class="text-xs text-blue-200">Remise</label><input type="number" name="montant_remise" min="0" value="{{ $inscriptionSelectionnee->montant_remise }}" class="w-full rounded-lg mt-1 text-gray-900 text-xs" required></div>
                                 </div>
-                                <button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium px-3 py-2 rounded-lg">
-                                    Modifier
-                                </button>
+                                <textarea name="note_financiere" placeholder="Note financière interne" class="w-full rounded-lg text-gray-900 text-xs">{{ $inscriptionSelectionnee->note_financiere }}</textarea>
+                                <button type="submit" class="w-full bg-amber-500 text-white text-xs font-medium px-3 py-2 rounded-lg">Mettre à jour</button>
                             </form>
+
+                            <div class="border-t border-blue-400/30 mt-4 pt-4">
+                                <p class="text-xs text-blue-200 mb-2">Échéancier</p>
+                                @forelse($inscriptionSelectionnee->echeances as $echeance)
+                                    <div class="flex justify-between text-xs bg-white/10 rounded px-2 py-1 mb-1"><span>{{ $echeance->libelle }} · {{ $echeance->date_echeance->format('d/m/Y') }}</span><strong>{{ number_format($echeance->montant,0,',',' ') }}</strong></div>
+                                @empty <p class="text-xs text-blue-200">Aucune échéance.</p> @endforelse
+                                <form method="POST" action="{{ route('finances.echeances.store', $inscriptionSelectionnee) }}" class="grid grid-cols-2 gap-2 mt-2">@csrf
+                                    <input name="libelle" placeholder="Ex. 1re tranche" class="rounded text-gray-900 text-xs" required><input type="number" name="montant" min="1" placeholder="Montant" class="rounded text-gray-900 text-xs" required><input type="date" name="date_echeance" class="rounded text-gray-900 text-xs" required><button class="bg-white/10 rounded text-xs">+ Échéance</button>
+                                </form>
+                            </div>
 
                             <div class="border-t border-blue-400/30 mt-4 pt-4">
                                 <p class="text-xs text-blue-200 mb-2">Derniers versements</p>
                                 <div class="space-y-2 mb-4">
                                     @forelse ($inscriptionSelectionnee->versements->sortByDesc('date_versement') as $versement)
                                         <div class="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2 text-xs">
-                                            <span>{{ \Carbon\Carbon::parse($versement->date_versement)->format('d/m/Y') }}</span>
+                                            <span>{{ $versement->date_versement->format('d/m/Y') }}</span>
                                             <span>{{ number_format($versement->montant, 0, ',', ' ') }}</span>
                                             <span class="{{ $versement->statut === 'Validée' ? 'text-green-400' : 'text-amber-400' }}">{{ $versement->statut }}</span>
                                         </div>
+                                        <p class="text-[10px] text-blue-200 px-2">{{ $versement->numero_recu ?? 'Sans reçu' }} · {{ $versement->mode_paiement }} {{ $versement->reference ? '· '.$versement->reference : '' }}</p>
                                     @empty
                                         <p class="text-xs text-blue-200">Aucun versement.</p>
                                     @endforelse
                                 </div>
 
-                                <form method="POST" action="{{ route('finances.versements.store', $etudiantSelectionne) }}" class="space-y-2">
+                                <form method="POST" action="{{ route('finances.versements.store', $inscriptionSelectionnee) }}" class="space-y-2">
                                     @csrf
                                     <p class="text-xs text-blue-200">Ajouter un versement</p>
                                     <div class="flex gap-2">
@@ -107,6 +134,8 @@
                                         <option value="Validée">Validée</option>
                                         <option value="En attente">En attente</option>
                                     </select>
+                                    <div class="flex gap-2"><select name="mode_paiement" class="w-1/2 rounded-lg text-gray-900 text-xs">@foreach(['Espèces','Virement','Chèque','Carte','Mobile Money'] as $mode)<option>{{ $mode }}</option>@endforeach</select><input name="reference" placeholder="Référence (facultatif)" class="w-1/2 rounded-lg text-gray-900 text-xs"></div>
+                                    <textarea name="note" placeholder="Note (facultatif)" class="w-full rounded-lg text-gray-900 text-xs"></textarea>
                                     <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium px-3 py-2 rounded-lg">
                                         + Ajouter le versement
                                     </button>
@@ -122,7 +151,7 @@
                 @endif
             </div>
 
-            {{-- Onglet Reversement INTEC --}}
+            {{-- Synthèse des frais facturés et encaissés ; les reversements INTEC seront suivis séparément. --}}
             <div id="panel-reversement" class="hidden">
                 <form method="GET" action="{{ route('finances.index') }}" class="mb-4 flex items-center gap-3">
                     <input type="hidden" name="tab" value="reversement">
@@ -140,11 +169,11 @@
                         <p class="text-xl font-bold text-[#1E2761]">{{ $carteReversement->nb_etudiants ?? 0 }}</p>
                     </div>
                     <div class="bg-white rounded-xl shadow p-4">
-                        <p class="text-xs text-gray-500">Montant dû à l'INTEC</p>
+                        <p class="text-xs text-gray-500">Frais nets facturés</p>
                         <p class="text-xl font-bold text-[#1E2761]">{{ number_format(($carteReversement->montant_du ?? 0) / 1000000, 1) }} M MRU</p>
                     </div>
                     <div class="bg-white rounded-xl shadow p-4">
-                        <p class="text-xs text-gray-500">Déjà reversé</p>
+                        <p class="text-xs text-gray-500">Encaissé auprès des étudiants</p>
                         <p class="text-xl font-bold text-green-600">{{ number_format(($carteReversement->reverse ?? 0) / 1000000, 1) }} M MRU</p>
                     </div>
                 </div>
@@ -155,7 +184,7 @@
                             <th class="p-3 text-left">Année académique</th>
                             <th class="p-3 text-left">Étudiants</th>
                             <th class="p-3 text-left">Montant dû</th>
-                            <th class="p-3 text-left">Reversé</th>
+                            <th class="p-3 text-left">Encaissé</th>
                             <th class="p-3 text-left">Statut</th>
                         </tr>
                     </thead>

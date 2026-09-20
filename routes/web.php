@@ -39,8 +39,9 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::delete('/affectations/{affectation}', [EnseignantController::class, 'destroyAffectation'])
         ->name('affectations.destroy');
     Route::get('/finances', [App\Http\Controllers\FinanceController::class, 'index'])->name('finances.index');
-    Route::post('/finances/{etudiant}/montant', [App\Http\Controllers\FinanceController::class, 'updateMontant'])->name('finances.montant.update');
-    Route::post('/finances/{etudiant}/versements', [App\Http\Controllers\FinanceController::class, 'storeVersement'])->name('finances.versements.store');
+    Route::put('/finances/inscriptions/{inscription}', [App\Http\Controllers\FinanceController::class, 'updateSituation'])->name('finances.inscriptions.update');
+    Route::post('/finances/inscriptions/{inscription}/versements', [App\Http\Controllers\FinanceController::class, 'storeVersement'])->name('finances.versements.store');
+    Route::post('/finances/inscriptions/{inscription}/echeances', [App\Http\Controllers\FinanceController::class, 'storeEcheance'])->name('finances.echeances.store');
 });
 
 // Réinitialisation de mot de passe (Custom)
