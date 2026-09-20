@@ -5,6 +5,8 @@ use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\FormationController;
 use App\Http\Controllers\InscriptionController;
 use App\Http\Controllers\ExamenController;
+use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\PdfController;
 use App\Http\Controllers\Auth\PasswordResetController;
 
 /*
@@ -34,6 +36,14 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/formations', [FormationController::class, 'index'])->name('formations.index');
     Route::resource('examens', ExamenController::class)->only(['index', 'create', 'store', 'show']);
     Route::put('/examens/{examen}/resultats/{resultat}', [ExamenController::class, 'updateResultat'])->name('examens.resultats.update');
+    Route::get('/etudiants/{etudiant}/documents', [DocumentController::class, 'index'])->name('etudiants.documents.index');
+    Route::post('/etudiants/{etudiant}/documents', [DocumentController::class, 'store'])->name('etudiants.documents.store');
+    Route::get('/documents/{piece}/telecharger', [DocumentController::class, 'download'])->name('documents.download');
+    Route::put('/documents/{piece}', [DocumentController::class, 'update'])->name('documents.update');
+    Route::get('/pdf/attestations/{inscription}', [PdfController::class, 'attestation'])->name('pdf.attestation');
+    Route::get('/pdf/releves/{inscription}', [PdfController::class, 'releve'])->name('pdf.releve');
+    Route::get('/pdf/convocations/{examen}/{resultat}', [PdfController::class, 'convocation'])->name('pdf.convocation');
+    Route::get('/pdf/recus/{versement}', [PdfController::class, 'recu'])->name('pdf.recu');
     // Gestion des Enseignants (Toutes les fonctions CRUD)
     Route::resource('enseignants', EnseignantController::class);
     // Gestion des Affectations des Enseignants

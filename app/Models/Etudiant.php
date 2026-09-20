@@ -25,4 +25,9 @@ class Etudiant extends Model
     {
         return $this->hasOne(Inscription::class, 'id_etudiant')->latestOfMany();
     }
+
+    public function piecesAdministratives()
+    {
+        return $this->hasMany(PieceAdministrative::class, 'etudiant_id');
+    }
 }
