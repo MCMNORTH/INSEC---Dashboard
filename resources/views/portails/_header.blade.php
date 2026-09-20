@@ -1,0 +1,1 @@
+<header class="bg-[#1E2761] text-white px-6 py-4 flex justify-between items-center"><div><strong class="text-xl">INSEC</strong><span class="text-blue-200 ml-3">{{ $espace }}</span></div><form method="POST" action="{{ route('logout') }}">@csrf<button class="text-sm bg-white/10 px-3 py-2 rounded">Déconnexion</button></form></header>

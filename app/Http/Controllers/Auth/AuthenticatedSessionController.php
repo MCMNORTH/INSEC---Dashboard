@@ -37,20 +37,19 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
 
         
-        if (in_array($user->role, ['admin', 'super_admin'])) {
-            return redirect()->intended('/admin/dashboard');
+        if ($user->active === false) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return redirect()->route('login')->withErrors(['email' => 'Ce compte est désactivé.']);
         }
 
+        $destination = match ($user->role) {
+            'admin', 'super_admin' => route('admin.dashboard'),
+            default => route('dashboard'),
+        };
 
-        Auth::guard('web')->logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect()->route('login')
-            ->withErrors([
-                'email' => 'Accès réservé aux administrateurs uniquement.',
-            ]);
+        return redirect()->intended($destination);
     }
 
     /**

@@ -30,4 +30,6 @@ class Etudiant extends Model
     {
         return $this->hasMany(PieceAdministrative::class, 'etudiant_id');
     }
+
+    public function user() { return $this->hasOne(User::class, 'etudiant_id'); }
 }

@@ -1,33 +1,27 @@
 <?php
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\EtudiantController;
+
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\CompteController;
+use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EnseignantController;
+use App\Http\Controllers\EtudiantController;
+use App\Http\Controllers\ExamenController;
 use App\Http\Controllers\FormationController;
 use App\Http\Controllers\InscriptionController;
-use App\Http\Controllers\ExamenController;
-use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\PdfController;
-use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\PortalController;
+use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-*/
+Route::get('/', fn () => view('auth.login'));
 
-// Page d'accueil (Login)
-Route::get('/', function () {
-    return view('auth.login');
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', [PortalController::class, 'redirect'])->name('dashboard');
+    Route::get('/portail/etudiant', [PortalController::class, 'etudiant'])->middleware('role:etudiant')->name('portail.etudiant');
+    Route::get('/portail/enseignant', [PortalController::class, 'enseignant'])->middleware('role:enseignant')->name('portail.enseignant');
 });
 
-Route::get('/dashboard', [App\Http\Controllers\AdminDashboardController::class, 'index'])
-    ->middleware(['auth', 'admin'])
-    ->name('dashboard');
-Route::middleware(['auth', 'admin'])->group(function () {
-    // Dashboards selon les rôles
-       Route::get('/admin/dashboard', [App\Http\Controllers\AdminDashboardController::class, 'index'])
-        ->name('admin.dashboard');
-    // Gestion des Étudiants (Toutes les fonctions CRUD)
+Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {
+    Route::get('/admin/dashboard', [App\Http\Controllers\AdminDashboardController::class, 'index'])->name('admin.dashboard');
     Route::resource('etudiants', EtudiantController::class);
     Route::get('/etudiants/{etudiant}/inscriptions/create', [InscriptionController::class, 'create'])->name('etudiants.inscriptions.create');
     Route::post('/etudiants/{etudiant}/inscriptions', [InscriptionController::class, 'store'])->name('etudiants.inscriptions.store');
@@ -44,20 +38,21 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/pdf/releves/{inscription}', [PdfController::class, 'releve'])->name('pdf.releve');
     Route::get('/pdf/convocations/{examen}/{resultat}', [PdfController::class, 'convocation'])->name('pdf.convocation');
     Route::get('/pdf/recus/{versement}', [PdfController::class, 'recu'])->name('pdf.recu');
-    // Gestion des Enseignants (Toutes les fonctions CRUD)
     Route::resource('enseignants', EnseignantController::class);
-    // Gestion des Affectations des Enseignants
-    Route::post('/enseignants/{enseignant}/affectations', [EnseignantController::class, 'storeAffectation'])
-        ->name('enseignants.affectations.store');
-    Route::delete('/affectations/{affectation}', [EnseignantController::class, 'destroyAffectation'])
-        ->name('affectations.destroy');
+    Route::post('/enseignants/{enseignant}/affectations', [EnseignantController::class, 'storeAffectation'])->name('enseignants.affectations.store');
+    Route::delete('/affectations/{affectation}', [EnseignantController::class, 'destroyAffectation'])->name('affectations.destroy');
+    Route::get('/comptes', [CompteController::class, 'index'])->name('comptes.index');
+    Route::post('/comptes', [CompteController::class, 'store'])->name('comptes.store');
+    Route::put('/comptes/{user}/statut', [CompteController::class, 'toggle'])->name('comptes.toggle');
+});
+
+Route::middleware(['auth', 'role:admin,super_admin,finance'])->group(function () {
     Route::get('/finances', [App\Http\Controllers\FinanceController::class, 'index'])->name('finances.index');
     Route::put('/finances/inscriptions/{inscription}', [App\Http\Controllers\FinanceController::class, 'updateSituation'])->name('finances.inscriptions.update');
     Route::post('/finances/inscriptions/{inscription}/versements', [App\Http\Controllers\FinanceController::class, 'storeVersement'])->name('finances.versements.store');
     Route::post('/finances/inscriptions/{inscription}/echeances', [App\Http\Controllers\FinanceController::class, 'storeEcheance'])->name('finances.echeances.store');
 });
 
-// Réinitialisation de mot de passe (Custom)
 Route::controller(PasswordResetController::class)->group(function () {
     Route::get('forgot-password', 'showForgotForm')->name('password.request');
     Route::post('forgot-password', 'sendCode')->name('password.email');

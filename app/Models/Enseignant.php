@@ -20,6 +20,8 @@ class Enseignant extends Model
         return $this->hasMany(AffectationEnseignant::class, 'enseignant_id');
     }
 
+    public function user() { return $this->hasOne(User::class, 'enseignant_id'); }
+
     public function getNombreUeAttribute()
     {
         return $this->affectations ? $this->affectations->count() : 0;
