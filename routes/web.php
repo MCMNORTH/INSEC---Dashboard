@@ -2,6 +2,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\EtudiantController;
 use App\Http\Controllers\EnseignantController;
+use App\Http\Controllers\FormationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 
 /*
@@ -24,6 +25,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->name('admin.dashboard');
     // Gestion des Étudiants (Toutes les fonctions CRUD)
     Route::resource('etudiants', EtudiantController::class);
+    Route::get('/formations', [FormationController::class, 'index'])->name('formations.index');
     // Gestion des Enseignants (Toutes les fonctions CRUD)
     Route::resource('enseignants', EnseignantController::class);
     // Gestion des Affectations des Enseignants
