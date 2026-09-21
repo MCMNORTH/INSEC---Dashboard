@@ -19,6 +19,7 @@ class SimplifiedNavigationTest extends TestCase
         $response->assertSee('aria-label="Alertes',false);
         $response->assertSee('sticky top-0 w-64 h-screen',false);
         $response->assertSee('images/logo-insec.png',false);
+        $response->assertDontSee('<p class="text-[#1E2761] font-bold text-xl mt-3">INSEC</p>',false);
     }
 
     public function test_grouped_hubs_keep_all_advanced_tools_accessible(): void

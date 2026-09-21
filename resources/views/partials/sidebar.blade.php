@@ -26,8 +26,7 @@
     <div class="mb-8 text-center">
         <img src="{{ asset('images/logo-insec.png') }}" alt="Logo INSEC" class="w-36 h-20 mx-auto object-contain mb-2">
         <div class="border-t-2 border-[#D4AF37] w-10 mx-auto"></div>
-        <p class="text-[#1E2761] font-bold text-xl mt-3">INSEC</p>
-        <p class="text-xs text-gray-400">{{ $role === 'finance' ? 'Espace finance' : 'Espace administration' }}</p>
+        <p class="text-xs text-gray-400 mt-3">{{ $role === 'finance' ? 'Espace finance' : 'Espace administration' }}</p>
     </div>
 
     <nav class="space-y-2 flex-1" aria-label="Navigation principale">

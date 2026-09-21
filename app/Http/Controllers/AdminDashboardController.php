@@ -16,8 +16,9 @@ class AdminDashboardController extends Controller
 {
     public function index(Request $request)
     {
+        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
         $annees = AnneeAcademique::orderByDesc('libelle')->get();
-        $anneeId = $request->integer('annee_id') ?: $annees->first()?->id;
+        $anneeId = $request->integer('annee_id') ?: $anneeCourante->id;
         if ($anneeId && ! $annees->contains('id', $anneeId)) abort(422, 'Année académique invalide.');
 
         $inscriptions = Inscription::with(['etudiant', 'formation', 'versements', 'echeances', 'resultatsExamens.examen.ue'])

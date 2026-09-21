@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AnneeAcademique;
+use Carbon\Carbon;
 use App\Models\Formation;
 use App\Models\Inscription;
 use App\Models\User;
@@ -26,5 +27,25 @@ class AdminAnalyticsDashboardTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin)->get(route('admin.dashboard', ['annee_id' => 999999]))->assertUnprocessable();
+    }
+
+    public function test_dashboard_selects_and_creates_the_current_academic_year_automatically(): void
+    {
+        Carbon::setTestNow('2026-09-21');
+        $admin = User::factory()->create(['role' => 'admin']);
+        AnneeAcademique::create(['libelle' => '2027-2028']);
+
+        $this->actingAs($admin)->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('<option value="2" selected>2026-2027</option>', false);
+
+        $this->assertDatabaseHas('annees_academiques', ['libelle' => '2026-2027']);
+        Carbon::setTestNow();
+    }
+
+    public function test_academic_year_rolls_over_each_september(): void
+    {
+        $this->assertSame('2026-2027', AnneeAcademique::libelleCourante(Carbon::parse('2027-08-31')));
+        $this->assertSame('2027-2028', AnneeAcademique::libelleCourante(Carbon::parse('2027-09-01')));
     }
 }
