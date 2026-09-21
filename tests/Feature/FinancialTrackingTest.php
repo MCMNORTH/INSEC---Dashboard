@@ -84,4 +84,30 @@ class FinancialTrackingTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_bumex_enrollment_keeps_normal_revenue_and_cnam_costs_separate(): void
+    {
+        $this->inscription->load('formation');
+        $ue = $this->inscription->formation->ues()->firstOrFail();
+        $this->inscription->ues()->sync([$ue->id]);
+        $this->inscription->update(['financeur' => 'bumex']);
+        $this->inscription->synchroniserTarification();
+
+        $fresh = $this->inscription->fresh()->load('ues');
+        $this->assertSame(16000, $fresh->montant_du);
+        $this->assertSame(160.0, $fresh->cout_cnam_total_eur);
+        $this->assertSame('bumex', $fresh->financeur);
+    }
+
+    public function test_cnam_forecast_uses_the_yearly_exchange_rate(): void
+    {
+        $annee = $this->inscription->anneeAcademique;
+        $this->put(route('finances.cnam.update', $annee), [
+            'taux_change_previsionnel' => 43.5, 'statut' => 'Prévisionnelle',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('factures_cnam', [
+            'annee_academique_id' => $annee->id, 'taux_change_previsionnel' => 43.5,
+        ]);
+    }
 }

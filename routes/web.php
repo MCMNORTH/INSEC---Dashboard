@@ -90,6 +90,7 @@ Route::middleware(['auth', 'role:admin,super_admin,finance'])->group(function ()
     Route::put('/finances/inscriptions/{inscription}', [App\Http\Controllers\FinanceController::class, 'updateSituation'])->name('finances.inscriptions.update');
     Route::post('/finances/inscriptions/{inscription}/versements', [App\Http\Controllers\FinanceController::class, 'storeVersement'])->name('finances.versements.store');
     Route::post('/finances/inscriptions/{inscription}/echeances', [App\Http\Controllers\FinanceController::class, 'storeEcheance'])->name('finances.echeances.store');
+    Route::put('/finances/cnam/{annee}', [App\Http\Controllers\FinanceController::class, 'updateFactureCnam'])->name('finances.cnam.update');
 });
 
 Route::controller(PasswordResetController::class)->group(function () {

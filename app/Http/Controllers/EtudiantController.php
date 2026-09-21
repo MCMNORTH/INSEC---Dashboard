@@ -49,6 +49,7 @@ class EtudiantController extends Controller
             ]);
             $inscription = $etudiant->inscriptions()->create($this->enrollmentAttributes($validated));
             $inscription->ues()->sync($validated['ue_ids']);
+            $inscription->synchroniserTarification();
             return $etudiant;
         });
         return redirect()->route('etudiants.show', $etudiant)->with('status', 'Étudiant et première inscription enregistrés.');
@@ -92,6 +93,7 @@ class EtudiantController extends Controller
             'formation_id' => ['required', 'exists:formations,id'], 'annee_academique_id' => ['required', 'exists:annees_academiques,id'],
             'annee_parcours' => ['required', 'integer', 'min:1'], 'date_inscription' => ['required', 'date'],
             'numero_inscription_intec' => ['nullable', 'string', 'max:100'], 'ue_ids' => ['required', 'array', 'min:1'],
+            'financeur' => ['nullable', Rule::in(['etudiant', 'bumex'])],
             'ue_ids.*' => ['integer', 'distinct', 'exists:ues,id'],
         ]);
         $formation = Formation::findOrFail($validated['formation_id']);
@@ -106,6 +108,7 @@ class EtudiantController extends Controller
     {
         return ['id_formation' => $validated['formation_id'], 'id_annee_academique' => $validated['annee_academique_id'],
             'annee_parcours' => $validated['annee_parcours'], 'date_inscription' => $validated['date_inscription'],
-            'numero_inscription_intec' => $validated['numero_inscription_intec'] ?? null, 'statut' => 'active'];
+            'numero_inscription_intec' => $validated['numero_inscription_intec'] ?? null, 'statut' => 'active',
+            'financeur' => $validated['financeur'] ?? 'etudiant'];
     }
 }

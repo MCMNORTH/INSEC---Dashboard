@@ -66,15 +66,16 @@ class CandidatureController extends Controller
     public function convertir(Request $request,Candidature $candidature)
     {
         abort_unless($candidature->statut==='Admissible',422,'La candidature doit être admissible avant inscription.');
-        $data=$request->validate(['annee_parcours'=>['required','integer','min:1','max:3'],'date_inscription'=>'required|date','numero_inscription_intec'=>'nullable|string|max:100','montant_du'=>'required|integer|min:0']);
+        $data=$request->validate(['annee_parcours'=>['required','integer','min:1','max:3'],'date_inscription'=>'required|date','numero_inscription_intec'=>'nullable|string|max:100','financeur'=>'nullable|in:etudiant,bumex']);
         abort_if($data['annee_parcours']>$candidature->formation->duree_annees,422,'Année de parcours incompatible.');
         $ues=Ue::where('formation_id',$candidature->formation_id)->where('annee_parcours',$data['annee_parcours'])->where('active',true)->pluck('id');
         abort_if($ues->isEmpty(),422,'Aucune UE active pour cette année de parcours.');
 
         $etudiant=DB::transaction(function() use($candidature,$data,$ues){
             $etudiant=Etudiant::firstOrCreate(['email'=>$candidature->email],['nom'=>$candidature->nom,'prenom'=>$candidature->prenom,'telephone'=>$candidature->telephone,'statut_etudiant'=>'Actif']);
-            $inscription=Inscription::create(['id_etudiant'=>$etudiant->id_etudiant,'id_formation'=>$candidature->formation_id,'id_annee_academique'=>$candidature->annee_academique_id,'annee_parcours'=>$data['annee_parcours'],'date_inscription'=>$data['date_inscription'],'numero_inscription_intec'=>$data['numero_inscription_intec']??null,'statut'=>'active','montant_du'=>$data['montant_du']]);
+            $inscription=Inscription::create(['id_etudiant'=>$etudiant->id_etudiant,'id_formation'=>$candidature->formation_id,'id_annee_academique'=>$candidature->annee_academique_id,'annee_parcours'=>$data['annee_parcours'],'date_inscription'=>$data['date_inscription'],'numero_inscription_intec'=>$data['numero_inscription_intec']??null,'statut'=>'active','financeur'=>$data['financeur']??'etudiant']);
             $inscription->ues()->sync($ues);
+            $inscription->synchroniserTarification();
             $candidature->update(['statut'=>'Inscrite','etudiant_id'=>$etudiant->id_etudiant,'traitee_at'=>now()]);
             return $etudiant;
         });

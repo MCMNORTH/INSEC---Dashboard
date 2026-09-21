@@ -26,6 +26,7 @@ class InscriptionController extends Controller
         DB::transaction(function () use ($etudiant, $validated) {
             $inscription = $etudiant->inscriptions()->create($this->attributes($validated));
             $inscription->ues()->sync($validated['ue_ids']);
+            $inscription->synchroniserTarification();
         });
         return redirect()->route('etudiants.show', $etudiant)->with('status', 'Nouvelle inscription ajoutée ; l’historique précédent est conservé.');
     }
@@ -44,6 +45,7 @@ class InscriptionController extends Controller
         DB::transaction(function () use ($inscription, $validated) {
             $inscription->update($this->attributes($validated));
             $inscription->ues()->sync($validated['ue_ids']);
+            $inscription->synchroniserTarification();
         });
         return redirect()->route('etudiants.show', $inscription->id_etudiant)->with('status', 'Inscription mise à jour.');
     }
@@ -55,6 +57,7 @@ class InscriptionController extends Controller
             'annee_parcours' => ['required', 'integer', 'min:1'], 'date_inscription' => ['required', 'date'],
             'numero_inscription_intec' => ['nullable', 'string', 'max:100'],
             'statut' => ['required', 'in:active,terminée,annulée,suspendue'], 'ue_ids' => ['required', 'array', 'min:1'],
+            'financeur' => ['nullable', 'in:etudiant,bumex'],
             'ue_ids.*' => ['integer', 'distinct', 'exists:ues,id'],
         ]);
         $formation = Formation::findOrFail($validated['formation_id']);
@@ -69,6 +72,7 @@ class InscriptionController extends Controller
     {
         return ['id_formation' => $validated['formation_id'], 'id_annee_academique' => $validated['annee_academique_id'],
             'annee_parcours' => $validated['annee_parcours'], 'date_inscription' => $validated['date_inscription'],
-            'numero_inscription_intec' => $validated['numero_inscription_intec'] ?? null, 'statut' => $validated['statut']];
+            'numero_inscription_intec' => $validated['numero_inscription_intec'] ?? null, 'statut' => $validated['statut'],
+            'financeur' => $validated['financeur'] ?? 'etudiant'];
     }
 }
