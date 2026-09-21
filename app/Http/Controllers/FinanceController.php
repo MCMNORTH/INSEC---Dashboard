@@ -23,8 +23,9 @@ class FinanceController extends Controller
                 : $etudiantSelectionne->inscriptions()->with(['formation', 'anneeAcademique', 'versements', 'echeances'])->latest()->first();
         }
 
+        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
         $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
-        $anneeSelectionneeId = $request->integer('annee_reversement') ?: $annees->first()?->id;
+        $anneeSelectionneeId = $request->integer('annee_reversement') ?: $anneeCourante->id;
         $anneesReversement = $annees->map(function ($annee) {
             $inscriptions = Inscription::where('id_annee_academique', $annee->id)->with('versements')->get();
             $montantNet = $inscriptions->sum(fn ($i) => $i->montant_net);

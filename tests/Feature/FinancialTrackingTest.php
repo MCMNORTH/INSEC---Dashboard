@@ -7,6 +7,7 @@ use App\Models\Etudiant;
 use App\Models\Formation;
 use App\Models\Inscription;
 use App\Models\User;
+use Carbon\Carbon;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -70,5 +71,17 @@ class FinancialTrackingTest extends TestCase
 
         $this->assertCount(1, $this->inscription->fresh()->versements);
         $this->assertCount(0, $otherEnrollment->fresh()->versements);
+    }
+
+    public function test_annual_finance_summary_defaults_to_the_current_academic_year(): void
+    {
+        Carbon::setTestNow('2026-09-21');
+        $courante = AnneeAcademique::where('libelle', '2026-2027')->firstOrFail();
+
+        $this->get(route('finances.index', ['tab' => 'reversement']))
+            ->assertOk()
+            ->assertSee('<option value="'.$courante->id.'" selected>2026-2027</option>', false);
+
+        Carbon::setTestNow();
     }
 }
