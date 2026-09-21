@@ -18,13 +18,13 @@
     }
 @endphp
 
-<aside class="relative w-64 bg-white border-r border-gray-200 min-h-screen p-4 flex flex-col shrink-0">
+<aside class="sticky top-0 w-64 h-screen bg-white border-r border-gray-200 p-4 flex flex-col shrink-0 overflow-hidden">
     <a href="{{ route('alertes.index') }}" aria-label="Alertes{{ $alertesNonLues ? ' — '.$alertesNonLues.' non lues' : '' }}" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center text-[#1E2761] hover:border-[#D4AF37]">
         <i class="fa-solid fa-bell" aria-hidden="true"></i>
         @if($alertesNonLues)<span class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center">{{ $alertesNonLues > 9 ? '9+' : $alertesNonLues }}</span>@endif
     </a>
     <div class="mb-8 text-center">
-        <img src="{{ asset('images/logo-insec.png') }}" alt="Logo INSEC" class="w-16 h-16 mx-auto object-contain mb-2">
+        <img src="{{ asset('images/logo-insec.png') }}" alt="Logo INSEC" class="w-36 h-20 mx-auto object-contain mb-2">
         <div class="border-t-2 border-[#D4AF37] w-10 mx-auto"></div>
         <p class="text-[#1E2761] font-bold text-xl mt-3">INSEC</p>
         <p class="text-xs text-gray-400">{{ $role === 'finance' ? 'Espace finance' : 'Espace administration' }}</p>

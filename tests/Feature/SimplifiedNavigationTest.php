@@ -17,6 +17,8 @@ class SimplifiedNavigationTest extends TestCase
         foreach(['Tableau de bord','Étudiants','Académique','Finances','Administration'] as $label)$response->assertSee($label);
         foreach(['Admissions','Diplômes &amp; UE','Examens &amp; résultats','Comptes &amp; accès','Imports &amp; exports','Journal d’audit'] as $label)$response->assertDontSee($label,false);
         $response->assertSee('aria-label="Alertes',false);
+        $response->assertSee('sticky top-0 w-64 h-screen',false);
+        $response->assertSee('images/logo-insec.png',false);
     }
 
     public function test_grouped_hubs_keep_all_advanced_tools_accessible(): void
