@@ -8,6 +8,8 @@ Chaque push et chaque pull request vers `main` déclenche GitHub Actions. La cha
 
 Une pull request ne doit être fusionnée que lorsque les tâches `Laravel · PHP 8.3` et `Front-end · Node.js 20` sont réussies. Il est recommandé de les rendre obligatoires dans les règles de protection de la branche `main`.
 
+Les règles de contribution, de nommage des branches et de validation sont détaillées dans [CONTRIBUTING.md](CONTRIBUTING.md). La branche `main` est protégée et les modifications doivent passer par une pull request approuvée par le propriétaire du code.
+
 ## Prérequis
 
 - PHP 8.2 ou supérieur avec PDO SQLite, Zip, Mbstring, OpenSSL et Fileinfo.
