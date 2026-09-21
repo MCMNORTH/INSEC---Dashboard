@@ -73,6 +73,12 @@ Les archives se trouvent dans `storage/app/backups`. Elles doivent également ê
 
 La restauration depuis l’interface est réservée au super-administrateur et exige son mot de passe ainsi que la confirmation `RESTAURER`. Une sauvegarde de précaution est créée automatiquement avant toute restauration.
 
+## Paquets de livraison
+
+Un tag Git au format `vX.Y.Z` déclenche la construction d’un paquet de production et la création d’une version GitHub. L’archive contient le code suivi, les ressources compilées et les dépendances Composer sans les outils de développement. Elle exclut automatiquement `.env`, les bases SQLite, les documents étudiants et les sauvegardes.
+
+Chaque archive est accompagnée d’un fichier `.sha256`. Vérifiez cette empreinte sur le serveur avant extraction. Le workflow peut également être lancé manuellement depuis GitHub Actions pour produire un paquet de validation sans créer de version publique.
+
 ## Sécurité
 
 - En production : `APP_ENV=production`, `APP_DEBUG=false` et HTTPS obligatoire.

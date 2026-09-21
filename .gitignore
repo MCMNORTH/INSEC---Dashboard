@@ -9,6 +9,7 @@
 /database/*.sqlite-*
 /storage/app/backups/
 /storage/app/dossiers/
+/dist/
 .phpunit.result.cache
 docker-compose.override.yml
 Homestead.json

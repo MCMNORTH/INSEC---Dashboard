@@ -1,0 +1,70 @@
+name: Paquet de livraison
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version du paquet, par exemple v1.0.0-rc1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Construire le paquet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v7
+
+      - name: Installer PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, zip, mbstring, fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Installer les dépendances de production
+        run: composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+
+      - name: Compiler les ressources
+        run: npm ci && npm run build
+
+      - name: Construire et contrôler l’archive
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: bash scripts/build-release.sh "$RELEASE_VERSION"
+
+      - name: Conserver le paquet comme artefact
+        uses: actions/upload-artifact@v7
+        with:
+          name: insec-dashboard-${{ github.event.inputs.version || github.ref_name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publier la version GitHub
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
