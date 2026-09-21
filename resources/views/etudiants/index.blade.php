@@ -3,6 +3,7 @@
         @include('partials.sidebar')
 
         <div class="flex-1 p-6">
+            @include('partials.student-section-nav')
             @if (session('error'))
                 <div class="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4">
                     {{ session('error') }}
