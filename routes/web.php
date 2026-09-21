@@ -7,6 +7,7 @@ use App\Http\Controllers\CandidatureController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\ExcelController;
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\EtudiantController;
@@ -30,6 +31,14 @@ Route::middleware('auth')->group(function () {
     Route::put('/alertes/tout-lire', [AlerteController::class, 'toutLire'])->name('alertes.tout-lire');
     Route::put('/alertes/{alerte}/lire', [AlerteController::class, 'lire'])->name('alertes.lire');
     Route::put('/alertes/{alerte}/archiver', [AlerteController::class, 'archiver'])->name('alertes.archiver');
+});
+
+Route::middleware(['auth', 'role:super_admin'])->prefix('sauvegardes')->name('backups.')->group(function () {
+    Route::get('/', [BackupController::class, 'index'])->name('index');
+    Route::post('/', [BackupController::class, 'store'])->name('store');
+    Route::post('/{nom}/verifier', [BackupController::class, 'verifier'])->name('verify');
+    Route::get('/{nom}/telecharger', [BackupController::class, 'download'])->name('download');
+    Route::post('/{nom}/restaurer', [BackupController::class, 'restore'])->middleware('throttle:3,10')->name('restore');
 });
 
 Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {

@@ -27,6 +27,9 @@
             <a href="{{ route('communications.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('communications.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-envelope w-4 text-center"></i> Communications</a>
             <a href="{{ route('excel.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('excel.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-file-excel w-4 text-center"></i> Imports & exports</a>
             <a href="{{ route('audit.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('audit.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-clock-rotate-left w-4 text-center"></i> Journal d’audit</a>
+            @if(auth()->user()->role === 'super_admin')
+                <a href="{{ route('backups.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('backups.*') ? 'bg-[#1E2761] text-white' : 'text-gray-600 hover:bg-gray-100' }}"><i class="fa-solid fa-database w-4 text-center"></i> Sauvegardes</a>
+            @endif
         @endif
         <form method="POST" action="{{ route('logout') }}" class="pt-5">@csrf<button class="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-500 hover:text-red-600"><i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Déconnexion</button></form>
     </nav>

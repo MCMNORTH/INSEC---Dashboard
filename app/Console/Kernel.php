@@ -15,7 +15,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('insec:backup --verify --retention=30')->dailyAt('02:00')->withoutOverlapping();
     }
 
     /**
