@@ -64,7 +64,6 @@ Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {
     Route::get('/pdf/attestations/{inscription}', [PdfController::class, 'attestation'])->name('pdf.attestation');
     Route::get('/pdf/releves/{inscription}', [PdfController::class, 'releve'])->name('pdf.releve');
     Route::get('/pdf/convocations/{examen}/{resultat}', [PdfController::class, 'convocation'])->name('pdf.convocation');
-    Route::get('/pdf/recus/{versement}', [PdfController::class, 'recu'])->name('pdf.recu');
     Route::resource('enseignants', EnseignantController::class);
     Route::post('/enseignants/{enseignant}/affectations', [EnseignantController::class, 'storeAffectation'])->name('enseignants.affectations.store');
     Route::delete('/affectations/{affectation}', [EnseignantController::class, 'destroyAffectation'])->name('affectations.destroy');
@@ -86,6 +85,8 @@ Route::middleware(['auth', 'role:admin,super_admin'])->group(function () {
 });
 
 Route::middleware(['auth', 'role:admin,super_admin,finance'])->group(function () {
+    Route::get('/pdf/recus/{versement}', [PdfController::class, 'recu'])->name('pdf.recu');
+    Route::post('/pdf/factures/{inscription}', [PdfController::class, 'facture'])->name('pdf.facture');
     Route::get('/finances', [App\Http\Controllers\FinanceController::class, 'index'])->name('finances.index');
     Route::put('/finances/inscriptions/{inscription}', [App\Http\Controllers\FinanceController::class, 'updateSituation'])->name('finances.inscriptions.update');
     Route::post('/finances/inscriptions/{inscription}/versements', [App\Http\Controllers\FinanceController::class, 'storeVersement'])->name('finances.versements.store');

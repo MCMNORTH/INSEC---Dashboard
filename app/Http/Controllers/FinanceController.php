@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AnneeAcademique;
 use App\Models\Etudiant;
 use App\Models\FactureCnam;
+use App\Models\DocumentFinancier;
 use App\Models\Inscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +89,20 @@ class FinanceController extends Controller
         $versement = DB::transaction(function () use ($inscription, $validated) {
             $versement = $inscription->versements()->create($validated);
             $versement->update(['numero_recu' => 'REC-'.now()->format('Ym').'-'.str_pad((string) $versement->id, 6, '0', STR_PAD_LEFT)]);
+            if ($versement->statut === 'Validée') {
+                $inscription->load('versements');
+                DocumentFinancier::create([
+                    'inscription_id' => $inscription->id,
+                    'versement_id' => $versement->id,
+                    'type' => 'recu',
+                    'numero' => $versement->numero_recu,
+                    'date_emission' => $versement->date_versement,
+                    'montant_total' => $inscription->montant_net,
+                    'montant_paye' => $versement->montant,
+                    'solde_restant' => $inscription->solde_restant,
+                    'details' => ['total_verse_apres_paiement' => $inscription->total_verse],
+                ]);
+            }
             return $versement;
         });
         if ($versement->statut === 'Validée') {

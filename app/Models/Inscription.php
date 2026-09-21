@@ -44,6 +44,11 @@ class Inscription extends Model
         return $this->hasMany(Echeance::class)->orderBy('date_echeance');
     }
 
+    public function documentsFinanciers()
+    {
+        return $this->hasMany(DocumentFinancier::class);
+    }
+
     public function resultatsExamens()
     {
         return $this->hasMany(ResultatExamen::class);

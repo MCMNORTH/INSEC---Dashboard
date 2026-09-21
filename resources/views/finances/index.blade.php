@@ -88,6 +88,13 @@
                             <p class="text-xs text-blue-200 mt-4">Solde restant (calculé)</p>
                             <p class="text-lg font-bold text-amber-400">{{ number_format($inscriptionSelectionnee->solde_restant, 0, ',', ' ') }} MRU</p>
 
+                            <form method="POST" action="{{ route('pdf.facture', $inscriptionSelectionnee) }}" class="mt-3">
+                                @csrf
+                                <button type="submit" class="w-full bg-white text-[#1E2761] text-xs font-bold px-3 py-2 rounded-lg border border-white/70">
+                                    Télécharger la facture du solde
+                                </button>
+                            </form>
+
                             @if ($inscriptionSelectionnee->montant_en_retard > 0)
                                 <p class="mt-2 rounded bg-red-500/20 p-2 text-xs text-red-200">En retard : {{ number_format($inscriptionSelectionnee->montant_en_retard, 0, ',', ' ') }} MRU</p>
                             @endif
@@ -125,6 +132,9 @@
                                             <span class="{{ $versement->statut === 'Validée' ? 'text-green-400' : 'text-amber-400' }}">{{ $versement->statut }}</span>
                                         </div>
                                         <p class="text-[10px] text-blue-200 px-2">{{ $versement->numero_recu ?? 'Sans reçu' }} · {{ $versement->mode_paiement }} {{ $versement->reference ? '· '.$versement->reference : '' }}</p>
+                                        @if ($versement->statut === 'Validée')
+                                            <a href="{{ route('pdf.recu', $versement) }}" class="inline-block ml-2 text-[10px] font-bold text-amber-300 underline">Télécharger le reçu</a>
+                                        @endif
                                     @empty
                                         <p class="text-xs text-blue-200">Aucun versement.</p>
                                     @endforelse

@@ -1,1 +1,5 @@
-<div class="header"><div class="brand">INSEC</div><div class="subtitle">Centre associé INTEC-CNAM · DGC & DSGC</div></div>
+<div class="topline"></div>
+<table class="header"><tr>
+<td><img class="logo" src="{{ public_path('images/logo-insec.png') }}" alt="INSEC"></td>
+<td class="identity"><strong>INSTITUT D'EXPERTISE COMPTABLE</strong><br>Centre associé du Cnam Intec Paris<br>Nouakchott, Mauritanie - mourteji@bumex.mr</td>
+</tr></table>

@@ -14,4 +14,9 @@ class Versement extends Model
     {
         return $this->belongsTo(Inscription::class);
     }
+
+    public function documentFinancier()
+    {
+        return $this->hasOne(DocumentFinancier::class);
+    }
 }

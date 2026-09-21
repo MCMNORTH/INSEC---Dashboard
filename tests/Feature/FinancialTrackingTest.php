@@ -7,6 +7,7 @@ use App\Models\Etudiant;
 use App\Models\Formation;
 use App\Models\Inscription;
 use App\Models\User;
+use App\Models\DocumentFinancier;
 use Carbon\Carbon;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -109,5 +110,39 @@ class FinancialTrackingTest extends TestCase
         $this->assertDatabaseHas('factures_cnam', [
             'annee_academique_id' => $annee->id, 'taux_change_previsionnel' => 43.5,
         ]);
+    }
+
+    public function test_validated_payment_creates_an_immutable_receipt_snapshot(): void
+    {
+        $this->inscription->update(['montant_du' => 100000, 'montant_remise' => 10000]);
+
+        $this->post(route('finances.versements.store', $this->inscription), [
+            'montant' => 30000, 'date_versement' => '2026-09-21', 'statut' => 'Validée',
+            'mode_paiement' => 'Espèces',
+        ])->assertRedirect();
+
+        $document = DocumentFinancier::where('type', 'recu')->firstOrFail();
+        $this->assertSame(90000, $document->montant_total);
+        $this->assertSame(30000, $document->montant_paye);
+        $this->assertSame(60000, $document->solde_restant);
+        $this->assertStringStartsWith('REC-', $document->numero);
+
+        $this->inscription->update(['montant_du' => 120000]);
+        $this->assertSame(90000, $document->fresh()->montant_total);
+    }
+
+    public function test_invoice_can_be_generated_before_any_payment(): void
+    {
+        $this->inscription->update(['montant_du' => 64000]);
+
+        $this->post(route('pdf.facture', $this->inscription))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $document = DocumentFinancier::where('type', 'facture')->firstOrFail();
+        $this->assertSame(64000, $document->montant_total);
+        $this->assertSame(0, $document->montant_paye);
+        $this->assertSame(64000, $document->solde_restant);
+        $this->assertStringStartsWith('FAC-', $document->numero);
     }
 }

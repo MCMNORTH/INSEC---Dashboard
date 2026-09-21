@@ -6,6 +6,7 @@ use App\Models\Examen;
 use App\Models\Inscription;
 use App\Models\ResultatExamen;
 use App\Models\Versement;
+use App\Models\DocumentFinancier;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class PdfController extends Controller
@@ -32,7 +33,39 @@ class PdfController extends Controller
 
     public function recu(Versement $versement)
     {
-        $versement->load(['inscription.etudiant', 'inscription.formation', 'inscription.anneeAcademique']);
-        return Pdf::loadView('pdf.recu', compact('versement'))->download("recu-{$versement->numero_recu}.pdf");
+        $versement->load(['inscription.etudiant', 'inscription.formation', 'inscription.anneeAcademique', 'inscription.versements']);
+        $document = $versement->documentFinancier()->firstOrCreate([], [
+            'inscription_id' => $versement->inscription_id,
+            'type' => 'recu',
+            'numero' => $versement->numero_recu ?: 'REC-'.now()->format('Ym').'-'.str_pad((string) $versement->id, 6, '0', STR_PAD_LEFT),
+            'date_emission' => $versement->date_versement,
+            'montant_total' => $versement->inscription->montant_net,
+            'montant_paye' => $versement->montant,
+            'solde_restant' => $versement->inscription->solde_restant,
+            'details' => ['total_verse_apres_paiement' => $versement->inscription->total_verse],
+        ]);
+        return Pdf::loadView('pdf.recu', compact('versement', 'document'))->setPaper('a4')->download("recu-{$document->numero}.pdf");
+    }
+
+    public function facture(Inscription $inscription)
+    {
+        $inscription->load(['etudiant', 'formation', 'anneeAcademique', 'versements', 'ues']);
+        $document = DocumentFinancier::create([
+            'inscription_id' => $inscription->id,
+            'type' => 'facture',
+            'numero' => 'TEMP-'.bin2hex(random_bytes(8)),
+            'date_emission' => today(),
+            'montant_total' => $inscription->montant_net,
+            'montant_paye' => $inscription->total_verse,
+            'solde_restant' => $inscription->solde_restant,
+            'details' => [
+                'financeur' => $inscription->financeur,
+                'formation' => $inscription->formation?->code,
+                'nombre_ue' => $inscription->ues->count(),
+            ],
+        ]);
+        $document->update(['numero' => 'FAC-'.now()->format('Ym').'-'.str_pad((string) $document->id, 6, '0', STR_PAD_LEFT)]);
+
+        return Pdf::loadView('pdf.facture', compact('inscription', 'document'))->setPaper('a4')->download("facture-{$document->numero}.pdf");
     }
 }
