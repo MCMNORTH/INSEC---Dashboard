@@ -13,12 +13,15 @@ use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\EtudiantController;
 use App\Http\Controllers\ExamenController;
 use App\Http\Controllers\FormationController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\InscriptionController;
 use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PortalController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => view('auth.login'));
+Route::get('/health/live', [HealthController::class, 'live'])->name('health.live');
+Route::get('/health/ready', [HealthController::class, 'ready'])->middleware('throttle:30,1')->name('health.ready');
 Route::get('/admission', [CandidatureController::class, 'create'])->name('candidatures.create');
 Route::post('/admission', [CandidatureController::class, 'store'])->name('candidatures.store');
 Route::get('/admission/confirmation/{reference}', [CandidatureController::class, 'confirmation'])->name('candidatures.confirmation');

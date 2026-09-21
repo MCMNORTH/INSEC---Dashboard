@@ -5,6 +5,10 @@
 /vendor
 .env
 .env.backup
+/database/*.sqlite
+/database/*.sqlite-*
+/storage/app/backups/
+/storage/app/dossiers/
 .phpunit.result.cache
 docker-compose.override.yml
 Homestead.json
