@@ -9,7 +9,8 @@ RUN npm run build
 FROM composer:2 AS dependencies
 WORKDIR /app
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts \
+    --ignore-platform-req=ext-gd
 
 FROM php:8.3-apache
 RUN apt-get update && apt-get install -y --no-install-recommends \
