@@ -2,6 +2,12 @@
 
 Application de gestion administrative, académique et financière de l’INSEC. Elle couvre les admissions, inscriptions, étudiants, enseignants, examens, paiements, documents, communications, alertes, imports/exports, audit et sauvegardes.
 
+## Qualité automatisée
+
+Chaque push et chaque pull request vers `main` déclenche GitHub Actions. La chaîne valide Composer, installe les dépendances, contrôle les vulnérabilités connues, exécute tous les tests Laravel et compile les ressources front-end. Dependabot vérifie chaque semaine les mises à jour Composer, npm et GitHub Actions.
+
+Une pull request ne doit être fusionnée que lorsque les tâches `Laravel · PHP 8.3` et `Front-end · Node.js 20` sont réussies. Il est recommandé de les rendre obligatoires dans les règles de protection de la branche `main`.
+
 ## Prérequis
 
 - PHP 8.2 ou supérieur avec PDO SQLite, Zip, Mbstring, OpenSSL et Fileinfo.
