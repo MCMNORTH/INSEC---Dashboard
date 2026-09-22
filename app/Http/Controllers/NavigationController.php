@@ -2,12 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AnneeAcademique;
+use App\Models\Examen;
+use App\Models\Inscription;
+use App\Models\ResultatExamen;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class NavigationController extends Controller
 {
-    public function academique(): View
-    { return view('navigation.academique'); }
+    public function academique(Request $request): View
+    {
+        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
+        $annees = AnneeAcademique::orderByDesc('libelle')->get();
+        $anneeId = $request->integer('annee_id') ?: $anneeCourante->id;
+        abort_unless($annees->contains('id', $anneeId), 422, 'Année académique invalide.');
+        $inscriptionIds = Inscription::where('id_annee_academique', $anneeId)->pluck('id');
+        $statistiques = [
+            'etudiants' => Inscription::where('id_annee_academique', $anneeId)->distinct('id_etudiant')->count('id_etudiant'),
+            'examens' => Examen::where('annee_academique_id', $anneeId)->count(),
+            'resultats' => ResultatExamen::whereIn('inscription_id', $inscriptionIds)->count(),
+        ];
+        return view('navigation.academique', compact('annees', 'anneeId', 'statistiques'));
+    }
 
     public function administration(): View
     { return view('navigation.administration'); }

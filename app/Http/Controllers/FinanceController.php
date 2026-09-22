@@ -15,19 +15,26 @@ class FinanceController extends Controller
 {
     public function index(Request $request)
     {
-        $etudiants = Etudiant::with(['derniereInscription.versements', 'derniereInscription.echeances', 'derniereInscription.formation', 'derniereInscription.ues'])->orderBy('nom')->get();
-        $etudiantSelectionne = $request->integer('etudiant') ? Etudiant::with(['inscriptions' => fn ($q) => $q->with(['formation', 'anneeAcademique'])->latest()])->find($request->integer('etudiant')) : null;
+        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
+        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
+        $anneeSelectionneeId = $request->integer('annee_id') ?: ($request->integer('annee_reversement') ?: $anneeCourante->id);
+        abort_unless($annees->contains('id', $anneeSelectionneeId), 422, 'Année académique invalide.');
+
+        $relationsFinancieres = ['formation', 'anneeAcademique', 'versements', 'echeances', 'ues'];
+        $etudiants = Etudiant::whereHas('inscriptions', fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId))
+            ->with(['inscriptions' => fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId)->with($relationsFinancieres)->latest()])
+            ->orderBy('nom')->get();
+        $etudiantSelectionne = $request->integer('etudiant') ? Etudiant::whereHas('inscriptions', fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId))
+            ->with(['inscriptions' => fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId)->with($relationsFinancieres)->latest()])
+            ->find($request->integer('etudiant')) : null;
         $inscriptionSelectionnee = null;
 
         if ($etudiantSelectionne) {
             $inscriptionSelectionnee = $request->integer('inscription')
-                ? $etudiantSelectionne->inscriptions()->with(['formation', 'anneeAcademique', 'versements', 'echeances', 'ues'])->find($request->integer('inscription'))
-                : $etudiantSelectionne->inscriptions()->with(['formation', 'anneeAcademique', 'versements', 'echeances', 'ues'])->latest()->first();
+                ? $etudiantSelectionne->inscriptions()->where('id_annee_academique', $anneeSelectionneeId)->with($relationsFinancieres)->find($request->integer('inscription'))
+                : $etudiantSelectionne->inscriptions->first();
         }
 
-        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
-        $anneeSelectionneeId = $request->integer('annee_reversement') ?: $anneeCourante->id;
         $facturesCnam = FactureCnam::whereIn('annee_academique_id', $annees->pluck('id'))->get()->keyBy('annee_academique_id');
         $anneesReversement = $annees->map(function ($annee) use ($facturesCnam) {
             $inscriptions = Inscription::where('id_annee_academique', $annee->id)->with(['versements', 'ues', 'formation'])->get();
@@ -68,7 +75,7 @@ class FinanceController extends Controller
         ]);
         FactureCnam::updateOrCreate(['annee_academique_id' => $annee->id], $validated);
 
-        return redirect()->route('finances.index', ['tab' => 'reversement', 'annee_reversement' => $annee->id])
+        return redirect()->route('finances.index', ['tab' => 'reversement', 'annee_id' => $annee->id])
             ->with('status', 'Prévision et facture CNAM mises à jour.');
     }
 
@@ -122,6 +129,10 @@ class FinanceController extends Controller
 
     private function backToInscription(Inscription $inscription, string $message)
     {
-        return redirect()->route('finances.index', ['etudiant' => $inscription->id_etudiant, 'inscription' => $inscription->id])->with('status', $message);
+        return redirect()->route('finances.index', [
+            'etudiant' => $inscription->id_etudiant,
+            'inscription' => $inscription->id,
+            'annee_id' => $inscription->id_annee_academique,
+        ])->with('status', $message);
     }
 }

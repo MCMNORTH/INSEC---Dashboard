@@ -21,6 +21,16 @@
                 </button>
             </div>
 
+            <form method="GET" action="{{ route('finances.index') }}" class="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <input type="hidden" name="tab" value="{{ request('tab', 'etudiants') }}">
+                <label class="text-sm font-semibold text-[#1E2761]">Année académique</label>
+                <select name="annee_id" onchange="this.form.submit()" class="rounded-lg border-amber-300 text-sm font-semibold text-[#1E2761]">
+                    @foreach ($annees as $annee)
+                        <option value="{{ $annee->id }}" @selected($anneeSelectionneeId == $annee->id)>{{ $annee->libelle }}</option>
+                    @endforeach
+                </select>
+            </form>
+
             {{-- Onglet Étudiants --}}
             <div id="panel-etudiants" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div class="lg:col-span-2 bg-white rounded-xl shadow overflow-hidden">
@@ -34,9 +44,9 @@
                         </thead>
                         <tbody>
                             @forelse ($etudiants as $etudiant)
-                                @php $inscription = $etudiant->derniereInscription; @endphp
+                                @php $inscription = $etudiant->inscriptions->first(); @endphp
                                 <tr class="border-b hover:bg-gray-50 cursor-pointer {{ $etudiantSelectionne?->id_etudiant === $etudiant->id_etudiant ? 'bg-blue-50' : '' }}"
-                                    onclick="window.location='{{ route('finances.index', ['etudiant' => $etudiant->id_etudiant]) }}'">
+                                    onclick="window.location='{{ route('finances.index', ['etudiant' => $etudiant->id_etudiant, 'annee_id' => $anneeSelectionneeId]) }}'">
                                     <td class="p-3 text-gray-900">{{ $etudiant->nom }} {{ $etudiant->prenom }}</td>
                                     <td class="p-3 text-gray-700">{{ number_format($inscription?->solde_restant ?? 0, 0, ',', ' ') }}</td>
                                     <td class="p-3">
@@ -63,7 +73,7 @@
 
                         <div class="flex flex-wrap gap-2 mt-3">
                             @foreach ($etudiantSelectionne->inscriptions as $dossier)
-                                <a href="{{ route('finances.index', ['etudiant' => $etudiantSelectionne->id_etudiant, 'inscription' => $dossier->id]) }}"
+                                <a href="{{ route('finances.index', ['etudiant' => $etudiantSelectionne->id_etudiant, 'inscription' => $dossier->id, 'annee_id' => $anneeSelectionneeId]) }}"
                                    class="text-xs px-2 py-1 rounded {{ $inscriptionSelectionnee?->id === $dossier->id ? 'bg-amber-500 text-white' : 'bg-white/10 text-blue-100' }}">
                                     {{ $dossier->formation?->code }} {{ $dossier->anneeAcademique?->libelle }}
                                 </a>
@@ -170,15 +180,6 @@
 
             {{-- Synthèse des frais facturés et encaissés ; les reversements INTEC seront suivis séparément. --}}
             <div id="panel-reversement" class="hidden">
-                <form method="GET" action="{{ route('finances.index') }}" class="mb-4 flex items-center gap-3">
-                    <input type="hidden" name="tab" value="reversement">
-                    <label class="text-sm text-gray-600">Année académique :</label>
-                    <select name="annee_reversement" onchange="this.form.submit()" class="border-gray-300 rounded-lg text-sm">
-                        @foreach ($annees as $annee)
-                            <option value="{{ $annee->id }}" @selected($anneeSelectionneeId == $annee->id)>{{ $annee->libelle }}</option>
-                        @endforeach
-                    </select>
-                </form>
 
                 <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
                     <div class="bg-white rounded-xl shadow p-4">

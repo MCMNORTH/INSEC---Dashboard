@@ -15,21 +15,25 @@ class EtudiantController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Etudiant::with(['derniereInscription.formation', 'derniereInscription.anneeAcademique']);
+        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
+        $annees = AnneeAcademique::orderByDesc('libelle')->get();
+        $anneeId = $request->integer('annee_id') ?: $anneeCourante->id;
+        abort_unless($annees->contains('id', $anneeId), 422, 'Année académique invalide.');
+
+        $query = Etudiant::with(['inscriptions' => fn ($q) => $q
+            ->where('id_annee_academique', $anneeId)
+            ->with(['formation', 'anneeAcademique'])
+            ->latest()]);
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(fn ($q) => $q->where('nom', 'like', "%{$search}%")->orWhere('prenom', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
         }
-        if ($request->filled('formation_id')) {
-            $query->whereHas('inscriptions', fn ($q) => $q->where('id_formation', $request->input('formation_id')));
-        }
-        if ($request->filled('annee_id')) {
-            $query->whereHas('inscriptions', fn ($q) => $q->where('id_annee_academique', $request->input('annee_id')));
-        }
+        $query->whereHas('inscriptions', fn ($q) => $q
+            ->where('id_annee_academique', $anneeId)
+            ->when($request->filled('formation_id'), fn ($q) => $q->where('id_formation', $request->integer('formation_id'))));
         $etudiants = $query->orderBy('nom')->paginate(10)->withQueryString();
         $formations = Formation::where('active', true)->orderBy('nom')->get();
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
-        return view('etudiants.index', compact('etudiants', 'formations', 'annees'));
+        return view('etudiants.index', compact('etudiants', 'formations', 'annees', 'anneeId'));
     }
 
     public function create()
