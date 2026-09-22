@@ -37,7 +37,7 @@ services:
       - key: AWS_USE_PATH_STYLE_ENDPOINT
         value: "true"
       - key: SESSION_DRIVER
-        value: database
+        value: cookie
       - key: CACHE_DRIVER
         value: file
       - key: QUEUE_CONNECTION
