@@ -134,6 +134,8 @@ class FinancialTrackingTest extends TestCase
     public function test_invoice_can_be_generated_before_any_payment(): void
     {
         $this->inscription->update(['montant_du' => 64000]);
+        $ues = $this->inscription->formation->ues()->orderBy('ordre')->limit(4)->get();
+        $this->inscription->ues()->sync($ues->pluck('id'));
 
         $this->post(route('pdf.facture', $this->inscription))
             ->assertOk()
@@ -143,6 +145,9 @@ class FinancialTrackingTest extends TestCase
         $this->assertSame(64000, $document->montant_total);
         $this->assertSame(0, $document->montant_paye);
         $this->assertSame(64000, $document->solde_restant);
+        $this->assertCount(4, $document->details['ues']);
+        $this->assertSame($ues->first()->code, $document->details['ues'][0]['code']);
+        $this->assertSame($ues->first()->libelle, $document->details['ues'][0]['libelle']);
         $this->assertStringStartsWith('FAC-', $document->numero);
     }
 }

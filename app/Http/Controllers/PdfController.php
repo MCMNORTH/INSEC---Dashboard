@@ -62,6 +62,11 @@ class PdfController extends Controller
                 'financeur' => $inscription->financeur,
                 'formation' => $inscription->formation?->code,
                 'nombre_ue' => $inscription->ues->count(),
+                'prix_ue_mru' => $inscription->prix_vente_ue_mru,
+                'ues' => $inscription->ues->map(fn ($ue) => [
+                    'code' => $ue->code,
+                    'libelle' => $ue->libelle,
+                ])->values()->all(),
             ],
         ]);
         $document->update(['numero' => 'FAC-'.now()->format('Ym').'-'.str_pad((string) $document->id, 6, '0', STR_PAD_LEFT)]);
