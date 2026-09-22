@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class AnneeAcademique extends Model
@@ -16,6 +17,13 @@ class AnneeAcademique extends Model
         $debut = $date->month >= 9 ? $date->year : $date->year - 1;
 
         return $debut.'-'.($debut + 1);
+    }
+
+    public function scopeDisponibles(Builder $query): Builder
+    {
+        return $query
+            ->where('libelle', '>=', '2024-2025')
+            ->where('libelle', '<=', static::libelleCourante());
     }
 
     public function inscriptions()

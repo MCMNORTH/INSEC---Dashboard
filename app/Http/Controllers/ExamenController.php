@@ -19,14 +19,14 @@ class ExamenController extends Controller
         $examens = Examen::with(['ue.formation', 'anneeAcademique'])->withCount('resultats')
             ->when($request->filled('annee_id'), fn ($q) => $q->where('annee_academique_id', $request->input('annee_id')))
             ->orderByDesc('date_examen')->paginate(15)->withQueryString();
-        $annees = AnneeAcademique::orderByDesc('libelle')->get();
+        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
         return view('examens.index', compact('examens', 'annees'));
     }
 
     public function create()
     {
         $ues = Ue::with('formation')->where('active', true)->orderBy('code')->get();
-        $annees = AnneeAcademique::orderByDesc('libelle')->get();
+        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
         return view('examens.create', compact('ues', 'annees'));
     }
 

@@ -18,7 +18,7 @@ class CandidatureController extends Controller
     public function __construct(private EmailService $emails) {}
     public function create()
     {
-        return view('candidatures.create', ['formations'=>Formation::where('active',true)->orderBy('code')->get(), 'annees'=>AnneeAcademique::orderByDesc('libelle')->get()]);
+        return view('candidatures.create', ['formations'=>Formation::where('active',true)->orderBy('code')->get(), 'annees'=>AnneeAcademique::disponibles()->orderByDesc('libelle')->get()]);
     }
 
     public function store(Request $request)

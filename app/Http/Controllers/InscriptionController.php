@@ -16,7 +16,7 @@ class InscriptionController extends Controller
     public function create(Etudiant $etudiant)
     {
         $formations = Formation::with('ues')->where('active', true)->orderBy('nom')->get();
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
+        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
         return view('inscriptions.create', compact('etudiant', 'formations', 'annees'));
     }
 
@@ -35,7 +35,7 @@ class InscriptionController extends Controller
     {
         $inscription->load(['etudiant', 'formation.ues', 'anneeAcademique', 'ues']);
         $formations = Formation::with('ues')->where('active', true)->orderBy('nom')->get();
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
+        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
         return view('inscriptions.edit', compact('inscription', 'formations', 'annees'));
     }
 

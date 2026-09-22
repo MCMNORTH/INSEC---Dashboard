@@ -16,7 +16,7 @@ class EtudiantController extends Controller
     public function index(Request $request)
     {
         $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
-        $annees = AnneeAcademique::orderByDesc('libelle')->get();
+        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
         $anneeId = $request->integer('annee_id') ?: $anneeCourante->id;
         abort_unless($annees->contains('id', $anneeId), 422, 'Année académique invalide.');
 
@@ -39,7 +39,7 @@ class EtudiantController extends Controller
     public function create()
     {
         $formations = Formation::with('ues')->where('active', true)->orderBy('nom')->get();
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
+        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
         return view('etudiants.create', compact('formations', 'annees'));
     }
 

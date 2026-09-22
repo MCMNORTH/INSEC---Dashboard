@@ -35,9 +35,12 @@ class AdminAnalyticsDashboardTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         AnneeAcademique::create(['libelle' => '2027-2028']);
 
+        $anneeCourante = AnneeAcademique::where('libelle', '2026-2027')->first();
+
         $this->actingAs($admin)->get(route('admin.dashboard'))
             ->assertOk()
-            ->assertSee('<option value="2" selected>2026-2027</option>', false);
+            ->assertSee('<option value="'.$anneeCourante->id.'" selected>2026-2027</option>', false)
+            ->assertDontSee('2027-2028');
 
         $this->assertDatabaseHas('annees_academiques', ['libelle' => '2026-2027']);
         Carbon::setTestNow();

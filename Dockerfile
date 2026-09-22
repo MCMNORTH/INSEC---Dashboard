@@ -16,7 +16,7 @@ FROM php:8.3-apache
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libfreetype6-dev libicu-dev libjpeg62-turbo-dev libonig-dev libpng-dev libpq-dev libzip-dev unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd intl mbstring pdo_pgsql zip \
+    && docker-php-ext-install -j$(nproc) gd intl mbstring opcache pdo_pgsql zip \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,6 +25,7 @@ COPY . .
 COPY --from=dependencies /app/vendor ./vendor
 COPY --from=assets /app/public/build ./public/build
 COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
+COPY docker/php-production.ini /usr/local/etc/php/conf.d/99-insec-production.ini
 COPY docker/start-render.sh /usr/local/bin/start-render
 RUN chmod +x /usr/local/bin/start-render \
     && chown -R www-data:www-data storage bootstrap/cache

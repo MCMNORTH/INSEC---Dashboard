@@ -16,7 +16,7 @@ class FinanceController extends Controller
     public function index(Request $request)
     {
         $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
+        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
         $anneeSelectionneeId = $request->integer('annee_id') ?: ($request->integer('annee_reversement') ?: $anneeCourante->id);
         abort_unless($annees->contains('id', $anneeSelectionneeId), 422, 'Année académique invalide.');
 
