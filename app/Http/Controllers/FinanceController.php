@@ -107,7 +107,7 @@ class FinanceController extends Controller
         });
         if ($versement->statut === 'Validée') {
             $etudiant=$inscription->etudiant;
-            app(EmailService::class)->envoyer($etudiant->email,$etudiant->prenom.' '.$etudiant->nom,'Paiement','Confirmation de votre paiement INSEC','Paiement validé',
+            if ($etudiant->email) app(EmailService::class)->envoyer($etudiant->email,$etudiant->prenom.' '.$etudiant->nom,'Paiement','Confirmation de votre paiement INSEC','Paiement validé',
                 'Votre versement a été validé et enregistré dans votre dossier financier.',['Reçu'=>$versement->numero_recu,'Montant'=>number_format($versement->montant,0,',',' ').' MRU','Date'=>$versement->date_versement->format('d/m/Y')]);
         }
         return $this->backToInscription($inscription, 'Versement enregistré avec un numéro de reçu.');

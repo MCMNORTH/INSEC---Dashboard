@@ -44,7 +44,7 @@ class EtudiantController extends Controller
         $validated = $this->validateStudentAndEnrollment($request);
         $etudiant = DB::transaction(function () use ($validated) {
             $etudiant = Etudiant::create([
-                'nom' => $validated['nom'], 'prenom' => $validated['prenom'], 'email' => $validated['email'],
+                'nom' => $validated['nom'], 'prenom' => $validated['prenom'], 'date_naissance' => $validated['date_naissance'] ?? null, 'email' => $validated['email'] ?? null,
                 'telephone' => $validated['telephone'] ?? null, 'statut_etudiant' => $validated['statut_etudiant'],
             ]);
             $inscription = $etudiant->inscriptions()->create($this->enrollmentAttributes($validated));
@@ -67,7 +67,8 @@ class EtudiantController extends Controller
     {
         $validated = $request->validate([
             'nom' => ['required', 'string', 'max:255'], 'prenom' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', Rule::unique('etudiants', 'email')->ignore($etudiant->id_etudiant, 'id_etudiant')],
+            'date_naissance' => ['nullable', 'date'],
+            'email' => ['nullable', 'email', Rule::unique('etudiants', 'email')->ignore($etudiant->id_etudiant, 'id_etudiant')],
             'telephone' => ['nullable', 'string', 'max:30'],
             'statut_etudiant' => ['required', Rule::in(['Actif', 'Suspendu', 'Diplômé', 'Abandon'])],
         ]);
@@ -88,7 +89,7 @@ class EtudiantController extends Controller
     {
         $validated = $request->validate([
             'nom' => ['required', 'string', 'max:255'], 'prenom' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:etudiants,email'], 'telephone' => ['nullable', 'string', 'max:30'],
+            'date_naissance' => ['nullable', 'date'], 'email' => ['nullable', 'email', 'unique:etudiants,email'], 'telephone' => ['nullable', 'string', 'max:30'],
             'statut_etudiant' => ['required', Rule::in(['Actif', 'Suspendu', 'Diplômé', 'Abandon'])],
             'formation_id' => ['required', 'exists:formations,id'], 'annee_academique_id' => ['required', 'exists:annees_academiques,id'],
             'annee_parcours' => ['required', 'integer', 'min:1'], 'date_inscription' => ['required', 'date'],

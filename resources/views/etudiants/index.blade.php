@@ -62,7 +62,7 @@
                             <tr class="hover:bg-gray-50 transition cursor-pointer"
                                 onclick="window.location='{{ route('etudiants.show', $etudiant) }}'">
                                 <td class="p-3 font-medium text-gray-800">{{ $etudiant->nom }} {{ $etudiant->prenom }}</td>
-                                <td class="p-3 text-gray-600">{{ $etudiant->email }}</td>
+                                <td class="p-3 text-gray-600">{{ $etudiant->email ?: 'Non renseigné' }}</td>
                                 <td class="p-3 text-gray-600">{{ $derniereInscription?->formation?->nom ?? '-' }}</td>
                                 <td class="p-3 text-gray-600">{{ $derniereInscription?->anneeAcademique?->libelle ?? '-' }}</td>
                                 <td class="p-3">
