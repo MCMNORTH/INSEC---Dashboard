@@ -15,10 +15,10 @@ class FinanceController extends Controller
 {
     public function index(Request $request)
     {
-        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
-        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
-        $anneeSelectionneeId = $request->integer('annee_id') ?: ($request->integer('annee_reversement') ?: $anneeCourante->id);
-        abort_unless($annees->contains('id', $anneeSelectionneeId), 422, 'Année académique invalide.');
+        if (! $request->filled('annee_id') && $request->filled('annee_reversement')) {
+            $request->merge(['annee_id' => $request->integer('annee_reversement')]);
+        }
+        [$annees, $anneeSelectionneeId] = AnneeAcademique::contexte($request);
 
         $relationsFinancieres = ['formation', 'anneeAcademique', 'versements', 'echeances', 'ues'];
         $etudiants = Etudiant::whereHas('inscriptions', fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId))
@@ -36,8 +36,10 @@ class FinanceController extends Controller
         }
 
         $facturesCnam = FactureCnam::whereIn('annee_academique_id', $annees->pluck('id'))->get()->keyBy('annee_academique_id');
-        $anneesReversement = $annees->map(function ($annee) use ($facturesCnam) {
-            $inscriptions = Inscription::where('id_annee_academique', $annee->id)->with(['versements', 'ues', 'formation'])->get();
+        $inscriptionsParAnnee = Inscription::whereIn('id_annee_academique', $annees->pluck('id'))
+            ->with(['versements', 'ues', 'formation'])->get()->groupBy('id_annee_academique');
+        $anneesReversement = $annees->map(function ($annee) use ($facturesCnam, $inscriptionsParAnnee) {
+            $inscriptions = $inscriptionsParAnnee->get($annee->id, collect());
             $montantNet = $inscriptions->sum(fn ($i) => $i->montant_net);
             $encaisse = $inscriptions->sum(fn ($i) => $i->total_verse);
             $coutCnamEur = $inscriptions->sum->cout_cnam_total_eur;

@@ -16,11 +16,11 @@ class ExamenController extends Controller
 {
     public function index(Request $request)
     {
+        [$annees, $anneeId] = AnneeAcademique::contexte($request);
         $examens = Examen::with(['ue.formation', 'anneeAcademique'])->withCount('resultats')
-            ->when($request->filled('annee_id'), fn ($q) => $q->where('annee_academique_id', $request->input('annee_id')))
+            ->where('annee_academique_id', $anneeId)
             ->orderByDesc('date_examen')->paginate(15)->withQueryString();
-        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
-        return view('examens.index', compact('examens', 'annees'));
+        return view('examens.index', compact('examens', 'annees', 'anneeId'));
     }
 
     public function create()

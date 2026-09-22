@@ -54,6 +54,17 @@ class AcademicYearNavigationTest extends TestCase
             ->assertSee('1 étudiant(s)');
     }
 
+    public function test_selected_year_is_preserved_between_sections(): void
+    {
+        [$ancienne] = $this->studentsInTwoYears();
+
+        $this->get(route('etudiants.index', ['annee_id' => $ancienne->id]))->assertOk();
+
+        $this->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertViewHas('anneeId', $ancienne->id);
+    }
+
     private function studentsInTwoYears(): array
     {
         $ancienne = AnneeAcademique::where('libelle', '2024-2025')->firstOrFail();

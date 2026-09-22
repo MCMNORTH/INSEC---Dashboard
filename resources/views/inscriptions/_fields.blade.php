@@ -12,7 +12,7 @@
         <label class="text-sm text-gray-600">Année académique</label>
         <select name="annee_academique_id" class="w-full border-gray-300 rounded-lg mt-1" required>
             @foreach ($annees as $annee)
-                <option value="{{ $annee->id }}" @selected(old('annee_academique_id', $inscription?->id_annee_academique) == $annee->id)>{{ $annee->libelle }}</option>
+                <option value="{{ $annee->id }}" @selected(old('annee_academique_id', $inscription?->id_annee_academique ?? ($anneeId ?? null)) == $annee->id)>{{ $annee->libelle }}</option>
             @endforeach
         </select>
     </div>

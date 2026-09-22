@@ -26,6 +26,22 @@ class ReadinessService
                 'Les 11 candidats historiques BUMEX sont présents.',
                 "Import historique incomplet ({$candidatsHistoriques}/11)."
             );
+            $dossiersSoldes = $anneeId ? DB::table('inscriptions as i')
+                ->leftJoin('versements as v', function ($join) {
+                    $join->on('v.inscription_id', '=', 'i.id')->where('v.statut', '=', 'Validée');
+                })
+                ->where('i.id_annee_academique', $anneeId)
+                ->where('i.financeur', 'bumex')
+                ->groupBy('i.id', 'i.montant_du', 'i.montant_remise')
+                ->selectRaw('i.id, i.montant_du, i.montant_remise, COALESCE(SUM(v.montant), 0) as total_verse')
+                ->get()
+                ->filter(fn ($dossier) => (int) $dossier->total_verse >= max((int) $dossier->montant_du - (int) $dossier->montant_remise, 0))
+                ->count() : 0;
+            $checks['historical_finances'] = $this->check(
+                $dossiersSoldes === 11,
+                'Les 11 dossiers BUMEX sont intégralement soldés.',
+                "Règlements BUMEX incomplets ({$dossiersSoldes}/11 dossiers soldés)."
+            );
         }
         $checks['storage']=$this->check($this->stockageAccessible(),'Stockage accessible en écriture','Le dossier storage/app n’est pas accessible en écriture.');
         $checks['backup']=$this->sauvegardeRecente();

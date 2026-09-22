@@ -13,10 +13,7 @@ class NavigationController extends Controller
 {
     public function academique(Request $request): View
     {
-        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
-        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
-        $anneeId = $request->integer('annee_id') ?: $anneeCourante->id;
-        abort_unless($annees->contains('id', $anneeId), 422, 'Année académique invalide.');
+        [$annees, $anneeId] = AnneeAcademique::contexte($request);
         $inscriptionIds = Inscription::where('id_annee_academique', $anneeId)->pluck('id');
         $statistiques = [
             'etudiants' => Inscription::where('id_annee_academique', $anneeId)->distinct('id_etudiant')->count('id_etudiant'),

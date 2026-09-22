@@ -13,11 +13,11 @@ use Illuminate\Validation\ValidationException;
 
 class InscriptionController extends Controller
 {
-    public function create(Etudiant $etudiant)
+    public function create(Request $request, Etudiant $etudiant)
     {
         $formations = Formation::with('ues')->where('active', true)->orderBy('nom')->get();
-        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
-        return view('inscriptions.create', compact('etudiant', 'formations', 'annees'));
+        [$annees, $anneeId] = AnneeAcademique::contexte($request);
+        return view('inscriptions.create', compact('etudiant', 'formations', 'annees', 'anneeId'));
     }
 
     public function store(Request $request, Etudiant $etudiant)

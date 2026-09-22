@@ -36,4 +36,28 @@ class HistoricalCandidatesImportTest extends TestCase
         $this->assertDatabaseMissing('etudiants', ['nom' => 'SOW', 'prenom' => 'Moussa Alioune']);
         $this->assertDatabaseHas('journal_audit', ['user_id' => $account->id, 'action' => 'historical_import']);
     }
+
+    public function test_bumex_historical_enrollments_can_be_fully_settled(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $import = require database_path('migrations/2026_09_22_000014_import_bumex_dgc_2024_2025.php');
+        $import->up();
+
+        app()->detectEnvironment(fn () => 'production');
+        try {
+            $reglement = require database_path('migrations/2026_09_22_000017_settle_bumex_historical_enrollments.php');
+            $reglement->up();
+        } finally {
+            app()->detectEnvironment(fn () => 'testing');
+        }
+
+        $annee = AnneeAcademique::where('libelle', '2024-2025')->firstOrFail();
+        $inscriptions = Inscription::where('id_annee_academique', $annee->id)
+            ->where('financeur', 'bumex')->with('versements')->get();
+
+        $this->assertCount(11, $inscriptions);
+        $this->assertSame(656000, $inscriptions->sum->montant_net);
+        $this->assertSame(656000, $inscriptions->sum->total_verse);
+        $this->assertTrue($inscriptions->every(fn ($inscription) => $inscription->statut_paiement === 'Soldé'));
+    }
 }

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\AnneeAcademique;
 use App\Models\Enseignant;
-use App\Models\Etudiant;
 use App\Models\Examen;
 use App\Models\Inscription;
 use App\Models\ResultatExamen;
@@ -16,10 +15,7 @@ class AdminDashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $anneeCourante = AnneeAcademique::firstOrCreate(['libelle' => AnneeAcademique::libelleCourante()]);
-        $annees = AnneeAcademique::disponibles()->orderByDesc('libelle')->get();
-        $anneeId = $request->integer('annee_id') ?: $anneeCourante->id;
-        if ($anneeId && ! $annees->contains('id', $anneeId)) abort(422, 'Année académique invalide.');
+        [$annees, $anneeId] = AnneeAcademique::contexte($request);
 
         $inscriptions = Inscription::with(['etudiant', 'formation', 'versements', 'echeances', 'resultatsExamens.examen.ue'])
             ->when($anneeId, fn ($q) => $q->where('id_annee_academique', $anneeId))->get();
@@ -55,12 +51,14 @@ class AdminDashboardController extends Controller
             ->whereYear('date_versement', $anneeCivile)->get()->groupBy(fn ($v) => $v->date_versement->month)->map->sum('montant');
         $moisLabels12 = collect(range(1, 12))->map(fn ($m) => ucfirst(Carbon::create($anneeCivile, $m, 1)->locale('fr')->isoFormat('MMM')));
         $paiements12 = collect(range(1, 12))->map(fn ($m) => (float) ($versementsParMois[$m] ?? 0));
-        $repartition = Etudiant::selectRaw('statut_etudiant, count(*) as total')->groupBy('statut_etudiant')->pluck('total', 'statut_etudiant');
+        $etudiantsSelectionnes = $inscriptions->pluck('etudiant')->filter()->unique('id_etudiant');
+        $repartition = $etudiantsSelectionnes->groupBy('statut_etudiant')->map->count();
 
         return view('admin.dashboard', compact('annees', 'anneeId', 'montantFacture', 'encaisses', 'resteARecouvrer', 'montantEnRetard',
             'tauxRecouvrement', 'resultats', 'tauxReussite', 'performanceDiplomes', 'performanceUes', 'impayes', 'examensProchains',
             'moisLabels12', 'paiements12', 'repartition') + [
-            'totalEtudiants' => Etudiant::count(), 'etudiantsActifs' => Etudiant::where('statut_etudiant', 'Actif')->count(),
+            'totalEtudiants' => $etudiantsSelectionnes->count(),
+            'etudiantsActifs' => $etudiantsSelectionnes->where('statut_etudiant', 'Actif')->count(),
             'totalEnseignants' => Enseignant::count(), 'inscriptionsActives' => $inscriptions->where('statut', 'active')->count(),
         ]);
     }
