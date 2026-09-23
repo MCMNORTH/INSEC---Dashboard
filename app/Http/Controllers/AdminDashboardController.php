@@ -27,7 +27,7 @@ class AdminDashboardController extends Controller
         $montantEnRetard = $inscriptions->sum->montant_en_retard;
         $tauxRecouvrement = $montantFacture > 0 ? round($encaisses / $montantFacture * 100, 1) : 0;
 
-        $resultats = ResultatExamen::with('examen.ue')->whereIn('inscription_id', $inscriptionIds)->whereNotNull('note')->get();
+        $resultats = $inscriptions->flatMap->resultatsExamens->whereNotNull('note');
         $tauxReussite = $resultats->count() ? round($resultats->filter->valide->count() / $resultats->count() * 100, 1) : 0;
 
         $performanceDiplomes = $inscriptions->groupBy(fn ($i) => $i->formation?->code ?? '—')->map(function ($groupe, $code) {
@@ -49,9 +49,10 @@ class AdminDashboardController extends Controller
         $libelleAnnee = $annees->firstWhere('id', $anneeId)->libelle;
         $debutPeriode = Carbon::create((int) substr($libelleAnnee, 0, 4), 9, 1)->startOfDay();
         $finPeriode = $debutPeriode->copy()->addYear();
-        $versementsParMois = Versement::where('statut', 'Validée')->whereIn('inscription_id', $inscriptionIds)
-            ->where('date_versement', '>=', $debutPeriode)->where('date_versement', '<', $finPeriode)
-            ->get()->groupBy(fn ($v) => $v->date_versement->format('Y-m'))->map->sum('montant');
+        $versementsParMois = $inscriptions->flatMap->versements
+            ->filter(fn ($v) => $v->statut === 'Validée' && $v->date_versement
+                && $v->date_versement->gte($debutPeriode) && $v->date_versement->lt($finPeriode))
+            ->groupBy(fn ($v) => $v->date_versement->format('Y-m'))->map->sum('montant');
         $mois = collect(range(0, 11))->map(fn ($m) => $debutPeriode->copy()->addMonths($m));
         $moisLabels12 = $mois->map(fn ($m) => ucfirst($m->locale('fr')->isoFormat('MMM YY')));
         $paiements12 = $mois->map(fn ($m) => (float) ($versementsParMois[$m->format('Y-m')] ?? 0));

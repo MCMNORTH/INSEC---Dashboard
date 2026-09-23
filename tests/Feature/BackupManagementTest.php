@@ -32,4 +32,18 @@ class BackupManagementTest extends TestCase
         $this->actingAs($user)->post(route('backups.restore','insec-test.zip'),['password'=>'incorrect','confirmation'=>'RESTAURER'])->assertStatus(422);
         $this->actingAs($user)->post(route('backups.restore','insec-test.zip'),['password'=>'secret-test','confirmation'=>'NON'])->assertSessionHasErrors('confirmation');
     }
+
+    public function test_owner_requested_promotion_changes_only_owner_and_preserves_password(): void
+    {
+        $owner = User::factory()->create(['email' => 'mohamed.cheikh@bumex.mr', 'role' => 'admin']);
+        $other = User::factory()->create(['role' => 'admin']);
+        $password = $owner->password;
+        $migration = require database_path('migrations/2026_09_23_000019_grant_owner_super_admin.php');
+        $migration->up();$migration->up();
+        $this->assertSame('super_admin', $owner->fresh()->role);
+        $this->assertSame($password, $owner->fresh()->password);
+        $this->assertSame('admin', $other->fresh()->role);
+        $this->assertSame(1, \Illuminate\Support\Facades\DB::table('journal_audit')->where('action', 'role_change')->count());
+        $this->actingAs($owner->fresh())->get(route('backups.index'))->assertOk();
+    }
 }

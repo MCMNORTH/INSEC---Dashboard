@@ -25,14 +25,12 @@ class FinanceController extends Controller
         $etudiants = Etudiant::whereHas('inscriptions', fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId))
             ->with(['inscriptions' => fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId)->with($relationsFinancieres)->latest()])
             ->orderBy('nom')->get();
-        $etudiantSelectionne = $request->integer('etudiant') ? Etudiant::whereHas('inscriptions', fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId))
-            ->with(['inscriptions' => fn ($q) => $q->where('id_annee_academique', $anneeSelectionneeId)->with($relationsFinancieres)->latest()])
-            ->find($request->integer('etudiant')) : null;
+        $etudiantSelectionne = $etudiants->firstWhere('id_etudiant', $request->integer('etudiant'));
         $inscriptionSelectionnee = null;
 
         if ($etudiantSelectionne) {
             $inscriptionSelectionnee = $request->integer('inscription')
-                ? $etudiantSelectionne->inscriptions()->where('id_annee_academique', $anneeSelectionneeId)->with($relationsFinancieres)->find($request->integer('inscription'))
+                ? $etudiantSelectionne->inscriptions->firstWhere('id', $request->integer('inscription'))
                 : $etudiantSelectionne->inscriptions->first();
         }
 
