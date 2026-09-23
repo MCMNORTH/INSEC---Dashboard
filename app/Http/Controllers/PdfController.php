@@ -33,6 +33,9 @@ class PdfController extends Controller
 
     public function recu(Versement $versement)
     {
+        abort_unless($versement->statut === 'Validée', 422, 'Un reçu exige un paiement validé.');
+        abort_unless($versement->date_versement && $versement->mode_paiement !== 'Non renseigné', 422,
+            'Le paiement historique est soldé, mais sa date et son mode doivent être confirmés avant émission d’un reçu.');
         $versement->load(['inscription.etudiant', 'inscription.formation', 'inscription.anneeAcademique', 'inscription.versements']);
         $document = $versement->documentFinancier()->firstOrCreate([], [
             'inscription_id' => $versement->inscription_id,

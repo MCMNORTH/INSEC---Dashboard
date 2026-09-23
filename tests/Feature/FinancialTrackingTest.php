@@ -38,7 +38,7 @@ class FinancialTrackingTest extends TestCase
             'montant_du' => 100000, 'montant_remise' => 10000, 'note_financiere' => 'Remise direction',
         ])->assertRedirect();
 
-        $this->post(route('finances.versements.store', $this->inscription), [
+        $this->post(route('finances.versements.store', $this->inscription), ['submission_id' => (string) \Illuminate\Support\Str::uuid(),
             'montant' => 30000, 'date_versement' => '2026-09-20', 'statut' => 'Validée',
             'mode_paiement' => 'Virement', 'reference' => 'VIR-42',
         ])->assertRedirect();
@@ -68,7 +68,7 @@ class FinancialTrackingTest extends TestCase
         $other = Etudiant::create(['nom' => 'Fall', 'prenom' => 'Oumar', 'email' => 'oumar@example.com', 'statut_etudiant' => 'Actif']);
         $otherEnrollment = $other->inscriptions()->create(['id_formation' => $this->inscription->id_formation, 'id_annee_academique' => $this->inscription->id_annee_academique]);
 
-        $this->post(route('finances.versements.store', $this->inscription), ['montant' => 1000, 'date_versement' => '2026-09-20', 'statut' => 'Validée', 'mode_paiement' => 'Espèces'])->assertRedirect();
+        $this->post(route('finances.versements.store', $this->inscription), ['submission_id' => (string) \Illuminate\Support\Str::uuid(), 'montant' => 1000, 'date_versement' => '2026-09-20', 'statut' => 'Validée', 'mode_paiement' => 'Espèces'])->assertRedirect();
 
         $this->assertCount(1, $this->inscription->fresh()->versements);
         $this->assertCount(0, $otherEnrollment->fresh()->versements);
@@ -116,7 +116,7 @@ class FinancialTrackingTest extends TestCase
     {
         $this->inscription->update(['montant_du' => 100000, 'montant_remise' => 10000]);
 
-        $this->post(route('finances.versements.store', $this->inscription), [
+        $this->post(route('finances.versements.store', $this->inscription), ['submission_id' => (string) \Illuminate\Support\Str::uuid(),
             'montant' => 30000, 'date_versement' => '2026-09-21', 'statut' => 'Validée',
             'mode_paiement' => 'Espèces',
         ])->assertRedirect();
@@ -129,6 +129,53 @@ class FinancialTrackingTest extends TestCase
 
         $this->inscription->update(['montant_du' => 120000]);
         $this->assertSame(90000, $document->fresh()->montant_total);
+    }
+
+    public function test_repeated_submission_creates_only_one_payment_and_receipt(): void
+    {
+        $data = ['submission_id' => (string) \Illuminate\Support\Str::uuid(), 'montant' => 1000,
+            'date_versement' => '2025-05-05', 'statut' => 'Validée', 'mode_paiement' => 'Espèces'];
+        $this->post(route('finances.versements.store', $this->inscription), $data)->assertSessionHasNoErrors();
+        $this->post(route('finances.versements.store', $this->inscription), $data)->assertSessionHasNoErrors();
+        $this->assertCount(1, $this->inscription->fresh()->versements);
+        $this->assertSame(1, DocumentFinancier::where('type', 'recu')->count());
+        $data['montant'] = 2000;
+        $this->post(route('finances.versements.store', $this->inscription), $data)->assertSessionHasErrors('montant');
+        $this->assertCount(1, $this->inscription->fresh()->versements);
+    }
+
+    public function test_receipt_requires_validated_and_dated_payment(): void
+    {
+        foreach (['En attente', 'Rejetée', 'Validée'] as $statut) {
+            $v = $this->inscription->versements()->create(['montant' => 1000, 'statut' => $statut,
+                'date_versement' => $statut === 'Validée' ? null : '2025-05-05', 'mode_paiement' => 'Non renseigné']);
+            $this->get(route('pdf.recu', $v))->assertStatus(422);
+        }
+        $this->assertSame(0, DocumentFinancier::count());
+    }
+
+    public function test_paid_cnam_requires_actual_payment_details_and_clears_remaining_debt(): void
+    {
+        $annee = $this->inscription->anneeAcademique;
+        $this->put(route('finances.cnam.update', $annee), ['statut' => 'Payée'])
+            ->assertSessionHasErrors(['montant_reel_eur', 'taux_change_reglement', 'date_reglement']);
+        $this->put(route('finances.cnam.update', $annee), ['statut' => 'Payée',
+            'montant_reel_eur' => 160, 'taux_change_reglement' => 43, 'date_reglement' => '2025-02-28'])
+            ->assertSessionHasNoErrors();
+        $this->get(route('finances.index', ['annee_id' => $annee->id]))->assertOk()
+            ->assertViewHas('carteReversement', fn ($c) => $c->reste_cnam_eur === 0 && $c->cout_reel_mru === 6880.0);
+    }
+
+    public function test_monthly_graph_uses_school_year_and_excludes_unknown_dates_without_losing_totals(): void
+    {
+        $annee = AnneeAcademique::where('libelle', '2024-2025')->firstOrFail();
+        $this->inscription->update(['id_annee_academique' => $annee->id]);
+        foreach (['2024-09-01', '2025-08-31', null, '2026-01-01'] as $date) {
+            $this->inscription->versements()->create(['montant' => 1000, 'statut' => 'Validée', 'date_versement' => $date]);
+        }
+        $this->get(route('admin.dashboard', ['annee_id' => $annee->id]))->assertOk()
+            ->assertViewHas('encaisses', 4000)->assertViewHas('horsGraphique', 2000)
+            ->assertViewHas('paiements12', fn ($p) => $p->count() === 12 && $p[0] === 1000.0 && $p[11] === 1000.0);
     }
 
     public function test_invoice_can_be_generated_before_any_payment(): void

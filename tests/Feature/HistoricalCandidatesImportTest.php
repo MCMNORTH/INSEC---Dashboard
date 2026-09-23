@@ -59,5 +59,13 @@ class HistoricalCandidatesImportTest extends TestCase
         $this->assertSame(656000, $inscriptions->sum->montant_net);
         $this->assertSame(656000, $inscriptions->sum->total_verse);
         $this->assertTrue($inscriptions->every(fn ($inscription) => $inscription->statut_paiement === 'Soldé'));
+        $correction = require database_path('migrations/2026_09_23_000018_correct_historical_payment_metadata.php');
+        $correction->correctMetadata();
+        $correction->correctMetadata();
+        $inscriptions->each->refresh();
+        $this->assertSame(656000, $inscriptions->sum->total_verse);
+        $this->assertTrue($inscriptions->every(fn ($i) => $i->facture_bumex_emise_le === null));
+        $this->assertTrue($inscriptions->flatMap->versements->every(fn ($v) => $v->date_versement === null && $v->mode_paiement === 'Non renseigné'));
+        $this->assertSame(1, \Illuminate\Support\Facades\DB::table('journal_audit')->where('action', 'historical_metadata_correction')->count());
     }
 }

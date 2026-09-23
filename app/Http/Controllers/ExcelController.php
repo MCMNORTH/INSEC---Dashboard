@@ -17,7 +17,7 @@ use App\Services\AuditService;
 
 class ExcelController extends Controller
 {
-    public function index(){ return view('excel.index'); }
+    public function index(Request $request){ [$annees, $anneeSelectionneeId] = \App\Models\AnneeAcademique::contexte($request); return view('excel.index', compact('annees', 'anneeSelectionneeId')); }
 
     public function modele(): StreamedResponse
     {
@@ -30,30 +30,33 @@ class ExcelController extends Controller
         return $this->telecharger($classeur,'modele-import-etudiants.xlsx');
     }
 
-    public function etudiants(): StreamedResponse
+    public function etudiants(Request $request): StreamedResponse
     {
+        [, $anneeId] = \App\Models\AnneeAcademique::contexte($request);
         AuditService::manuel('export','Export Excel des étudiants');
         $headers=['ID','Prénom','Nom','E-mail','Téléphone','Statut étudiant','Diplôme actuel','Année académique','Année parcours','N° INTEC','Statut inscription'];
         $classeur=$this->classeur('Étudiants',$headers); $s=$classeur->getActiveSheet(); $ligne=2;
-        Etudiant::with(['derniereInscription.formation','derniereInscription.anneeAcademique'])->orderBy('nom')->each(function($e)use($s,&$ligne){$i=$e->derniereInscription;$this->ecrire($s,$ligne++,[$e->id_etudiant,$e->prenom,$e->nom,$e->email,$e->telephone,$e->statut_etudiant,$i?->formation?->code,$i?->anneeAcademique?->libelle,$i?->annee_parcours,$i?->numero_inscription_intec,$i?->statut]);});
+        Inscription::with(['etudiant','formation','anneeAcademique'])->where('id_annee_academique', $anneeId)->get()->each(function($i)use($s,&$ligne){$e=$i->etudiant;$this->ecrire($s,$ligne++,[$e->id_etudiant,$e->prenom,$e->nom,$e->email,$e->telephone,$e->statut_etudiant,$i->formation?->code,$i->anneeAcademique?->libelle,$i->annee_parcours,$i->numero_inscription_intec,$i->statut]);});
         $this->finaliser($s,'A1:K'.max(2,$ligne-1)); return $this->telecharger($classeur,'etudiants-insec-'.now()->format('Ymd').'.xlsx');
     }
 
-    public function finances(): StreamedResponse
+    public function finances(Request $request): StreamedResponse
     {
+        [, $anneeId] = \App\Models\AnneeAcademique::contexte($request);
         AuditService::manuel('export','Export Excel des finances');
         $headers=['Étudiant','E-mail','Diplôme','Année académique','Montant dû','Remise','Montant net','Total versé','Solde restant','Montant en retard','Statut paiement'];
         $classeur=$this->classeur('Finances',$headers); $s=$classeur->getActiveSheet(); $ligne=2;
-        Inscription::with(['etudiant','formation','anneeAcademique','versements','echeances'])->latest()->get()->each(function($i)use($s,&$ligne){$this->ecrire($s,$ligne++,[$i->etudiant->prenom.' '.$i->etudiant->nom,$i->etudiant->email,$i->formation->code,$i->anneeAcademique->libelle,(float)$i->montant_du,(float)$i->montant_remise,(float)$i->montant_net,(float)$i->total_verse,(float)$i->solde_restant,(float)$i->montant_en_retard,$i->statut_paiement]);});
+        Inscription::with(['etudiant','formation','anneeAcademique','versements','echeances'])->where('id_annee_academique', $anneeId)->latest()->get()->each(function($i)use($s,&$ligne){$this->ecrire($s,$ligne++,[$i->etudiant->prenom.' '.$i->etudiant->nom,$i->etudiant->email,$i->formation->code,$i->anneeAcademique->libelle,(float)$i->montant_du,(float)$i->montant_remise,(float)$i->montant_net,(float)$i->total_verse,(float)$i->solde_restant,(float)$i->montant_en_retard,$i->statut_paiement]);});
         $this->finaliser($s,'A1:K'.max(2,$ligne-1)); $s->getStyle('E2:J'.max(2,$ligne-1))->getNumberFormat()->setFormatCode('#,##0 "MRU"'); return $this->telecharger($classeur,'finances-insec-'.now()->format('Ymd').'.xlsx');
     }
 
-    public function resultats(): StreamedResponse
+    public function resultats(Request $request): StreamedResponse
     {
+        [, $anneeId] = \App\Models\AnneeAcademique::contexte($request);
         AuditService::manuel('export','Export Excel des résultats');
         $headers=['Étudiant','E-mail','Diplôme','UE','Libellé UE','Session','Date examen','Présence','Note','Note sur','Décision'];
         $classeur=$this->classeur('Résultats',$headers); $s=$classeur->getActiveSheet(); $ligne=2;
-        ResultatExamen::with(['inscription.etudiant','inscription.formation','examen.ue'])->whereNotNull('note')->get()->each(function($r)use($s,&$ligne){$this->ecrire($s,$ligne++,[$r->inscription->etudiant->prenom.' '.$r->inscription->etudiant->nom,$r->inscription->etudiant->email,$r->inscription->formation->code,$r->examen->ue->code,$r->examen->ue->libelle,$r->examen->session,$r->examen->date_examen->format('d/m/Y H:i'),$r->presence,(float)$r->note,(float)$r->examen->note_sur,$r->valide?'Validée':'Non validée']);});
+        ResultatExamen::with(['inscription.etudiant','inscription.formation','examen.ue'])->whereHas('inscription', fn ($q) => $q->where('id_annee_academique', $anneeId))->get()->each(function($r)use($s,&$ligne){$this->ecrire($s,$ligne++,[$r->inscription->etudiant->prenom.' '.$r->inscription->etudiant->nom,$r->inscription->etudiant->email,$r->inscription->formation->code,$r->examen->ue->code,$r->examen->ue->libelle,$r->examen->session,$r->examen->date_examen->format('d/m/Y H:i'),$r->presence,$r->note === null ? null : (float)$r->note,(float)$r->examen->note_sur,$r->presence === 'Non renseigné' ? 'Présence non renseignée' : ($r->presence !== 'Présent' ? 'Absent à l’examen' : ($r->note === null ? 'Non noté' : ($r->valide ? 'Validée' : 'Non validée')))]);});
         $this->finaliser($s,'A1:K'.max(2,$ligne-1)); $s->getStyle('I2:J'.max(2,$ligne-1))->getNumberFormat()->setFormatCode('0.00'); return $this->telecharger($classeur,'resultats-insec-'.now()->format('Ymd').'.xlsx');
     }
 

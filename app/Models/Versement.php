@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Versement extends Model
 {
-    protected $fillable = ['inscription_id', 'montant', 'date_versement', 'statut', 'mode_paiement', 'reference', 'numero_recu', 'note'];
+    protected $fillable = ['inscription_id', 'montant', 'date_versement', 'statut', 'mode_paiement', 'reference', 'numero_recu', 'note', 'submission_id'];
 
     protected $casts = ['date_versement' => 'date'];
 

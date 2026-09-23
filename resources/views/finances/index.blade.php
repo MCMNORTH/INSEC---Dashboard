@@ -137,12 +137,12 @@
                                 <div class="space-y-2 mb-4">
                                     @forelse ($inscriptionSelectionnee->versements->sortByDesc('date_versement') as $versement)
                                         <div class="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2 text-xs">
-                                            <span>{{ $versement->date_versement->format('d/m/Y') }}</span>
+                                            <span>{{ $versement->date_versement?->format('d/m/Y') ?? 'Date non renseignée (historique)' }}</span>
                                             <span>{{ number_format($versement->montant, 0, ',', ' ') }}</span>
                                             <span class="{{ $versement->statut === 'Validée' ? 'text-green-400' : 'text-amber-400' }}">{{ $versement->statut }}</span>
                                         </div>
                                         <p class="text-[10px] text-blue-200 px-2">{{ $versement->numero_recu ?? 'Sans reçu' }} · {{ $versement->mode_paiement }} {{ $versement->reference ? '· '.$versement->reference : '' }}</p>
-                                        @if ($versement->statut === 'Validée')
+                                        @if ($versement->statut === 'Validée' && $versement->date_versement && $versement->mode_paiement !== 'Non renseigné')
                                             <a href="{{ route('pdf.recu', $versement) }}" class="inline-block ml-2 text-[10px] font-bold text-amber-300 underline">Télécharger le reçu</a>
                                         @endif
                                     @empty
@@ -151,6 +151,7 @@
                                 </div>
 
                                 <form method="POST" action="{{ route('finances.versements.store', $inscriptionSelectionnee) }}" class="space-y-2">
+                                    <input type="hidden" name="submission_id" value="{{ old('submission_id', (string) \Illuminate\Support\Str::uuid()) }}">
                                     @csrf
                                     <p class="text-xs text-blue-200">Ajouter un versement</p>
                                     <div class="flex gap-2">
@@ -216,7 +217,9 @@
                         <p class="text-xl font-bold text-green-600">{{ $carteReversement->marge_previsionnelle !== null ? number_format($carteReversement->marge_previsionnelle, 0, ',', ' ').' MRU' : '—' }}</p>
                     </div>
                     <div class="bg-white rounded-xl shadow p-4">
-                        <p class="text-xs text-gray-500">Manque pour régler le CNAM</p>
+                        <p class="text-xs text-gray-500">Écart CNAM / encaissements (hors autres charges)</p>
+                        <p class="text-xs text-gray-500">Reste CNAM : {{ number_format($carteReversement->reste_cnam_eur, 2, ',', ' ') }} €</p>
+                        @if($carteReversement->cout_reel_mru !== null)<p class="text-xs text-gray-500">Coût réglé : {{ number_format($carteReversement->cout_reel_mru, 0, ',', ' ') }} MRU</p>@endif
                         <p class="text-xl font-bold text-red-600">{{ $carteReversement->besoin_cnam !== null ? number_format($carteReversement->besoin_cnam, 0, ',', ' ').' MRU' : '—' }}</p>
                     </div>
                 </div>
