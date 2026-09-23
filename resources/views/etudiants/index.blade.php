@@ -3,6 +3,7 @@
         @include('partials.sidebar')
 
         <div class="flex-1 p-6">
+            @include('partials.student-section-nav')
             @if (session('error'))
                 <div class="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4">
                     {{ session('error') }}
@@ -22,7 +23,7 @@
             </div>
 
             <!-- Barre de Recherche et Filtres -->
-            <form method="GET" action="{{ route('etudiants.index') }}" class="flex gap-2 mb-4">
+            <form method="GET" action="{{ route('etudiants.index') }}" class="flex flex-wrap gap-2 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Rechercher un étudiant..." class="flex-1 border-gray-300 rounded-lg text-sm focus:ring-blue-500">
 
                 <select name="formation_id" class="border-gray-300 rounded-lg text-sm text-gray-600 focus:ring-blue-500">
@@ -32,10 +33,9 @@
                     @endforeach
                 </select>
 
-                <select name="annee_id" class="border-gray-300 rounded-lg text-sm text-gray-600 focus:ring-blue-500">
-                    <option value="">Année</option>
+                <select name="annee_id" onchange="this.form.submit()" class="border-amber-300 rounded-lg text-sm font-semibold text-[#1E2761] focus:ring-amber-500">
                     @foreach($annees as $annee)
-                        <option value="{{ $annee->id }}" @selected(request('annee_id') == $annee->id)>{{ $annee->libelle }}</option>
+                        <option value="{{ $annee->id }}" @selected($anneeId == $annee->id)>{{ $annee->libelle }}</option>
                     @endforeach
                 </select>
 
@@ -57,11 +57,11 @@
                     </thead>
                     <tbody class="divide-y divide-gray-100 text-sm">
                         @forelse ($etudiants as $etudiant)
-                            @php $derniereInscription = $etudiant->derniereInscription; @endphp
+                            @php $derniereInscription = $etudiant->inscriptions->first(); @endphp
                             <tr class="hover:bg-gray-50 transition cursor-pointer"
                                 onclick="window.location='{{ route('etudiants.show', $etudiant) }}'">
                                 <td class="p-3 font-medium text-gray-800">{{ $etudiant->nom }} {{ $etudiant->prenom }}</td>
-                                <td class="p-3 text-gray-600">{{ $etudiant->email }}</td>
+                                <td class="p-3 text-gray-600">{{ $etudiant->email ?: 'Non renseigné' }}</td>
                                 <td class="p-3 text-gray-600">{{ $derniereInscription?->formation?->nom ?? '-' }}</td>
                                 <td class="p-3 text-gray-600">{{ $derniereInscription?->anneeAcademique?->libelle ?? '-' }}</td>
                                 <td class="p-3">

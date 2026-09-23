@@ -9,11 +9,14 @@ class Inscription extends Model
     protected $fillable = [
         'id_etudiant', 'id_formation', 'id_annee_academique', 'annee_parcours',
         'date_inscription', 'numero_inscription_intec', 'statut', 'montant_du',
-        'montant_remise', 'note_financiere',
+        'montant_remise', 'note_financiere', 'financeur', 'prix_vente_ue_mru',
+        'cout_cnam_ue_eur', 'reference_facture_bumex', 'facture_bumex_emise_le',
     ];
 
     protected $casts = [
         'date_inscription' => 'date',
+        'cout_cnam_ue_eur' => 'decimal:2',
+        'facture_bumex_emise_le' => 'date',
     ];
 
     public function etudiant()
@@ -39,6 +42,11 @@ class Inscription extends Model
     public function echeances()
     {
         return $this->hasMany(Echeance::class)->orderBy('date_echeance');
+    }
+
+    public function documentsFinanciers()
+    {
+        return $this->hasMany(DocumentFinancier::class);
     }
 
     public function resultatsExamens()
@@ -86,5 +94,23 @@ class Inscription extends Model
     {
         $exigible = $this->echeances->where('date_echeance', '<', now()->startOfDay())->sum('montant');
         return max(min($exigible, $this->montant_net) - $this->total_verse, 0);
+    }
+
+    public function synchroniserTarification(): void
+    {
+        $this->loadMissing(['formation', 'ues']);
+        $tarif = config('insec.tarifs_ue.'.$this->formation?->code);
+        if (! $tarif) return;
+
+        $this->update([
+            'prix_vente_ue_mru' => $tarif['vente_mru'],
+            'cout_cnam_ue_eur' => $tarif['cout_cnam_eur'],
+            'montant_du' => $this->ues->count() * $tarif['vente_mru'],
+        ]);
+    }
+
+    public function getCoutCnamTotalEurAttribute(): float
+    {
+        return $this->ues->count() * (float) $this->cout_cnam_ue_eur;
     }
 }

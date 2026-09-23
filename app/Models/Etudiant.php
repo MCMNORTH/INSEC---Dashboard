@@ -9,12 +9,15 @@ class Etudiant extends Model
     protected $primaryKey = 'id_etudiant';
     
     protected $fillable = [
-        'nom', 
-        'prenom', 
+        'nom',
+        'prenom',
+        'date_naissance',
         'email', 
         'telephone', 
         'statut_etudiant'
     ];
+
+    protected $casts = ['date_naissance' => 'date'];
 
     public function inscriptions()
     {

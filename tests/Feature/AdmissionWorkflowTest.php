@@ -38,7 +38,7 @@ class AdmissionWorkflowTest extends TestCase
         $candidature=Candidature::create(['reference'=>'ADM-TEST01','nom'=>'Ba','prenom'=>'Awa','email'=>'awa@example.com','telephone'=>'22000000','dernier_diplome'=>'Baccalauréat','formation_id'=>$formation->id,'annee_academique_id'=>$annee->id,'statut'=>'Admissible']);
         $this->actingAs($admin)->post(route('candidatures.convertir',$candidature),['annee_parcours'=>1,'date_inscription'=>'2026-09-20','numero_inscription_intec'=>'INTEC-001','montant_du'=>50000])->assertRedirect();
         $this->assertDatabaseHas('etudiants',['email'=>'awa@example.com']);
-        $this->assertDatabaseHas('inscriptions',['id_formation'=>$formation->id,'montant_du'=>50000]);
+        $this->assertDatabaseHas('inscriptions',['id_formation'=>$formation->id,'montant_du'=>16000,'prix_vente_ue_mru'=>16000,'cout_cnam_ue_eur'=>160]);
         $this->assertDatabaseHas('inscription_ue',['ue_id'=>$ue->id]);
         $this->assertSame('Inscrite',$candidature->fresh()->statut);
     }

@@ -15,6 +15,34 @@ class ReadinessService
         $checks['debug']=$this->check(!app()->environment('production')||!config('app.debug'),'Mode debug désactivé en production','APP_DEBUG doit être false en production.');
         try { DB::select('SELECT 1');$checks['database']=$this->check(true,'Connexion à la base disponible',''); }
         catch(Throwable $e){$checks['database']=$this->check(false,'','Base de données indisponible.');}
+        if (app()->environment('production') && ($checks['database']['status'] ?? null) === 'ok') {
+            $anneeId = DB::table('annees_academiques')->where('libelle', '2024-2025')->value('id');
+            $candidatsHistoriques = $anneeId ? DB::table('inscriptions')
+                ->where('id_annee_academique', $anneeId)
+                ->where('financeur', 'bumex')
+                ->count() : 0;
+            $checks['historical_candidates'] = $this->check(
+                $candidatsHistoriques === 11,
+                'Les 11 candidats historiques BUMEX sont présents.',
+                "Import historique incomplet ({$candidatsHistoriques}/11)."
+            );
+            $dossiersSoldes = $anneeId ? DB::table('inscriptions as i')
+                ->leftJoin('versements as v', function ($join) {
+                    $join->on('v.inscription_id', '=', 'i.id')->where('v.statut', '=', 'Validée');
+                })
+                ->where('i.id_annee_academique', $anneeId)
+                ->where('i.financeur', 'bumex')
+                ->groupBy('i.id', 'i.montant_du', 'i.montant_remise')
+                ->selectRaw('i.id, i.montant_du, i.montant_remise, COALESCE(SUM(v.montant), 0) as total_verse')
+                ->get()
+                ->filter(fn ($dossier) => (int) $dossier->total_verse >= max((int) $dossier->montant_du - (int) $dossier->montant_remise, 0))
+                ->count() : 0;
+            $checks['historical_finances'] = $this->check(
+                $dossiersSoldes === 11,
+                'Les 11 dossiers BUMEX sont intégralement soldés.',
+                "Règlements BUMEX incomplets ({$dossiersSoldes}/11 dossiers soldés)."
+            );
+        }
         $checks['storage']=$this->check($this->stockageAccessible(),'Stockage accessible en écriture','Le dossier storage/app n’est pas accessible en écriture.');
         $checks['backup']=$this->sauvegardeRecente();
         return ['status'=>collect($checks)->contains(fn($c)=>$c['status']==='failed')?'failed':(collect($checks)->contains(fn($c)=>$c['status']==='warning')?'warning':'ok'),'checks'=>$checks,'checked_at'=>now()->toIso8601String()];
@@ -22,11 +50,15 @@ class ReadinessService
 
     private function sauvegardeRecente(): array
     {
-        $dir=storage_path('app/backups');$fichiers=File::isDirectory($dir)?File::files($dir):[];
-        $dernier=collect($fichiers)->filter(fn($f)=>$f->getExtension()==='zip')->sortByDesc(fn($f)=>$f->getMTime())->first();
-        if(!$dernier)return ['status'=>'warning','message'=>'Aucune sauvegarde disponible.'];
-        $heures=now()->diffInHours(\Illuminate\Support\Carbon::createFromTimestamp($dernier->getMTime()));
-        return $heures<=48?['status'=>'ok','message'=>'Dernière sauvegarde récente.']:['status'=>'warning','message'=>'La dernière sauvegarde date de plus de 48 heures.'];
+        try {
+            $latest = app(RemoteBackupService::class)->lister()[0] ?? null;
+            if (! $latest) return ['status' => 'warning', 'message' => 'Aucune sauvegarde vérifiée conservée.'];
+            $date = \Illuminate\Support\Carbon::parse($latest['cree_le']);
+            $recent = $date->lte(now()) && $date->gte(now()->subHours(48));
+            return ['status' => $recent ? 'ok' : 'warning', 'message' => $recent ? 'Sauvegarde vérifiée récente.' : 'Sauvegarde de plus de 48 heures.'];
+        } catch (Throwable $e) {
+            return ['status' => 'warning', 'message' => 'Impossible de vérifier le stockage des sauvegardes.'];
+        }
     }
 
     private function check(bool $ok,string $success,string $failure): array

@@ -15,28 +15,29 @@ class EtudiantController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Etudiant::with(['derniereInscription.formation', 'derniereInscription.anneeAcademique']);
+        [$annees, $anneeId] = AnneeAcademique::contexte($request);
+
+        $query = Etudiant::with(['inscriptions' => fn ($q) => $q
+            ->where('id_annee_academique', $anneeId)
+            ->with(['formation', 'anneeAcademique'])
+            ->latest()]);
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(fn ($q) => $q->where('nom', 'like', "%{$search}%")->orWhere('prenom', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
         }
-        if ($request->filled('formation_id')) {
-            $query->whereHas('inscriptions', fn ($q) => $q->where('id_formation', $request->input('formation_id')));
-        }
-        if ($request->filled('annee_id')) {
-            $query->whereHas('inscriptions', fn ($q) => $q->where('id_annee_academique', $request->input('annee_id')));
-        }
+        $query->whereHas('inscriptions', fn ($q) => $q
+            ->where('id_annee_academique', $anneeId)
+            ->when($request->filled('formation_id'), fn ($q) => $q->where('id_formation', $request->integer('formation_id'))));
         $etudiants = $query->orderBy('nom')->paginate(10)->withQueryString();
         $formations = Formation::where('active', true)->orderBy('nom')->get();
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
-        return view('etudiants.index', compact('etudiants', 'formations', 'annees'));
+        return view('etudiants.index', compact('etudiants', 'formations', 'annees', 'anneeId'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $formations = Formation::with('ues')->where('active', true)->orderBy('nom')->get();
-        $annees = AnneeAcademique::orderBy('libelle', 'desc')->get();
-        return view('etudiants.create', compact('formations', 'annees'));
+        [$annees, $anneeId] = AnneeAcademique::contexte($request);
+        return view('etudiants.create', compact('formations', 'annees', 'anneeId'));
     }
 
     public function store(Request $request)
@@ -44,11 +45,12 @@ class EtudiantController extends Controller
         $validated = $this->validateStudentAndEnrollment($request);
         $etudiant = DB::transaction(function () use ($validated) {
             $etudiant = Etudiant::create([
-                'nom' => $validated['nom'], 'prenom' => $validated['prenom'], 'email' => $validated['email'],
+                'nom' => $validated['nom'], 'prenom' => $validated['prenom'], 'date_naissance' => $validated['date_naissance'] ?? null, 'email' => $validated['email'] ?? null,
                 'telephone' => $validated['telephone'] ?? null, 'statut_etudiant' => $validated['statut_etudiant'],
             ]);
             $inscription = $etudiant->inscriptions()->create($this->enrollmentAttributes($validated));
             $inscription->ues()->sync($validated['ue_ids']);
+            $inscription->synchroniserTarification();
             return $etudiant;
         });
         return redirect()->route('etudiants.show', $etudiant)->with('status', 'Étudiant et première inscription enregistrés.');
@@ -66,7 +68,8 @@ class EtudiantController extends Controller
     {
         $validated = $request->validate([
             'nom' => ['required', 'string', 'max:255'], 'prenom' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', Rule::unique('etudiants', 'email')->ignore($etudiant->id_etudiant, 'id_etudiant')],
+            'date_naissance' => ['nullable', 'date'],
+            'email' => ['nullable', 'email', Rule::unique('etudiants', 'email')->ignore($etudiant->id_etudiant, 'id_etudiant')],
             'telephone' => ['nullable', 'string', 'max:30'],
             'statut_etudiant' => ['required', Rule::in(['Actif', 'Suspendu', 'Diplômé', 'Abandon'])],
         ]);
@@ -87,11 +90,12 @@ class EtudiantController extends Controller
     {
         $validated = $request->validate([
             'nom' => ['required', 'string', 'max:255'], 'prenom' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:etudiants,email'], 'telephone' => ['nullable', 'string', 'max:30'],
+            'date_naissance' => ['nullable', 'date'], 'email' => ['nullable', 'email', 'unique:etudiants,email'], 'telephone' => ['nullable', 'string', 'max:30'],
             'statut_etudiant' => ['required', Rule::in(['Actif', 'Suspendu', 'Diplômé', 'Abandon'])],
             'formation_id' => ['required', 'exists:formations,id'], 'annee_academique_id' => ['required', 'exists:annees_academiques,id'],
             'annee_parcours' => ['required', 'integer', 'min:1'], 'date_inscription' => ['required', 'date'],
             'numero_inscription_intec' => ['nullable', 'string', 'max:100'], 'ue_ids' => ['required', 'array', 'min:1'],
+            'financeur' => ['nullable', Rule::in(['etudiant', 'bumex'])],
             'ue_ids.*' => ['integer', 'distinct', 'exists:ues,id'],
         ]);
         $formation = Formation::findOrFail($validated['formation_id']);
@@ -106,6 +110,7 @@ class EtudiantController extends Controller
     {
         return ['id_formation' => $validated['formation_id'], 'id_annee_academique' => $validated['annee_academique_id'],
             'annee_parcours' => $validated['annee_parcours'], 'date_inscription' => $validated['date_inscription'],
-            'numero_inscription_intec' => $validated['numero_inscription_intec'] ?? null, 'statut' => 'active'];
+            'numero_inscription_intec' => $validated['numero_inscription_intec'] ?? null, 'statut' => 'active',
+            'financeur' => $validated['financeur'] ?? 'etudiant'];
     }
 }

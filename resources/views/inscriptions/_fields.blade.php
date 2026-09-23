@@ -12,7 +12,7 @@
         <label class="text-sm text-gray-600">Année académique</label>
         <select name="annee_academique_id" class="w-full border-gray-300 rounded-lg mt-1" required>
             @foreach ($annees as $annee)
-                <option value="{{ $annee->id }}" @selected(old('annee_academique_id', $inscription?->id_annee_academique) == $annee->id)>{{ $annee->libelle }}</option>
+                <option value="{{ $annee->id }}" @selected(old('annee_academique_id', $inscription?->id_annee_academique ?? ($anneeId ?? null)) == $annee->id)>{{ $annee->libelle }}</option>
             @endforeach
         </select>
     </div>
@@ -33,6 +33,14 @@
         <label class="text-sm text-gray-600">N° d’inscription INTEC <span class="text-gray-400">(facultatif)</span></label>
         <input type="text" name="numero_inscription_intec" value="{{ old('numero_inscription_intec', $inscription?->numero_inscription_intec) }}" class="w-full border-gray-300 rounded-lg mt-1">
     </div>
+    <div>
+        <label class="text-sm text-gray-600">Payeur</label>
+        <select name="financeur" class="w-full border-gray-300 rounded-lg mt-1" required>
+            <option value="etudiant" @selected(old('financeur', $inscription?->financeur ?? 'etudiant') === 'etudiant')>Paiement personnel</option>
+            <option value="bumex" @selected(old('financeur', $inscription?->financeur) === 'bumex')>Prise en charge BUMEX</option>
+        </select>
+        <p class="text-xs text-gray-400 mt-1">BUMEX sera facturé au même tarif que l’étudiant.</p>
+    </div>
     @if ($showStatus ?? false)
         <div>
             <label class="text-sm text-gray-600">Statut de l’inscription</label>
@@ -52,7 +60,7 @@
             @foreach ($formation->ues as $ue)
                 <label class="ue-option flex gap-2 rounded p-2 hover:bg-gray-50" data-formation="{{ $formation->id }}" data-year="{{ $ue->annee_parcours }}">
                     <input type="checkbox" name="ue_ids[]" value="{{ $ue->id }}" @checked(in_array($ue->id, old('ue_ids', $inscription?->ues->pluck('id')->all() ?? [])))>
-                    <span><strong>{{ $ue->code }}</strong> — {{ $ue->libelle }} <span class="text-xs text-gray-500">({{ $ue->credits }} ECTS)</span></span>
+                    <span><strong>{{ $ue->code }}</strong> — {{ $ue->libelle }} <span class="text-xs text-gray-500">({{ $ue->credits }} ECTS · {{ number_format(config('insec.tarifs_ue.'.$formation->code.'.vente_mru', 0), 0, ',', ' ') }} MRU)</span></span>
                 </label>
             @endforeach
         @endforeach

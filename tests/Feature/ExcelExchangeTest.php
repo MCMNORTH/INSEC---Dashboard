@@ -38,4 +38,46 @@ class ExcelExchangeTest extends TestCase
         $finance=User::factory()->create(['role'=>'finance']);
         $this->actingAs($finance)->get(route('excel.index'))->assertForbidden();
     }
+
+    public function test_exports_keep_selected_year_and_absences(): void
+    {
+        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+        $import = require database_path('migrations/2026_09_22_000014_import_bumex_dgc_2024_2025.php');
+        $import->up();
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+        $year = \App\Models\AnneeAcademique::where('libelle', '2024-2025')->firstOrFail();
+        foreach (['excel.etudiants' => 12, 'excel.finances' => 12, 'excel.resultats' => 42] as $route => $rows) {
+            $response = $this->get(route($route, ['annee_id' => $year->id]))->assertOk();
+            $path = tempnam(sys_get_temp_dir(), 'insec-export');
+            try {
+                file_put_contents($path, $response->streamedContent());
+                $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+                $sheet = $book->getActiveSheet();
+                $this->assertSame($rows, $sheet->getHighestRow());
+                if ($route === 'excel.resultats') {
+                    $data = array_slice($sheet->toArray(), 1);
+                    $absents = array_filter($data, fn ($row) => $row[7] === 'Non présenté');
+                    $unknown = array_filter($data, fn ($row) => $row[7] === 'Non renseigné');
+                    $this->assertCount(13, $absents);
+                    foreach ($absents as $row) {
+                        $this->assertEmpty($row[8]);
+                        $this->assertSame('Absent à l’examen', $row[10]);
+                    }
+                    foreach ($unknown as $row) $this->assertSame('Présence non renseignée', $row[10]);
+                }
+                $book->disconnectWorksheets();
+            } finally {
+                unlink($path);
+            }
+        }
+        $current = \App\Models\AnneeAcademique::where('libelle', '2026-2027')->firstOrFail();
+        $response = $this->get(route('excel.etudiants', ['annee_id' => $current->id]))->assertOk();
+        $path = tempnam(sys_get_temp_dir(), 'insec-export');
+        try {
+            file_put_contents($path, $response->streamedContent());
+            $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $this->assertEmpty($book->getActiveSheet()->getCell('A2')->getValue());
+            $book->disconnectWorksheets();
+        } finally { unlink($path); }
+    }
 }

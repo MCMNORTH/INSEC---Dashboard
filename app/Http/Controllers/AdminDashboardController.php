@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\AnneeAcademique;
 use App\Models\Enseignant;
-use App\Models\Etudiant;
 use App\Models\Examen;
 use App\Models\Inscription;
 use App\Models\ResultatExamen;
@@ -16,9 +15,7 @@ class AdminDashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $annees = AnneeAcademique::orderByDesc('libelle')->get();
-        $anneeId = $request->integer('annee_id') ?: $annees->first()?->id;
-        if ($anneeId && ! $annees->contains('id', $anneeId)) abort(422, 'Année académique invalide.');
+        [$annees, $anneeId] = AnneeAcademique::contexte($request);
 
         $inscriptions = Inscription::with(['etudiant', 'formation', 'versements', 'echeances', 'resultatsExamens.examen.ue'])
             ->when($anneeId, fn ($q) => $q->where('id_annee_academique', $anneeId))->get();
@@ -30,7 +27,7 @@ class AdminDashboardController extends Controller
         $montantEnRetard = $inscriptions->sum->montant_en_retard;
         $tauxRecouvrement = $montantFacture > 0 ? round($encaisses / $montantFacture * 100, 1) : 0;
 
-        $resultats = ResultatExamen::with('examen.ue')->whereIn('inscription_id', $inscriptionIds)->whereNotNull('note')->get();
+        $resultats = $inscriptions->flatMap->resultatsExamens->whereNotNull('note');
         $tauxReussite = $resultats->count() ? round($resultats->filter->valide->count() / $resultats->count() * 100, 1) : 0;
 
         $performanceDiplomes = $inscriptions->groupBy(fn ($i) => $i->formation?->code ?? '—')->map(function ($groupe, $code) {
@@ -49,17 +46,25 @@ class AdminDashboardController extends Controller
         $examensProchains = Examen::with('ue')->when($anneeId, fn ($q) => $q->where('annee_academique_id', $anneeId))
             ->where('statut', 'Planifié')->whereBetween('date_examen', [now(), now()->addDays(30)])->orderBy('date_examen')->take(6)->get();
 
-        $anneeCivile = now()->year;
-        $versementsParMois = Versement::where('statut', 'Validée')->whereIn('inscription_id', $inscriptionIds)
-            ->whereYear('date_versement', $anneeCivile)->get()->groupBy(fn ($v) => $v->date_versement->month)->map->sum('montant');
-        $moisLabels12 = collect(range(1, 12))->map(fn ($m) => ucfirst(Carbon::create($anneeCivile, $m, 1)->locale('fr')->isoFormat('MMM')));
-        $paiements12 = collect(range(1, 12))->map(fn ($m) => (float) ($versementsParMois[$m] ?? 0));
-        $repartition = Etudiant::selectRaw('statut_etudiant, count(*) as total')->groupBy('statut_etudiant')->pluck('total', 'statut_etudiant');
+        $libelleAnnee = $annees->firstWhere('id', $anneeId)->libelle;
+        $debutPeriode = Carbon::create((int) substr($libelleAnnee, 0, 4), 9, 1)->startOfDay();
+        $finPeriode = $debutPeriode->copy()->addYear();
+        $versementsParMois = $inscriptions->flatMap->versements
+            ->filter(fn ($v) => $v->statut === 'Validée' && $v->date_versement
+                && $v->date_versement->gte($debutPeriode) && $v->date_versement->lt($finPeriode))
+            ->groupBy(fn ($v) => $v->date_versement->format('Y-m'))->map->sum('montant');
+        $mois = collect(range(0, 11))->map(fn ($m) => $debutPeriode->copy()->addMonths($m));
+        $moisLabels12 = $mois->map(fn ($m) => ucfirst($m->locale('fr')->isoFormat('MMM YY')));
+        $paiements12 = $mois->map(fn ($m) => (float) ($versementsParMois[$m->format('Y-m')] ?? 0));
+        $horsGraphique = $encaisses - $paiements12->sum();
+        $etudiantsSelectionnes = $inscriptions->pluck('etudiant')->filter()->unique('id_etudiant');
+        $repartition = $etudiantsSelectionnes->groupBy('statut_etudiant')->map->count();
 
         return view('admin.dashboard', compact('annees', 'anneeId', 'montantFacture', 'encaisses', 'resteARecouvrer', 'montantEnRetard',
             'tauxRecouvrement', 'resultats', 'tauxReussite', 'performanceDiplomes', 'performanceUes', 'impayes', 'examensProchains',
-            'moisLabels12', 'paiements12', 'repartition') + [
-            'totalEtudiants' => Etudiant::count(), 'etudiantsActifs' => Etudiant::where('statut_etudiant', 'Actif')->count(),
+            'moisLabels12', 'paiements12', 'repartition', 'libelleAnnee', 'horsGraphique') + [
+            'totalEtudiants' => $etudiantsSelectionnes->count(),
+            'etudiantsActifs' => $etudiantsSelectionnes->where('statut_etudiant', 'Actif')->count(),
             'totalEnseignants' => Enseignant::count(), 'inscriptionsActives' => $inscriptions->where('statut', 'active')->count(),
         ]);
     }
