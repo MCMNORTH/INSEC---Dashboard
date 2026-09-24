@@ -1,0 +1,27 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+
+@theme {
+  --color-insec: #1e2761;
+  --color-insec-dark: #151b45;
+  --color-or: #d4af37;
+  --font-sans: "Nunito", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+/* Champs de formulaire : même rendu que Laravel Breeze + @tailwindcss/forms. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+  border-color: #d1d5db;
+}
+
+/* Les libellés « sr-only » (positionnés en absolu) restent contenus dans les tableaux défilants
+   au lieu d'élargir la page sur mobile. */
+.overflow-x-auto {
+  position: relative;
+}

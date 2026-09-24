@@ -1,6 +1,6 @@
 * @MCMNORTH
 
 /.github/ @MCMNORTH
-/app/ @MCMNORTH
-/database/ @MCMNORTH
-/routes/ @MCMNORTH
+/src/ @MCMNORTH
+/drizzle/ @MCMNORTH
+/scripts/ @MCMNORTH

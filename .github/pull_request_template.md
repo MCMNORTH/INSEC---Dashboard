@@ -8,10 +8,10 @@ Décrivez brièvement le besoin traité et le résultat attendu.
 
 ## Vérifications
 
-- [ ] Les tests Laravel passent avec `php artisan test`.
-- [ ] La compilation réussit avec `npm run build`.
+- [ ] `npm run lint`, `npm run typecheck` et `npm test` passent.
+- [ ] `npm run build` réussit ; `npm run test:e2e` passe si l’interface a changé.
 - [ ] Les droits d’accès des rôles concernés ont été vérifiés.
-- [ ] Les migrations disposent d’une méthode `down()` sûre.
+- [ ] Toute modification du schéma a sa migration générée avec `npm run db:generate`.
 - [ ] Aucun secret, fichier `.env`, document étudiant ou sauvegarde n’est inclus.
 - [ ] Les captures sont jointes si l’interface a changé.
 
