@@ -1,1 +1,0 @@
-{{-- Barre de navigation Breeze retirée : la sidebar gère déjà la navigation --}}

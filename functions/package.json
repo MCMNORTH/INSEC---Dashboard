@@ -1,0 +1,33 @@
+{
+    "name": "insec-functions",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.js",
+    "engines": {
+        "node": "22"
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.test.json",
+        "test": "firebase emulators:exec --project demo-insec --only auth,firestore,storage \"vitest run\"",
+        "amorcer": "npm run build && node lib/scripts/amorcer.js",
+        "amorcer:local": "npm run build && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 GCLOUD_PROJECT=demo-insec SUPER_ADMIN_EMAIL=superadmin@insec.test SUPER_ADMIN_NOM='Super Admin' SUPER_ADMIN_MOT_DE_PASSE=insec-super-2026 node lib/scripts/amorcer.js --demo"
+    },
+    "dependencies": {
+        "@google-cloud/firestore": "^9.3.0",
+        "exceljs": "^4.4.0",
+        "firebase-admin": "^14.5.0",
+        "firebase-functions": "^7.4.0",
+        "nodemailer": "^10.0.13",
+        "pdfmake": "^0.3.11",
+        "zod": "^4.6.5"
+    },
+    "devDependencies": {
+        "@firebase/rules-unit-testing": "^5.0.2",
+        "@types/node": "^22.20.4",
+        "@types/nodemailer": "^8.0.2",
+        "firebase": "^12.19.0",
+        "typescript": "~5.9",
+        "vitest": "^5.0.3"
+    }
+}

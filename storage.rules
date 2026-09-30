@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Pièces administratives : dépôt direct par l'administration, enregistrement via la fonction
+// enregistrerPiece, téléchargement uniquement via la fonction telechargerPiece (journalisé).
+service firebase.storage {
+  match /b/{bucket}/o {
+    function admin() {
+      return request.auth != null && request.auth.token.get('role', '') in ['admin', 'super_admin'];
+    }
+
+    match /dossiers/{etudiantId}/{fichier} {
+      allow create: if admin()
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/jpeg|image/png');
+      allow read, update, delete: if false;
+    }
+
+    match /{chemin=**} {
+      allow read, write: if false;
+    }
+  }
+}

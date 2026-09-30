@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// Toutes les écritures métier passent par les Cloud Functions (validation, transactions, audit).
+// Le navigateur ne dispose que d'accès en lecture, restreints selon le rôle porté par le jeton
+// (custom claims : role, etudiantId, enseignantId), à l'exception de l'état lu/archivé des alertes.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function connecte() { return request.auth != null; }
+    function role() { return connecte() ? request.auth.token.get('role', '') : ''; }
+    function admin() { return role() in ['admin', 'super_admin']; }
+    function finance() { return role() in ['admin', 'super_admin', 'finance']; }
+    function etudiant(id) { return role() == 'etudiant' && request.auth.token.get('etudiantId', '') == id; }
+    function enseignant(id) { return role() == 'enseignant' && request.auth.token.get('enseignantId', '') == id; }
+
+    // Référentiel : les diplômes et années alimentent le formulaire public de préinscription.
+    match /formations/{id} { allow read: if true; }
+    match /annees/{id} { allow read: if true; }
+    match /ues/{id} { allow read: if connecte(); }
+
+    match /etudiants/{id} { allow read: if finance() || etudiant(id); }
+    match /inscriptions/{id} { allow read: if finance() || etudiant(resource.data.etudiantId); }
+    match /versements/{id} { allow read: if finance() || etudiant(resource.data.etudiantId); }
+
+    // Le calendrier des examens n'est pas confidentiel pour les membres connectés de l'établissement.
+    match /examens/{id} { allow read: if admin() || role() in ['enseignant', 'etudiant']; }
+    match /resultats/{id} { allow read: if admin() || etudiant(resource.data.etudiantId); }
+
+    match /pieces/{id} { allow read: if admin(); }
+    match /candidatures/{id} { allow read: if admin(); }
+    match /enseignants/{id} { allow read: if admin() || enseignant(id); }
+    match /affectations/{id} { allow read: if admin() || enseignant(resource.data.enseignantId); }
+
+    match /utilisateurs/{uid} {
+      allow read: if admin() || (connecte() && request.auth.uid == uid);
+
+      match /alertes/{cle} {
+        allow read: if connecte() && request.auth.uid == uid;
+        // Seuls les champs de lecture et d'archivage peuvent être modifiés, avec l'heure du serveur.
+        allow update: if connecte() && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lueLe', 'archiveeLe'])
+          && (!('lueLe' in request.resource.data.diff(resource.data).affectedKeys()) || request.resource.data.lueLe == request.time)
+          && (!('archiveeLe' in request.resource.data.diff(resource.data).affectedKeys()) || request.resource.data.archiveeLe == request.time);
+      }
+    }
+
+    match /journalEmails/{id} { allow read: if admin(); }
+    match /journalAudit/{id} { allow read: if admin(); }
+    match /sauvegardes/{id} { allow read: if role() == 'super_admin'; }
+
+    // Collections techniques (unicité, compteurs) : jamais exposées.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
