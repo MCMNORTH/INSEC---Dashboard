@@ -6,7 +6,7 @@
         "dev": "vite",
         "build": "vue-tsc --noEmit && vite build",
         "typecheck": "vue-tsc --noEmit",
-        "emulateurs": "npm --prefix functions run build && firebase emulators:start --only auth,firestore,storage,functions",
+        "emulateurs": "npm --prefix functions run build && firebase emulators:start --project demo-insec --only auth,firestore,storage,functions",
         "amorcer:local": "npm --prefix functions run amorcer:local",
         "test": "npm --prefix functions test"
     },
