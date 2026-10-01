@@ -68,7 +68,7 @@ npm run build                    # vérification des types et compilation de l�
    ```bash
    firebase functions:secrets:set SMTP_PASSWORD
    ```
-4. Préparez les sauvegardes : créez le bucket `<projet>-sauvegardes` (ou celui indiqué dans `BACKUP_BUCKET`) dans la même région, ajoutez-lui une règle de cycle de vie supprimant les objets après 35 jours, et accordez au compte de service des fonctions (`<numéro>-compute@developer.gserviceaccount.com`) les rôles **Cloud Datastore Import Export Admin** sur le projet et **Storage Admin** sur ce bucket. Activez aussi la *suppression réversible* (soft delete) du bucket par défaut.
+4. Préparez les sauvegardes avant le déploiement : créez le bucket `<projet>-sauvegardes` (ou celui indiqué dans `BACKUP_BUCKET`) dans la même région que Firestore (`europe-west1` pour `insec-bd390`). Le code purge les archives après 30 jours ; ajoutez une règle de cycle de vie de secours à 35 jours et activez la *suppression réversible* (soft delete). Les exports gérés s’exécutent avec le compte de service Firestore affiché dans **Firestore → Importations/Exportations** ; dans le même projet, ce compte dispose normalement de l’accès requis au bucket. Le compte d’exécution des fonctions doit pouvoir lancer les exports (rôle **Cloud Datastore Import Export Admin** sur le projet) et gérer les objets du bucket pour copier, vérifier et purger les pièces jointes (rôle **Storage Object Admin** sur le bucket). Vérifiez le compte d’exécution réel dans les paramètres de sécurité de la fonction avant de lui accorder ces rôles ; ne donnez pas `Storage Admin` au niveau du projet.
 5. Déployez :
    ```bash
    firebase deploy
