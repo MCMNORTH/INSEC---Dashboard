@@ -15,10 +15,14 @@ export interface ProfilCompte {
 }
 
 /** Crée l'utilisateur Firebase Auth, ses droits (custom claims) et son profil Firestore. */
-export async function provisionnerCompte(profil: ProfilCompte, motDePasse: string): Promise<string> {
+export async function provisionnerCompte(profil: ProfilCompte, motDePasse?: string): Promise<string> {
     let uid: string;
     try {
-        ({ uid } = await auth.createUser({ email: profil.email, password: motDePasse, displayName: profil.nom }));
+        ({ uid } = await auth.createUser({
+            email: profil.email,
+            ...(motDePasse ? { password: motDePasse } : {}),
+            displayName: profil.nom,
+        }));
     } catch (erreur) {
         if ((erreur as { code?: string }).code === 'auth/email-already-exists') erreurChamp('email', 'Un compte existe déjà avec cet e-mail.');
         throw erreur;

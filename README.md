@@ -76,9 +76,9 @@ npm run build                    # vérification des types et compilation de l�
    Le déploiement compile l’interface et les fonctions, publie les règles et crée les index. La création des index composites peut prendre quelques minutes.
 6. Créez le premier super-administrateur (l’inscription publique des comptes internes n’existe pas) avec des identifiants Google Cloud autorisés (`gcloud auth application-default login`) :
    ```bash
-   GCLOUD_PROJECT=<id-du-projet> SUPER_ADMIN_EMAIL=… SUPER_ADMIN_NOM="…" SUPER_ADMIN_MOT_DE_PASSE=… npm --prefix functions run amorcer
+   GCLOUD_PROJECT=<id-du-projet> SUPER_ADMIN_EMAIL=… SUPER_ADMIN_NOM="…" npm --prefix functions run amorcer
    ```
-   Le script charge aussi le référentiel INTEC-CNAM (diplômes DGC/DSGC, UE, années académiques). Il peut être relancé sans risque.
+   Le script charge aussi le référentiel INTEC-CNAM (diplômes DGC/DSGC, UE, années académiques). Il peut être relancé sans risque. Le compte est créé sans mot de passe initial ; depuis la page de connexion, utilisez « Mot de passe oublié » pour recevoir un lien et définir un mot de passe privé.
 7. Dans la console Authentication, personnalisez en français le modèle d’e-mail de réinitialisation du mot de passe et ajoutez votre domaine aux domaines autorisés.
 
 ### Vérifications après déploiement

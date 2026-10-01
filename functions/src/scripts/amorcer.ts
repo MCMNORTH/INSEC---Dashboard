@@ -2,7 +2,8 @@
  * Amorçage de la base : référentiel INTEC-CNAM, premier super-administrateur et, en option, données de démonstration.
  *
  *   Émulateurs : npm run amorcer:local -- --demo
- *   Production : GCLOUD_PROJECT=<projet> SUPER_ADMIN_EMAIL=… SUPER_ADMIN_NOM=… SUPER_ADMIN_MOT_DE_PASSE=… npm run amorcer
+ *   Production : GCLOUD_PROJECT=<projet> SUPER_ADMIN_EMAIL=… SUPER_ADMIN_NOM=… npm run amorcer
+ *   Après création, le super-administrateur définit son mot de passe via « Mot de passe oublié ».
  */
 import { FieldValue } from 'firebase-admin/firestore';
 import { auth, db } from '../lib/firebase.js';
@@ -51,9 +52,16 @@ async function referentiel() {
     console.log(`Référentiel : ${FORMATIONS.length} diplômes, ${Object.values(CATALOGUE).flat().length} UE, ${ANNEES.length} années.`);
 }
 
-async function compte(profil: ProfilCompte, motDePasse: string) {
+async function compte(profil: ProfilCompte, motDePasse?: string) {
     const existant = await auth.getUserByEmail(profil.email).catch(() => null);
     const uid = existant?.uid ?? (await provisionnerCompte(profil, motDePasse));
+    if (existant) {
+        await auth.setCustomUserClaims(uid, {
+            role: profil.role,
+            ...(profil.etudiantId ? { etudiantId: profil.etudiantId } : {}),
+            ...(profil.enseignantId ? { enseignantId: profil.enseignantId } : {}),
+        });
+    }
     await db.collection('utilisateurs').doc(uid).set(
         { ...profil, actif: true, creeLe: FieldValue.serverTimestamp(), modifieLe: FieldValue.serverTimestamp() },
         { merge: true },
@@ -105,12 +113,11 @@ async function demo() {
 async function principal() {
     await referentiel();
     const email = process.env.SUPER_ADMIN_EMAIL;
-    const motDePasse = process.env.SUPER_ADMIN_MOT_DE_PASSE;
-    if (email && motDePasse) {
-        if (motDePasse.length < 12) throw new Error('Le mot de passe du super-administrateur doit contenir au moins 12 caractères.');
-        await compte({ nom: process.env.SUPER_ADMIN_NOM ?? 'Super administrateur', email: email.toLowerCase(), role: 'super_admin', etudiantId: null, enseignantId: null }, motDePasse);
+    const nom = process.env.SUPER_ADMIN_NOM;
+    if (email && nom) {
+        await compte({ nom, email: email.toLowerCase(), role: 'super_admin', etudiantId: null, enseignantId: null });
     } else {
-        console.log('SUPER_ADMIN_EMAIL / SUPER_ADMIN_MOT_DE_PASSE absents : aucun super-administrateur créé.');
+        console.log('SUPER_ADMIN_EMAIL / SUPER_ADMIN_NOM absents : aucun super-administrateur créé.');
     }
     if (process.argv.includes('--demo')) {
         if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Les données de démonstration sont réservées aux émulateurs.');
