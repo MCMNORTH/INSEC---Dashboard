@@ -39,9 +39,7 @@ async function quitter() {
     </div>
     <aside :class="[ouverte ? 'block' : 'hidden', 'w-full border-r border-gray-200 bg-white p-4 lg:block lg:min-h-screen lg:w-64 lg:shrink-0']">
         <div class="mb-8 hidden text-center lg:block">
-            <img src="/images/logo-insec.png" alt="Logo INSEC" class="mx-auto mb-2 h-20 w-20 object-contain" />
-            <div class="mx-auto w-12 border-t-2 border-insec-or"></div>
-            <p class="mt-3 text-xl font-bold text-insec">INSEC</p>
+            <img src="/images/logo-insec.png" alt="Logo INSEC" class="mx-auto mb-3 block h-auto max-h-28 w-full max-w-[190px] object-contain" />
             <p class="mb-7 text-xs text-gray-400">{{ session.role === 'finance' ? 'Espace finance' : 'Espace administration' }}</p>
         </div>
         <nav class="space-y-1">
