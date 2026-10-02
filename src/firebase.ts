@@ -1,4 +1,5 @@
 import { initializeApp, type FirebaseOptions } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
@@ -27,6 +28,15 @@ async function configuration(): Promise<FirebaseOptions> {
 }
 
 export const app = initializeApp(await configuration());
+// Clé de site publique, limitée au domaine de production par reCAPTCHA Enterprise.
+const cleSiteAppCheck = env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY
+    || '6LfSH9otAAAAACNkXZUF2pjo4N32XQW2U_5f2Rgx';
+if (!avecEmulateurs && !env.DEV) {
+    initializeAppCheck(app, {
+        provider: new ReCaptchaEnterpriseProvider(cleSiteAppCheck),
+        isTokenAutoRefreshEnabled: true,
+    });
+}
 export const auth = getAuth(app);
 auth.languageCode = 'fr';
 export const db = getFirestore(app);

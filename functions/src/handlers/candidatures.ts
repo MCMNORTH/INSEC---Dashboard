@@ -48,14 +48,14 @@ export const deposerCandidature = operation('deposerCandidature', 'public', asyn
         });
     });
     return { reference };
-});
+}, { enforceAppCheck: true });
 
 export const confirmationCandidature = operation('confirmationCandidature', 'public', async (donnees) => {
     const { reference } = valider(z.object({ reference: z.string().regex(/^ADM-\d{6}-[A-Z0-9]{6}$/, 'référence invalide.') }), donnees);
     const snap = await col.candidatures().doc(reference).get();
     if (!snap.exists) throw new HttpsError('not-found', 'Candidature introuvable.');
     return { reference, email: snap.get('email') as string };
-});
+}, { enforceAppCheck: true });
 
 export const deciderCandidature = operation('deciderCandidature', ROLES_ADMIN, async (donnees, acteur) => {
     const v = valider(z.object({ id: s.id(), statut: s.choix(DECISIONS_CANDIDATURE), noteInterne: s.texteOptionnel(2000) }), donnees);
