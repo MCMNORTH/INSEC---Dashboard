@@ -52,6 +52,17 @@ const progressionPreparation = computed(() => {
 const lignes = computed(() =>
     [...resultats.value].sort((a, b) => nomComplet(parEtudiant.value.get(a.etudiantId)).localeCompare(nomComplet(parEtudiant.value.get(b.etudiantId)))),
 );
+const convocables = computed(() => {
+    if (examen.value?.statut === 'Annulé') return [];
+    const uniques = new Map<string, Resultat>();
+    for (const resultat of resultats.value) {
+        const email = parEtudiant.value.get(resultat.etudiantId)?.email?.trim() ?? '';
+        if (resultat.presence === 'Convoqué' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+            uniques.set(resultat.etudiantId, resultat);
+        }
+    }
+    return [...uniques.values()];
+});
 
 const saisie = reactive<Record<string, { presence: string; note: number | '' | null; commentaire: string }>>({});
 const valeur = (r: Resultat) => (saisie[r.id] ??= { presence: r.presence, note: r.note ?? '', commentaire: r.commentaire ?? '' });
@@ -69,6 +80,14 @@ async function enregistrer(r: Resultat) {
     enCours.id = r.id;
     const resultat = await soumettre(() => appeler('enregistrerResultat', { id: r.id, ...valeur(r) }));
     if (resultat) notifier(resultat.message ?? 'Résultat enregistré.');
+}
+
+async function envoyerToutesConvocations() {
+    const nombre = convocables.value.length;
+    if (!nombre || examen.value?.statut === 'Annulé') return;
+    if (!window.confirm(`Envoyer ${nombre} convocation(s) ? Chaque étudiant recevra un e-mail séparé avec son PDF personnalisé.`)) return;
+    const resultat = await soumettre(() => appeler('envoyerConvocationsExamen', { id: props.id }));
+    if (resultat) notifier(resultat.message ?? 'Envoi groupé terminé.');
 }
 
 async function envoyerConvocation(r: Resultat) {
@@ -149,7 +168,15 @@ async function envoyerConvocation(r: Resultat) {
                     </div>
                 </form>
             </section>
-            <h2 class="mt-7 mb-3 font-bold text-insec">Convocations et résultats ({{ resultats.length }})</h2>
+            <div class="mt-7 mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 class="font-bold text-insec">Convocations et résultats ({{ resultats.length }})</h2>
+                <button
+                    type="button"
+                    class="bouton-principal"
+                    :disabled="envoi || !convocables.length || examen.statut === 'Annulé'"
+                    @click="envoyerToutesConvocations"
+                ><i class="fa-solid fa-paper-plane"></i> Envoyer les convocations ({{ convocables.length }})</button>
+            </div>
             <div class="space-y-3">
                 <form v-for="r in lignes" :key="r.id" class="carte grid items-end gap-3 p-4 md:grid-cols-7" @submit.prevent="enregistrer(r)">
                     <div class="md:col-span-2">

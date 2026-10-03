@@ -301,51 +301,136 @@ async function destinataireDocument(type: 'facture' | 'recu' | 'convocation', id
     return { ...contexte, email };
 }
 
+async function expedierDocument(
+    type: 'facture' | 'recu' | 'convocation',
+    id: string,
+    acteurId: string,
+    transport: ReturnType<typeof transportSmtp>,
+) {
+    const contexte = await destinataireDocument(type, id);
+    const pdf = await generateurs[type](id);
+    const contenu = Buffer.from(pdf.contenu, 'base64');
+    if (contenu.length > 8 * 1024 * 1024) {
+        throw new HttpsError('resource-exhausted', 'Le document dépasse la taille maximale autorisée pour un e-mail.');
+    }
+
+    const libelles = { facture: 'Facture d’inscription', recu: 'Reçu de paiement', convocation: 'Convocation à l’examen' };
+    const libelle = libelles[type];
+    const email: Email = {
+        destinataire: contexte.email,
+        nomDestinataire: `${contexte.etudiant.prenom ?? ''} ${contexte.etudiant.nom ?? ''}`.trim() || null,
+        type: 'Document PDF',
+        sujet: `INSEC · ${libelle}`,
+        titre: libelle,
+        message: 'Veuillez trouver votre document en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.',
+        details: { Document: pdf.nom, 'Année académique': String(contexte.annee.libelle ?? '') },
+    };
+    const journal = db.collection('journalEmails').doc();
+    await journal.set({
+        ...email,
+        lien: null,
+        libelleLien: null,
+        etudiantId: contexte.inscription.etudiantId,
+        nomPieceJointe: pdf.nom,
+        acteurId,
+        statut: 'En attente',
+        envoiDirect: true,
+        erreur: null,
+        envoyeLe: null,
+        creeLe: FieldValue.serverTimestamp(),
+    });
+
+    const statut = await expedier(journal.id, email, transport, [
+        { filename: pdf.nom, content: contenu, contentType: 'application/pdf' },
+    ]);
+    return { statut, email, libelle };
+}
+
 export const envoyerDocumentParEmail = operation(
     'envoyerDocumentParEmail',
     ROLES_ADMIN,
     async (donnees, acteur) => {
         const v = valider(z.object({ type: s.choix(['facture', 'recu', 'convocation'] as const), id: s.id() }), donnees);
-        const contexte = await destinataireDocument(v.type, v.id);
-        const pdf = await generateurs[v.type](v.id);
-        const contenu = Buffer.from(pdf.contenu, 'base64');
-        if (contenu.length > 8 * 1024 * 1024) {
-            throw new HttpsError('resource-exhausted', 'Le document dépasse la taille maximale autorisée pour un e-mail.');
-        }
-
-        const libelles = { facture: 'Facture d’inscription', recu: 'Reçu de paiement', convocation: 'Convocation à l’examen' };
-        const libelle = libelles[v.type];
-        const email: Email = {
-            destinataire: contexte.email,
-            nomDestinataire: `${contexte.etudiant.prenom ?? ''} ${contexte.etudiant.nom ?? ''}`.trim() || null,
-            type: 'Document PDF',
-            sujet: `INSEC · ${libelle}`,
-            titre: libelle,
-            message: 'Veuillez trouver votre document en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.',
-            details: { Document: pdf.nom, 'Année académique': String(contexte.annee.libelle ?? '') },
-        };
-        const journal = db.collection('journalEmails').doc();
-        await journal.set({
-            ...email,
-            lien: null,
-            libelleLien: null,
-            etudiantId: contexte.inscription.etudiantId,
-            nomPieceJointe: pdf.nom,
-            acteurId: acteur.uid,
-            statut: 'En attente',
-            envoiDirect: true,
-            erreur: null,
-            envoyeLe: null,
-            creeLe: FieldValue.serverTimestamp(),
-        });
-
-        const statut = await expedier(journal.id, email, transportSmtp(), [
-            { filename: pdf.nom, content: contenu, contentType: 'application/pdf' },
-        ]);
-        if (statut === 'Échec') {
+        const id = String(v.id ?? '');
+        if (!id) throw new HttpsError('invalid-argument', 'Identifiant du document manquant.');
+        const acteurId = String(acteur.uid ?? '');
+        if (!acteurId) throw new HttpsError('unauthenticated', 'Session administrateur introuvable.');
+        const resultat = await expedierDocument(v.type, id, acteurId, transportSmtp());
+        if (resultat.statut === 'Échec') {
             throw new HttpsError('unavailable', 'Le document n’a pas pu être envoyé. Consultez le journal des communications.');
         }
-        return { message: `${libelle} envoyé à ${contexte.email}.` };
+        return { message: `${resultat.libelle} envoyé à ${resultat.email.destinataire}.` };
     },
     { memory: '512MiB', timeoutSeconds: 120, secrets: [SMTP_PASSWORD] },
+);
+
+export const envoyerConvocationsExamen = operation(
+    'envoyerConvocationsExamen',
+    ROLES_ADMIN,
+    async (donnees, acteur) => {
+        const v = valider(z.object({ id: s.id() }), donnees);
+        const examenId = String(v.id ?? '');
+        if (!examenId) throw new HttpsError('invalid-argument', 'Identifiant de l’examen manquant.');
+        const acteurId = String(acteur.uid ?? '');
+        if (!acteurId) throw new HttpsError('unauthenticated', 'Session administrateur introuvable.');
+        const examen = await exiger(null, col.examens().doc(examenId), 'Examen introuvable.');
+        if (examen.statut === 'Annulé') {
+            throw new HttpsError('failed-precondition', 'Les convocations d’un examen annulé ne peuvent pas être envoyées.');
+        }
+
+        const documents = (await col.resultats().where('examenId', '==', examenId).get()).docs;
+        const convoques = documents
+            .map((doc) => ({ ...doc.data(), id: doc.id }) as Doc & { id: string; etudiantId: string; presence: string })
+            .filter((resultat) => resultat.presence === 'Convoqué');
+        const uniques = new Map<string, (typeof convoques)[number]>();
+        for (const resultat of convoques) {
+            if (typeof resultat.etudiantId === 'string' && resultat.etudiantId && !uniques.has(resultat.etudiantId)) {
+                uniques.set(resultat.etudiantId, resultat);
+            }
+        }
+        const cibles = [...uniques.values()];
+        if (cibles.length > 300) {
+            throw new HttpsError('resource-exhausted', 'Cet envoi dépasse la limite de 300 étudiants par examen.');
+        }
+        if (!cibles.length) {
+            throw new HttpsError('failed-precondition', 'Aucun étudiant n’est marqué « Convoqué » pour cet examen.');
+        }
+
+        const fiches = await db.getAll(...cibles.map((resultat) => col.etudiants().doc(resultat.etudiantId)));
+        const emailValide = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+        const eligibles = cibles.filter((_, index) => {
+            const email = String(fiches[index].get('email') ?? '').trim();
+            return fiches[index].exists && emailValide.test(email);
+        });
+        const ignores = convoques.length - eligibles.length;
+        if (!eligibles.length) {
+            throw new HttpsError('failed-precondition', 'Aucun étudiant convoqué ne possède une adresse e-mail valide.');
+        }
+
+        const transport = transportSmtp();
+        let prochain = 0;
+        let envoyes = 0;
+        let echecs = 0;
+        const travailleurs = Array.from({ length: Math.min(3, eligibles.length) }, async () => {
+            while (prochain < eligibles.length) {
+                const cible = eligibles[prochain++];
+                try {
+                    const resultat = await expedierDocument('convocation', cible.id, acteurId, transport);
+                    if (resultat.statut === 'Envoyé') envoyes += 1;
+                    else echecs += 1;
+                } catch {
+                    echecs += 1;
+                }
+            }
+        });
+        await Promise.all(travailleurs);
+
+        return {
+            message: `Envoi terminé : ${envoyes} envoyé(s), ${echecs} échec(s), ${ignores} ignoré(s).`,
+            envoyes,
+            echecs,
+            ignores,
+        };
+    },
+    { memory: '1GiB', timeoutSeconds: 300, secrets: [SMTP_PASSWORD] },
 );
