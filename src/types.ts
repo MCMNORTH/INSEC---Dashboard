@@ -194,6 +194,7 @@ export interface JournalEmail {
     nomDestinataire: string | null;
     type: string;
     sujet: string;
+    nomPieceJointe?: string;
     statut: string;
     erreur: string | null;
     creeLe?: Timestamp;
