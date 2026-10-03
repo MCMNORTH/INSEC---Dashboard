@@ -58,7 +58,6 @@ async function seConnecter() {
                     <button class="bouton-principal w-full py-2.5" :disabled="envoi">
                         <i v-if="envoi" class="fa-solid fa-circle-notch fa-spin"></i> Se connecter
                     </button>
-                    <RouterLink to="/admission" class="bouton-secondaire w-full py-2.5">Déposer une candidature</RouterLink>
                 </form>
             </div>
         </div>
