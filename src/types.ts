@@ -86,6 +86,13 @@ export interface Examen {
     seuilValidation: number;
     statut: string;
     nbConvoques: number;
+    sujetsRecusLe?: string | null;
+    nombreSujetsRecus?: number | null;
+    salleConfirmee?: boolean;
+    surveillanceConfirmee?: boolean;
+    nombreCopiesRassemblees?: number | null;
+    copiesEnvoyeesLe?: string | null;
+    referenceEnvoiCopies?: string | null;
 }
 
 export interface Resultat {
