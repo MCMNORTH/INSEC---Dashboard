@@ -69,9 +69,8 @@ export function accueil(role: Role | null = session.role): string {
         case 'finance':
             return '/finances';
         case 'enseignant':
-            return '/portail/enseignant';
         case 'etudiant':
-            return '/portail/etudiant';
+            return '/acces-refuse';
         default:
             return '/acces-refuse';
     }
