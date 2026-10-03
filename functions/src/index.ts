@@ -10,7 +10,7 @@ export { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription,
 export { exporterExcel, importerEtudiants } from './handlers/excel.js';
 export { creerExamen, enregistrerResultat, mettreAJourPreparationExamen } from './handlers/examens.js';
 export { ajouterEcheance, ajouterVersement, modifierSituationFinanciere } from './handlers/finances.js';
-export { genererPdf } from './handlers/pdf.js';
+export { envoyerDocumentParEmail, genererPdf } from './handlers/pdf.js';
 export { sante } from './handlers/sante.js';
 export { creerSauvegarde, restaurerSauvegarde, sauvegardeQuotidienne, verifierSauvegarde } from './handlers/sauvegardes.js';
 export { tableauDeBordAdmin } from './handlers/tableauDeBord.js';
