@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { collection, orderBy, query } from 'firebase/firestore';
 import { computed, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { appeler } from '../../api';
 import BadgeStatut from '../../composants/BadgeStatut.vue';
 import Chargement from '../../composants/Chargement.vue';
@@ -15,6 +15,7 @@ import { useReferentiel } from '../../referentiel';
 import type { Etudiant, Inscription } from '../../types';
 
 const router = useRouter();
+const route = useRoute();
 const { formationsActives, annees, formation } = useReferentiel();
 const { donnees: etudiants, chargement, erreur } = useRequete<Etudiant>(() => query(collection(db, 'etudiants'), orderBy('nom')));
 const {
@@ -24,14 +25,28 @@ const {
 } = useRequete<Inscription>(() => query(collection(db, 'inscriptions')));
 const recherche = ref('');
 const formationId = ref('');
-const anneeId = ref('');
-const filtreInscription = ref<'tous' | 'inscrits' | 'non-inscrits'>('tous');
+const anneeId = ref(typeof route.query.anneeId === 'string' ? route.query.anneeId : '');
+const filtreInscription = ref<'tous' | 'inscrits' | 'non-inscrits'>(
+    route.query.inscription === 'non-inscrits' ? 'non-inscrits' : 'tous',
+);
 const page = ref(1);
 const PAR_PAGE = 10;
 
 watch(annees, (liste) => {
-    if (!anneeId.value && liste.length) anneeId.value = liste[0].id;
+    const anneeDemandee = route.query.anneeId;
+    if (typeof anneeDemandee === 'string' && liste.some((a) => a.id === anneeDemandee)) {
+        anneeId.value = anneeDemandee;
+    } else if (!anneeId.value || !liste.some((a) => a.id === anneeId.value)) {
+        anneeId.value = liste[0]?.id ?? '';
+    }
 }, { immediate: true });
+
+watch(() => [route.query.anneeId, route.query.inscription] as const, ([annee, inscription]) => {
+    if (typeof annee === 'string') anneeId.value = annee;
+    if (inscription === 'tous' || inscription === 'inscrits' || inscription === 'non-inscrits') {
+        filtreInscription.value = inscription;
+    }
+});
 
 const normaliser = (v: string) => v.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const inscriptionsPour = (etudiantId: string) =>

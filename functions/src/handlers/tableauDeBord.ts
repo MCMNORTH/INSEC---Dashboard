@@ -84,13 +84,16 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
         col.enseignants().count().get(),
     ]);
     const repartition = Object.fromEntries(STATUTS_ETUDIANT.map((statut, n) => [statut, comptages[n].data().count]));
+    const totalEtudiants = comptages[STATUTS_ETUDIANT.length].data().count;
+    const etudiantsInscrits = new Set(inscriptions.filter((i) => i.statut === 'active').map((i) => i.etudiantId)).size;
+    const etudiantsSansInscription = Math.max(0, totalEtudiants - etudiantsInscrits);
 
     return {
         annees, anneeId, montantFacture, encaisses, resteARecouvrer, montantEnRetard: retard,
         tauxRecouvrement: montantFacture > 0 ? arrondi((encaisses / montantFacture) * 100) : 0,
         tauxReussite: taux(resultats.filter((r) => r.valide).length, resultats.length),
         performanceDiplomes, performanceUes, impayes, examensProchains, paiements12, repartition,
-        totalEtudiants: comptages[STATUTS_ETUDIANT.length].data().count,
+        totalEtudiants, etudiantsInscrits, etudiantsSansInscription,
         etudiantsActifs: repartition['Actif'] ?? 0,
         totalEnseignants: comptages[STATUTS_ETUDIANT.length + 1].data().count,
         inscriptionsActives: inscriptions.filter((i) => i.statut === 'active').length,
