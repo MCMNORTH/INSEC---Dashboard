@@ -70,6 +70,18 @@ async function enregistrer(r: Resultat) {
     const resultat = await soumettre(() => appeler('enregistrerResultat', { id: r.id, ...valeur(r) }));
     if (resultat) notifier(resultat.message ?? 'Résultat enregistré.');
 }
+
+async function envoyerConvocation(r: Resultat) {
+    const etudiant = parEtudiant.value.get(r.etudiantId);
+    const email = etudiant?.email?.trim();
+    if (!email) {
+        notifier('Aucune adresse e-mail n’est enregistrée pour cet étudiant.');
+        return;
+    }
+    if (!window.confirm(`Envoyer la convocation PDF à ${nomComplet(etudiant)} — ${email} ?`)) return;
+    const resultat = await soumettre(() => appeler('envoyerDocumentParEmail', { type: 'convocation', id: r.id }));
+    if (resultat) notifier(resultat.message ?? 'Convocation envoyée par e-mail.');
+}
 </script>
 
 <template>
@@ -155,6 +167,13 @@ async function enregistrer(r: Resultat) {
                     <button type="button" class="bouton-secondaire" :disabled="envoi" title="Convocation PDF" @click="soumettre(() => telecharger('genererPdf', { type: 'convocation', id: r.id }))">
                         <i class="fa-solid fa-file-pdf"></i> Convocation
                     </button>
+                    <button
+                        type="button"
+                        class="bouton-secondaire"
+                        :disabled="envoi || examen.statut === 'Annulé' || !parEtudiant.get(r.etudiantId)?.email"
+                        title="Envoyer la convocation par e-mail"
+                        @click="envoyerConvocation(r)"
+                    ><i class="fa-solid fa-paper-plane"></i> Envoyer par e-mail</button>
                     <p v-if="enCours.id === r.id && erreurs.note" class="text-xs text-red-600 md:col-span-7">{{ erreurs.note }}</p>
                     <p v-if="r.presence === 'Présent' && r.note !== null" :class="['text-xs md:col-span-7', r.valide ? 'text-green-700' : 'text-red-700']">
                         {{ r.valide ? 'UE validée' : 'UE non validée' }}
