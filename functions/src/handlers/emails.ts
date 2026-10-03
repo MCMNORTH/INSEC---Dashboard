@@ -6,8 +6,8 @@ import { REGION } from '../lib/firebase.js';
 export const envoyerEmail = onDocumentCreated(
     { document: 'journalEmails/{id}', region: REGION, secrets: [SMTP_PASSWORD], retry: false },
     async (evenement) => {
-        const donnees = evenement.data?.data() as (Email & { statut: string }) | undefined;
-        if (!donnees || donnees.statut !== 'En attente') return;
+        const donnees = evenement.data?.data() as (Email & { statut: string; envoiDirect?: boolean }) | undefined;
+        if (!donnees || donnees.statut !== 'En attente' || donnees.envoiDirect) return;
         await expedier(evenement.params.id, donnees, transportSmtp());
     },
 );
