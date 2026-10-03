@@ -30,7 +30,14 @@ const couleurs: Record<string, string> = { Envoyé: 'bg-green-50 text-green-700'
 </script>
 
 <template>
-    <div class="mb-6"><p class="text-sm text-gray-500">Traçabilité</p><h1 class="titre-page">Communications par e-mail</h1></div>
+    <div class="mb-6">
+        <p class="text-sm text-gray-500">Traçabilité</p>
+        <h1 class="titre-page">Communications par e-mail</h1>
+        <p class="mt-2 max-w-3xl text-sm text-gray-600">
+            Les factures se préparent dans Finances, les reçus après validation d’un versement et les convocations depuis la fiche d’examen.
+            Chaque PDF est joint au message; son envoi et son résultat sont suivis ici.
+        </p>
+    </div>
     <section class="mb-6 grid grid-cols-3 gap-4">
         <div v-for="s in STATUTS_EMAIL" :key="s" :class="[couleurs[s], 'rounded-xl border border-white p-4']">
             <p class="text-2xl font-bold">{{ stats[s] ?? 0 }}</p>
@@ -49,7 +56,11 @@ const couleurs: Record<string, string> = { Envoyé: 'bg-green-50 text-green-700'
                     <tr v-for="j in affiches" :key="j.id" class="border-t">
                         <td class="p-4 whitespace-nowrap">{{ dateHeure(j.creeLe) }}</td>
                         <td class="p-4"><strong>{{ j.nomDestinataire || '—' }}</strong><span class="block text-xs text-gray-400">{{ j.destinataire }}</span></td>
-                        <td class="p-4"><span class="text-xs text-gray-400">{{ j.type }}</span><span class="block">{{ j.sujet }}</span></td>
+                        <td class="p-4">
+                            <span class="text-xs text-gray-400">{{ j.type }}</span>
+                            <span class="block">{{ j.sujet }}</span>
+                            <span v-if="j.nomPieceJointe" class="block text-xs text-gray-500">Pièce jointe · {{ j.nomPieceJointe }}</span>
+                        </td>
                         <td class="p-4">
                             <BadgeStatut :statut="j.statut" />
                             <span v-if="j.erreur" :title="j.erreur" class="ml-2 cursor-help text-red-500"><i class="fa-solid fa-circle-info"></i></span>
