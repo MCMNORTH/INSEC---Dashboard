@@ -351,7 +351,9 @@ export const envoyerDocumentParEmail = operation(
     ROLES_ADMIN,
     async (donnees, acteur) => {
         const v = valider(z.object({ type: s.choix(['facture', 'recu', 'convocation'] as const), id: s.id() }), donnees);
-        const resultat = await expedierDocument(v.type, v.id, acteur.uid, transportSmtp());
+        const id = String(v.id ?? '');
+        if (!id) throw new HttpsError('invalid-argument', 'Identifiant du document manquant.');
+        const resultat = await expedierDocument(v.type, id, acteur.uid, transportSmtp());
         if (resultat.statut === 'Échec') {
             throw new HttpsError('unavailable', 'Le document n’a pas pu être envoyé. Consultez le journal des communications.');
         }
@@ -365,14 +367,16 @@ export const envoyerConvocationsExamen = operation(
     ROLES_ADMIN,
     async (donnees, acteur) => {
         const v = valider(z.object({ id: s.id() }), donnees);
-        const examen = await exiger(null, col.examens().doc(v.id), 'Examen introuvable.');
+        const examenId = String(v.id ?? '');
+        if (!examenId) throw new HttpsError('invalid-argument', 'Identifiant de l’examen manquant.');
+        const examen = await exiger(null, col.examens().doc(examenId), 'Examen introuvable.');
         if (examen.statut === 'Annulé') {
             throw new HttpsError('failed-precondition', 'Les convocations d’un examen annulé ne peuvent pas être envoyées.');
         }
 
-        const documents = (await col.resultats().where('examenId', '==', v.id).get()).docs;
+        const documents = (await col.resultats().where('examenId', '==', examenId).get()).docs;
         const convoques = documents
-            .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .map((doc) => ({ ...doc.data(), id: doc.id }) as Doc & { id: string; etudiantId: string; presence: string })
             .filter((resultat) => resultat.presence === 'Convoqué');
         const uniques = new Map<string, (typeof convoques)[number]>();
         for (const resultat of convoques) {
