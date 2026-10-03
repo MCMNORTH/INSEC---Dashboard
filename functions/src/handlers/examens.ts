@@ -3,12 +3,12 @@ import { auditer, auditerModele, trace } from '../lib/audit.js';
 import { operation } from '../lib/contexte.js';
 import { col, exiger, nomComplet } from '../lib/donnees.js';
 import { mettreEnFileEmail } from '../lib/email.js';
-import { db, FUSEAU, Timestamp } from '../lib/firebase.js';
+import { db, Timestamp } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
 import { PRESENCES, resultatValide, ROLES_ADMIN, SESSIONS_EXAMEN, STATUTS_EXAMEN } from '../shared/domaine.js';
 
 export const formaterDateHeure = (d: Date) =>
-    new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU, dateStyle: 'short', timeStyle: 'short' }).format(d).replace(' ', ' à ');
+    new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short' }).format(d).replace(' ', ' à ');
 
 /** Exécute des écritures par lots de 400 (limite Firestore : 500 opérations par lot). */
 export async function ecrireParLots<T>(elements: T[], ecrire: (lot: WriteBatch, element: T) => void): Promise<void> {
