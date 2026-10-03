@@ -170,7 +170,15 @@ async function envoyerConvocation(r: Resultat) {
             </section>
             <div class="mt-7 mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 class="font-bold text-insec">Convocations et résultats ({{ resultats.length }})</h2>
-                <button
+                <div class="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        class="bouton-secondaire"
+                        :disabled="envoi || !resultats.length || examen.statut === 'Annulé'"
+                        title="Télécharger la feuille de présence PDF"
+                        @click="soumettre(() => telecharger('genererPdf', { type: 'feuillePresence', id: props.id }))"
+                    ><i class="fa-solid fa-file-pdf"></i> Feuille de présence</button>
+                    <button
                     type="button"
                     class="bouton-principal"
                     :disabled="envoi || !convocables.length || examen.statut === 'Annulé'"
