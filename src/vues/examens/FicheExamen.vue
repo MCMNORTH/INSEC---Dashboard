@@ -206,7 +206,7 @@ async function envoyerConvocation(r: Resultat) {
             </div>
             <div class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
                 <p class="text-sm text-gray-700">
-                    Convoqués <strong>{{ resumePresence['Convoqué'] }}</strong>
+                    À pointer <strong>{{ resumePresence['Convoqué'] }}</strong>
                     · Présents <strong class="text-green-700">{{ resumePresence['Présent'] }}</strong>
                     · Absents <strong class="text-red-700">{{ resumePresence['Absent'] }}</strong>
                     · Dispensés <strong>{{ resumePresence['Dispensé'] }}</strong>
