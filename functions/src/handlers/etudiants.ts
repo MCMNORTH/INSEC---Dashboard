@@ -158,6 +158,14 @@ export const creerInscription = operation('creerInscription', ROLES_ADMIN, async
         await exiger(tx, etudiantRef, 'Étudiant introuvable.');
         await controlerInscription(tx, v);
         const existantes = await tx.get(col.inscriptions().where('etudiantId', '==', v.etudiantId));
+        const doublonActif = existantes.docs.some((inscription) =>
+            inscription.get('statut') === 'active'
+            && inscription.get('formationId') === v.formationId
+            && inscription.get('anneeId') === v.anneeId,
+        );
+        if (doublonActif) {
+            erreurChamp('formationId', 'Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
+        }
         const inscription = {
             etudiantId: v.etudiantId,
             ...attributsInscription(v, 'active'),
@@ -181,6 +189,15 @@ export const modifierInscription = operation('modifierInscription', ROLES_ADMIN,
         etudiantId = avant.etudiantId;
         await controlerInscription(tx, v);
         const autres = await tx.get(col.inscriptions().where('etudiantId', '==', etudiantId));
+        const doublonActif = v.statut === 'active' && autres.docs.some((inscription) =>
+            inscription.id !== v.id
+            && inscription.get('statut') === 'active'
+            && inscription.get('formationId') === v.formationId
+            && inscription.get('anneeId') === v.anneeId,
+        );
+        if (doublonActif) {
+            erreurChamp('formationId', 'Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
+        }
         const apres = attributsInscription(v, v.statut);
         const toutes = autres.docs.map((d) => (d.id === v.id ? { ...avant, ...apres } : { id: d.id, ...d.data() }));
         tx.update(ref, { ...apres, ...trace(acteur) });
