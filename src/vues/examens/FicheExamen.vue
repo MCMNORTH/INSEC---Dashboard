@@ -198,6 +198,13 @@ async function envoyerConvocation(r: Resultat) {
                     ><i class="fa-solid fa-file-pdf"></i> Feuille de présence</button>
                     <button
                         type="button"
+                        class="bouton-secondaire"
+                        :disabled="envoi || !resultats.length || examen.statut === 'Annulé'"
+                        title="Télécharger le bordereau d’accompagnement des copies"
+                        @click="soumettre(() => telecharger('genererPdf', { type: 'bordereauCopies', id: props.id }))"
+                    ><i class="fa-solid fa-file-pdf"></i> Bordereau des copies</button>
+                    <button
+                        type="button"
                         class="bouton-principal"
                         :disabled="envoi || !convocables.length || examen.statut === 'Annulé'"
                         @click="envoyerToutesConvocations"
