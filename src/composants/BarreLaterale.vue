@@ -11,9 +11,7 @@ const nonLues = useAlertesNonLues();
 watch(() => route.path, () => (ouverte.value = false));
 
 const liens = [
-    { vers: '/candidatures', icone: 'fa-file-signature', libelle: 'Admissions', roles: ['admin', 'super_admin'] },
     { vers: '/etudiants', icone: 'fa-user', libelle: 'Étudiants', roles: ['admin', 'super_admin'] },
-    { vers: '/enseignants', icone: 'fa-chalkboard-user', libelle: 'Enseignants', roles: ['admin', 'super_admin'] },
     { vers: '/formations', icone: 'fa-graduation-cap', libelle: 'Diplômes & UE', roles: ['admin', 'super_admin'] },
     { vers: '/examens', icone: 'fa-clipboard-check', libelle: 'Examens & résultats', roles: ['admin', 'super_admin'] },
     { vers: '/finances', icone: 'fa-dollar-sign', libelle: 'Finances', roles: ['admin', 'super_admin', 'finance'] },
