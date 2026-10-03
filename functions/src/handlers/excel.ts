@@ -5,11 +5,11 @@ import { operation, refuser } from '../lib/contexte.js';
 import { col, refUnique, verifierUnique, type Doc } from '../lib/donnees.js';
 import { db, FUSEAU } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
-import { dateDuJour, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, statutPaiement, STATUTS_ETUDIANT } from '../shared/domaine.js';
-import { cleEmailEtudiant } from './etudiants.js';
+import { dateDuJour, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, statutPaiement, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
+import { attributsInscription, cleEmailEtudiant, controlerInscription, resumeInscriptions } from './etudiants.js';
 
 type Valeur = string | number | null | undefined;
-const ENTETES_MODELE = ['Prénom', 'Nom', 'E-mail', 'Téléphone', 'Statut'];
+const ENTETES_MODELE = ['Prénom', 'Nom', 'E-mail', 'Téléphone', 'Statut étudiant', 'Code diplôme', 'Année académique', 'Année parcours', 'Codes UE', 'Date inscription (AAAA-MM-JJ)', 'N° INTEC', 'Statut inscription'];
 
 function classeur(titre: string, entetes: string[]) {
     const wb = new ExcelJS.Workbook();
@@ -46,28 +46,59 @@ async function referentiel() {
 }
 
 async function modele() {
-    const { wb, feuille } = classeur('Modèle import étudiants', ENTETES_MODELE);
-    ajouter(feuille, ['Awa', 'Ba', 'awa@example.com', '22000000', 'Actif']).font = { color: { argb: 'FF777777' } };
-    return finaliser(wb, feuille, 'modele-import-etudiants.xlsx');
+    const { wb, feuille } = classeur('Registre étudiants', ENTETES_MODELE);
+    const guide = wb.addWorksheet('Guide');
+    guide.addRows([
+        ['IMPORT DU REGISTRE INSEC'],
+        ['Une ligne correspond à un étudiant et, au plus, une inscription annuelle. Répétez l’identité pour chaque année d’inscription. Les colonnes d’identité et le statut étudiant sont obligatoires.'],
+        ['Pour créer aussi une inscription annuelle, renseignez le code diplôme, l’année académique, l’année de parcours et les codes UE.'],
+        ['Les codes UE doivent être séparés par des points-virgules et appartenir au diplôme et à l’année de parcours indiqués.'],
+        ['Sans information d’inscription, la ligne crée ou met à jour uniquement le dossier étudiant.'],
+        ['Date inscription est facultative; si elle est vide, la date du jour est utilisée. Format attendu : AAAA-MM-JJ.'],
+        ['Statut inscription est facultatif et vaut « active » par défaut. Valeurs acceptées : active, terminée, suspendue, annulée.'],
+        ['Le CSV utilise les mêmes colonnes; les codes UE séparés par des points-virgules doivent rester dans une seule cellule.'],
+        ['Ne modifiez pas les intitulés des colonnes de la feuille « Registre étudiants ».'],
+    ]);
+    guide.getColumn(1).width = 110;
+    guide.getColumn(1).alignment = { wrapText: true, vertical: 'top' };
+    guide.getRow(1).font = { bold: true, color: { argb: 'FF1E2761' }, size: 14 };
+    guide.eachRow((row) => { row.height = 30; });
+    return finaliser(wb, feuille, 'modele-import-registre-insec.xlsx');
 }
 
 async function etudiants() {
-    const [{ formations, annees }, liste, inscriptions] = await Promise.all([
+    const [{ formations, annees, ues }, liste, inscriptions] = await Promise.all([
         referentiel(), col.etudiants().orderBy('nom').get(), col.inscriptions().get(),
     ]);
-    const parInscription = parId(inscriptions.docs);
-    const { wb, feuille } = classeur('Étudiants', [
-        'ID', 'Prénom', 'Nom', 'E-mail', 'Téléphone', 'Statut étudiant', 'Diplôme actuel', 'Année académique', 'Année parcours', 'N° INTEC', 'Statut inscription',
-    ]);
-    for (const d of liste.docs) {
-        const e = d.data();
-        const i = e.derniere ? parInscription.get(e.derniere.inscriptionId) : undefined;
-        ajouter(feuille, [
-            d.id, e.prenom, e.nom, e.email, e.telephone, e.statut, i ? formations.get(i.formationId)?.code : null,
-            i ? annees.get(i.anneeId)?.libelle : null, i?.anneeParcours, i?.numeroIntec, i?.statut,
-        ]);
+    const parEtudiant = new Map<string, Doc[]>();
+    for (const doc of inscriptions.docs) {
+        const inscription = doc.data() as Doc;
+        const existantes = parEtudiant.get(String(inscription.etudiantId)) ?? [];
+        existantes.push({ id: doc.id, ...inscription });
+        parEtudiant.set(String(inscription.etudiantId), existantes);
     }
-    return finaliser(wb, feuille, `etudiants-insec-${suffixe()}.xlsx`);
+    const { wb, feuille } = classeur('Registre étudiants', ENTETES_MODELE);
+    for (const doc of liste.docs) {
+        const etudiant = doc.data();
+        const historiques = (parEtudiant.get(doc.id) ?? []).sort((a, b) => Number(a.ordre ?? 0) - Number(b.ordre ?? 0));
+        const lignes = historiques.length ? historiques : [null];
+        for (const inscription of lignes) {
+            const formation = inscription ? formations.get(String(inscription.formationId)) : null;
+            const annee = inscription ? annees.get(String(inscription.anneeId)) : null;
+            const codesUE = inscription
+                ? (Array.isArray(inscription.ueIds) ? inscription.ueIds : [])
+                    .map((id: string) => String(ues.get(id)?.code ?? ''))
+                    .filter(Boolean)
+                    .join('; ')
+                : '';
+            ajouter(feuille, [
+                etudiant.prenom, etudiant.nom, etudiant.email, etudiant.telephone, etudiant.statut,
+                formation?.code, annee?.libelle, inscription?.anneeParcours, codesUE,
+                inscription?.dateInscription, inscription?.numeroIntec, inscription?.statut,
+            ]);
+        }
+    }
+    return finaliser(wb, feuille, 'registre-etudiants-insec-' + suffixe() + '.xlsx');
 }
 
 async function finances() {
@@ -137,19 +168,85 @@ export const exporterExcel = operation(
 async function lireLignes(nom: string, contenu: Buffer): Promise<string[][]> {
     const wb = new ExcelJS.Workbook();
     const feuille = nom.toLowerCase().endsWith('.csv')
-        ? await wb.csv.read(Readable.from(contenu))
+        ? await (() => {
+            const texte = contenu.toString('utf8').replace(/^\\uFEFF/, '');
+            const entete = texte.split(/\\r?\\n/, 1)[0] ?? '';
+            const nombre = (separateur: string) => (entete.match(new RegExp(separateur === ';' ? ';' : ',', 'g')) ?? []).length;
+            const delimiteur = nombre(';') > nombre(',') ? ';' : ',';
+            return wb.csv.read(Readable.from(texte), { parserOptions: { delimiter: delimiteur } });
+        })()
         : (await wb.xlsx.load(contenu as never), wb.worksheets[0]);
     if (!feuille) return [];
     const lignes: string[][] = [];
     feuille.eachRow({ includeEmpty: true }, (ligne, numero) => {
-        lignes[numero - 1] = Array.from({ length: 5 }, (_, i) => String(ligne.getCell(i + 1).text ?? '').trim());
+        lignes[numero - 1] = Array.from({ length: ENTETES_MODELE.length }, (_, i) => String(ligne.getCell(i + 1).text ?? '').trim());
     });
-    return Array.from(lignes, (l) => l ?? ['', '', '', '', '']);
+    return Array.from(lignes, (l) => l ?? Array.from({ length: ENTETES_MODELE.length }, () => ''));
 }
 
 const ligneEtudiant = z.object({
     prenom: s.texte(100), nom: s.texte(100), email: s.email(), telephone: s.texteOptionnel(40), statut: s.choix(STATUTS_ETUDIANT),
 });
+
+type InscriptionImport = {
+    formationId: string;
+    anneeId: string;
+    anneeParcours: number;
+    dateInscription: string;
+    numeroIntec: string | null;
+    ueIds: string[];
+    statut: (typeof STATUTS_INSCRIPTION)[number];
+};
+
+function inscriptionImport(ligne: string[], refs: Awaited<ReturnType<typeof referentiel>>): InscriptionImport | null {
+    const cellules = ligne.slice(5, ENTETES_MODELE.length);
+    if (cellules.every((valeur) => !valeur.trim())) return null;
+    const [codeFormation, libelleAnnee, parcoursBrut, codesBruts, dateBrute, numeroIntecBrut, statutBrut] = cellules;
+    if (!codeFormation || !libelleAnnee || !parcoursBrut || !codesBruts) {
+        throw new Error('Pour créer une inscription, renseignez le diplôme, l’année académique, l’année parcours et au moins une UE.');
+    }
+
+    const formation = [...refs.formations.entries()].find(([, valeur]) =>
+        String(valeur.code ?? '').trim().toLocaleUpperCase('fr-FR') === codeFormation.trim().toLocaleUpperCase('fr-FR'),
+    );
+    if (!formation) throw new Error('Code diplôme « ' + codeFormation + ' » inconnu.');
+    const annee = [...refs.annees.entries()].find(([, valeur]) =>
+        String(valeur.libelle ?? '').trim().toLocaleUpperCase('fr-FR') === libelleAnnee.trim().toLocaleUpperCase('fr-FR'),
+    );
+    if (!annee) throw new Error('Année académique « ' + libelleAnnee + ' » inconnue.');
+
+    const anneeParcours = Number(parcoursBrut);
+    if (!Number.isInteger(anneeParcours) || anneeParcours < 1 || anneeParcours > 10) {
+        throw new Error('Année parcours doit être un nombre entier entre 1 et 10.');
+    }
+    const codesUE = codesBruts.split(';').map((code) => code.trim().toLocaleUpperCase('fr-FR')).filter(Boolean);
+    if (!codesUE.length || new Set(codesUE).size !== codesUE.length) {
+        throw new Error('Codes UE vides ou répétés; séparez les codes distincts par un point-virgule.');
+    }
+    const ueIds = codesUE.map((code) => {
+        const correspondances = [...refs.ues.entries()].filter(([, valeur]) =>
+            valeur.formationId === formation[0]
+            && valeur.anneeParcours === anneeParcours
+            && String(valeur.code ?? '').trim().toLocaleUpperCase('fr-FR') === code,
+        );
+        if (correspondances.length !== 1) {
+            throw new Error('UE « ' + code + ' » introuvable ou ambiguë pour ' + codeFormation + ', année parcours ' + anneeParcours + '.');
+        }
+        return correspondances[0][0];
+    });
+    const statut = statutBrut
+        ? valider(z.object({ statut: s.choix(STATUTS_INSCRIPTION) }), { statut: statutBrut.trim().toLocaleLowerCase('fr-FR') }).statut
+        : 'active';
+    return {
+        formationId: formation[0],
+        anneeId: annee[0],
+        anneeParcours,
+        dateInscription: (dateBrute ?? '').trim() ? valider(z.object({ date: s.date() }), { date: (dateBrute ?? '').trim() }).date : dateDuJour(),
+        numeroIntec: (numeroIntecBrut ?? '').trim() || null,
+        ueIds,
+        statut,
+    };
+}
 
 export const importerEtudiants = operation(
     'importerEtudiants',
@@ -157,8 +254,8 @@ export const importerEtudiants = operation(
     async (donnees, acteur) => {
         const v = valider(
             z.object({
-                nom: z.string().regex(/\.(xlsx|csv)$/i, 'seuls les fichiers .xlsx et .csv sont acceptés.'),
-                contenu: z.base64().max(7_000_000, 'le fichier dépasse 5 Mo.'),
+                nom: z.string().regex(/\.(xlsx|csv)$/i, 'Seuls les fichiers .xlsx et .csv sont acceptés.'),
+                contenu: z.base64().max(7_000_000, 'Le fichier dépasse 5 Mo.'),
                 mode: s.choix(['ignorer', 'mettre_a_jour'] as const),
             }),
             donnees,
@@ -170,46 +267,110 @@ export const importerEtudiants = operation(
             refuser('Le fichier est illisible ou n’est pas un classeur Excel valide.');
         }
         const [entetes = [], ...corps] = lignes;
-        if (ENTETES_MODELE.some((e, i) => entetes[i] !== e)) refuser('Les colonnes du fichier ne correspondent pas au modèle INSEC.');
+        if (ENTETES_MODELE.some((e, i) => entetes[i] !== e)) {
+            refuser('Les colonnes du fichier ne correspondent pas au modèle INSEC. Téléchargez le modèle actualisé.');
+        }
+        if (corps.length > 1000) refuser('L’import est limité à 1 000 lignes par fichier.');
 
-        let crees = 0, misAJour = 0, ignores = 0;
+        const refs = await referentiel();
+        let crees = 0, misAJour = 0, ignores = 0, inscriptionsCreees = 0, inscriptionsExistantes = 0;
         const erreurs: string[] = [];
         for (const [index, ligne] of corps.entries()) {
             const numero = index + 2;
             if (ligne.every((c) => c === '')) continue;
-            const analyse = ligneEtudiant.safeParse({ prenom: ligne[0], nom: ligne[1], email: ligne[2], telephone: ligne[3], statut: ligne[4] });
-            if (!analyse.success) {
-                erreurs.push(`Ligne ${numero} : ${analyse.error.issues.map((p) => `${String(p.path[0])} — ${p.message}`).join(' ')}`);
-                continue;
-            }
-            const d = analyse.data;
-            const resultat = await db.runTransaction(async (tx) => {
-                const unique = await tx.get(refUnique(cleEmailEtudiant(d.email)));
-                if (unique.exists) {
-                    if (v.mode === 'ignorer') return 'ignore';
-                    const ref = col.etudiants().doc(unique.get('proprietaire'));
-                    const avant = (await tx.get(ref)).data() ?? {};
-                    tx.update(ref, { ...d, ...trace(acteur) });
-                    auditerModele(tx, acteur, 'Etudiant', ref.id, 'updated', avant, d);
-                    return 'maj';
+            try {
+                const analyse = ligneEtudiant.safeParse({
+                    prenom: ligne[0], nom: ligne[1], email: ligne[2], telephone: ligne[3], statut: ligne[4],
+                });
+                if (!analyse.success) {
+                    erreurs.push('Ligne ' + numero + ' : ' + analyse.error.issues
+                        .map((p) => String(p.path[0]) + ' — ' + p.message).join(' '));
+                    continue;
                 }
-                const ref = col.etudiants().doc();
-                const reserver = await verifierUnique(tx, cleEmailEtudiant(d.email), ref.id, 'E-mail déjà utilisé.', 'email');
-                reserver();
-                const etudiant = { ...d, derniere: null, formationIds: [], anneeIds: [], nbInscriptions: 0 };
-                tx.set(ref, { ...etudiant, ...trace(acteur, true) });
-                auditerModele(tx, acteur, 'Etudiant', ref.id, 'created', null, etudiant);
-                return 'cree';
-            });
-            if (resultat === 'ignore') ignores++;
-            else if (resultat === 'maj') misAJour++;
-            else crees++;
+                const d = analyse.data;
+                const inscription = inscriptionImport(ligne, refs);
+                const resultat = await db.runTransaction(async (tx) => {
+                    const unique = await tx.get(refUnique(cleEmailEtudiant(d.email)));
+                    if (unique.exists && v.mode === 'ignorer') {
+                        return { type: 'ignore' as const, inscription: 'aucune' as const };
+                    }
+                    const etudiantId = unique.exists ? String(unique.get('proprietaire') ?? '') : col.etudiants().doc().id;
+                    if (!etudiantId) throw new Error('Le dossier étudiant lié à cet e-mail est introuvable.');
+                    const etudiantRef = col.etudiants().doc(etudiantId);
+                    const avantSnapshot = unique.exists ? await tx.get(etudiantRef) : null;
+                    if (unique.exists && !avantSnapshot?.exists) throw new Error('Le dossier étudiant lié à cet e-mail est introuvable.');
+                    const avant = avantSnapshot?.data() ?? null;
+                    const inscriptionsAvant = inscription
+                        ? await tx.get(col.inscriptions().where('etudiantId', '==', etudiantId))
+                        : null;
+
+                    let inscriptionRef: FirebaseFirestore.DocumentReference | null = null;
+                    let inscriptionDonnees: Doc | null = null;
+                    let inscriptionResultat: 'aucune' | 'existante' | 'creee' = 'aucune';
+                    if (inscription && inscriptionsAvant) {
+                        const correspondantes = inscriptionsAvant.docs.filter((doc) =>
+                            doc.get('formationId') === inscription.formationId && doc.get('anneeId') === inscription.anneeId,
+                        );
+                        const memeStatut = correspondantes.some((doc) => doc.get('statut') === inscription.statut);
+                        const activeExistante = correspondantes.some((doc) => doc.get('statut') === 'active');
+                        if (memeStatut || (inscription.statut === 'active' && activeExistante)) {
+                            inscriptionResultat = 'existante';
+                        } else if (inscription.statut !== 'active' && activeExistante) {
+                            throw new Error('Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
+                        } else {
+                            await controlerInscription(tx, inscription);
+                            inscriptionRef = col.inscriptions().doc();
+                            inscriptionDonnees = {
+                                etudiantId,
+                                ...attributsInscription(inscription, inscription.statut),
+                                montantDu: 0, montantRemise: 0, noteFinanciere: null, totalVerse: 0, echeances: [],
+                                ordre: (inscriptionsAvant?.size ?? 0) + 1,
+                            };
+                            inscriptionResultat = 'creee';
+                        }
+                    }
+
+                    const cree = !unique.exists;
+                    const toutes = inscriptionRef && inscriptionDonnees && inscriptionsAvant
+                        ? [...inscriptionsAvant.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Doc) })), { id: inscriptionRef.id, ...inscriptionDonnees }]
+                        : null;
+                    const resume = toutes ? resumeInscriptions(toutes) : null;
+                    const apres: Doc = cree
+                        ? { ...d, ...(resume ?? { derniere: null, formationIds: [], anneeIds: [], nbInscriptions: 0 }) }
+                        : { ...d, ...(resume ?? {}) };
+
+                    if (cree) tx.set(etudiantRef, { ...apres, ...trace(acteur, true) });
+                    else tx.update(etudiantRef, { ...apres, ...trace(acteur) });
+
+                    if (inscriptionRef && inscriptionDonnees) {
+                        tx.set(inscriptionRef, { ...inscriptionDonnees, ...trace(acteur, true) });
+                        auditerModele(tx, acteur, 'Inscription', inscriptionRef.id, 'created', null, inscriptionDonnees);
+                    }
+                    auditerModele(tx, acteur, 'Etudiant', etudiantId, cree ? 'created' : 'updated', avant, apres);
+                    return {
+                        type: cree ? 'cree' as const : 'maj' as const,
+                        inscription: inscriptionResultat,
+                    };
+                });
+
+                if (resultat.type === 'ignore') ignores++;
+                else if (resultat.type === 'maj') misAJour++;
+                else crees++;
+                if (resultat.inscription === 'creee') inscriptionsCreees++;
+                else if (resultat.inscription === 'existante') inscriptionsExistantes++;
+            } catch (erreur) {
+                const message = erreur instanceof Error ? erreur.message : 'Données invalides.';
+                erreurs.push('Ligne ' + numero + ' : ' + message);
+            }
         }
         await auditerDirect(acteur, {
-            action: 'import', description: 'Import Excel des étudiants',
-            apres: { créés: crees, mis_à_jour: misAJour, ignorés: ignores, erreurs: erreurs.length },
+            action: 'import', description: 'Import Excel du registre étudiant',
+            apres: {
+                créés: crees, mis_à_jour: misAJour, ignorés: ignores,
+                inscriptions_créées: inscriptionsCreees, inscriptions_existantes: inscriptionsExistantes, erreurs: erreurs.length,
+            },
         });
-        return { crees, misAJour, ignores, erreurs };
+        return { crees, misAJour, ignores, inscriptionsCreees, inscriptionsExistantes, erreurs };
     },
     { memory: '512MiB', timeoutSeconds: 300 },
 );
