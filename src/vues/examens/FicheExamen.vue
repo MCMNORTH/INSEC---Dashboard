@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PRESENCES } from '@shared/domaine';
 import { collection, query, where } from 'firebase/firestore';
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { appeler } from '../../api';
 import Chargement from '../../composants/Chargement.vue';
 import { indexer, useDocument, useRequete } from '../../donnees';
@@ -21,6 +21,34 @@ const { donnees: etudiants } = useRequete<Etudiant>(() => collection(db, 'etudia
 const { donnees: inscriptions } = useRequete<Inscription>(() => (examen.value ? query(collection(db, 'inscriptions'), where('anneeId', '==', examen.value.anneeId)) : null));
 const parEtudiant = computed(() => indexer(etudiants.value));
 const parInscription = computed(() => indexer(inscriptions.value));
+const preparation = reactive({
+    sujetsRecusLe: '',
+    nombreSujetsRecus: null as number | null,
+    salleConfirmee: false,
+    surveillanceConfirmee: false,
+    nombreCopiesRassemblees: null as number | null,
+    copiesEnvoyeesLe: '',
+    referenceEnvoiCopies: '',
+});
+watch(examen, (e) => {
+    if (!e) return;
+    preparation.sujetsRecusLe = e.sujetsRecusLe ?? '';
+    preparation.nombreSujetsRecus = e.nombreSujetsRecus ?? null;
+    preparation.salleConfirmee = e.salleConfirmee ?? false;
+    preparation.surveillanceConfirmee = e.surveillanceConfirmee ?? false;
+    preparation.nombreCopiesRassemblees = e.nombreCopiesRassemblees ?? null;
+    preparation.copiesEnvoyeesLe = e.copiesEnvoyeesLe ?? '';
+    preparation.referenceEnvoiCopies = e.referenceEnvoiCopies ?? '';
+}, { immediate: true });
+const progressionPreparation = computed(() => {
+    const total = 4;
+    const termine = Number(!!preparation.sujetsRecusLe && preparation.nombreSujetsRecus !== null)
+        + Number(preparation.salleConfirmee && preparation.surveillanceConfirmee)
+        + Number(preparation.nombreCopiesRassemblees !== null)
+        + Number(!!preparation.copiesEnvoyeesLe);
+    return { termine, total };
+});
+
 const lignes = computed(() =>
     [...resultats.value].sort((a, b) => nomComplet(parEtudiant.value.get(a.etudiantId)).localeCompare(nomComplet(parEtudiant.value.get(b.etudiantId)))),
 );
@@ -29,6 +57,13 @@ const saisie = reactive<Record<string, { presence: string; note: number | '' | n
 const valeur = (r: Resultat) => (saisie[r.id] ??= { presence: r.presence, note: r.note ?? '', commentaire: r.commentaire ?? '' });
 const { envoi, erreurs, soumettre } = useFormulaire();
 const enCours = reactive({ id: '' });
+
+async function enregistrerPreparation() {
+    const sauvegarde = await soumettre(() =>
+        appeler('mettreAJourPreparationExamen', { id: props.id, ...preparation }),
+    );
+    if (sauvegarde) notifier(sauvegarde.message ?? 'Suivi de préparation enregistré.');
+}
 
 async function enregistrer(r: Resultat) {
     enCours.id = r.id;
@@ -50,6 +85,57 @@ async function enregistrer(r: Resultat) {
                     <div><span class="text-gray-500">Salle</span><br /><strong>{{ examen.salle || '—' }}</strong></div>
                     <div><span class="text-gray-500">Validation</span><br /><strong>{{ examen.seuilValidation }}/{{ examen.noteSur }}</strong></div>
                 </div>
+            </section>
+            <section class="carte mt-6 p-5">
+                <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-insec">Préparation de l’épreuve et retour des copies</h2>
+                        <p class="mt-1 text-sm text-gray-500">Suivez les sujets reçus, l’organisation de la salle et l’envoi des copies à l’INTEC.</p>
+                    </div>
+                    <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-800">
+                        {{ progressionPreparation.termine }}/{{ progressionPreparation.total }} étapes terminées
+                    </span>
+                </div>
+                <form class="space-y-5" @submit.prevent="enregistrerPreparation">
+                    <div class="grid gap-5 lg:grid-cols-3">
+                        <section class="rounded-lg border border-gray-200 p-4">
+                            <h3 class="mb-3 font-semibold text-gray-800">1. Réception des sujets</h3>
+                            <label class="etiquette">Date de réception
+                                <input v-model="preparation.sujetsRecusLe" type="date" class="champ mt-1" />
+                            </label>
+                            <label class="etiquette mt-3 block">Nombre de lots reçus
+                                <input v-model.number="preparation.nombreSujetsRecus" type="number" min="0" max="500" step="1" class="champ mt-1" />
+                            </label>
+                        </section>
+                        <section class="rounded-lg border border-gray-200 p-4">
+                            <h3 class="mb-3 font-semibold text-gray-800">2. Organisation de la salle</h3>
+                            <label class="flex items-start gap-3 py-2 text-sm text-gray-700">
+                                <input v-model="preparation.salleConfirmee" type="checkbox" class="mt-1 rounded border-gray-300" />
+                                <span>Salle d’examen confirmée</span>
+                            </label>
+                            <label class="flex items-start gap-3 py-2 text-sm text-gray-700">
+                                <input v-model="preparation.surveillanceConfirmee" type="checkbox" class="mt-1 rounded border-gray-300" />
+                                <span>Surveillance organisée</span>
+                            </label>
+                        </section>
+                        <section class="rounded-lg border border-gray-200 p-4">
+                            <h3 class="mb-3 font-semibold text-gray-800">3. Retour des copies</h3>
+                            <label class="etiquette">Copies rassemblées
+                                <input v-model.number="preparation.nombreCopiesRassemblees" type="number" min="0" max="500" step="1" class="champ mt-1" />
+                            </label>
+                            <label class="etiquette mt-3 block">Date d’envoi à l’INTEC
+                                <input v-model="preparation.copiesEnvoyeesLe" type="date" class="champ mt-1" />
+                            </label>
+                            <label class="etiquette mt-3 block">Référence d’envoi <span class="text-gray-400">(facultatif)</span>
+                                <input v-model="preparation.referenceEnvoiCopies" maxlength="120" class="champ mt-1" />
+                            </label>
+                        </section>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                        <p class="text-xs text-gray-500">Chaque modification est enregistrée dans le journal d’audit.</p>
+                        <button class="bouton-action" :disabled="envoi">Enregistrer le suivi</button>
+                    </div>
+                </form>
             </section>
             <h2 class="mt-7 mb-3 font-bold text-insec">Convocations et résultats ({{ resultats.length }})</h2>
             <div class="space-y-3">
