@@ -359,10 +359,10 @@ async function bordereauCopies(id: string) {
         titre('Bordereau d’accompagnement des copies d’examen'),
         { text: 'Destinataire : INTEC-CNAM · Service des examens', bold: true, color: BLEU, margin: [0, 0, 0, 10] },
         encadre([
-            { text: \`\${ue.code} · \${ue.libelle}\`, fontSize: 14, bold: true, color: BLEU },
-            \`\${formation.code} · \${annee.libelle} · Session \${examen.session}\`,
-            \`Date et heure de l’épreuve (Paris) : \${formaterDateHeure(examen.dateExamen.toDate())}\`,
-            \`Salle : \${examen.salle || 'À confirmer'}\`,
+            { text: `${ue.code} · ${ue.libelle}`, fontSize: 14, bold: true, color: BLEU },
+            `${formation.code} · ${annee.libelle} · Session ${examen.session}`,
+            `Date et heure de l’épreuve (Paris) : ${formaterDateHeure(examen.dateExamen.toDate())}`,
+            `Salle : ${examen.salle || 'À confirmer'}`,
         ]),
         grille([
             [cle('Étudiants convoqués'), String(resultats.size)],
@@ -377,7 +377,7 @@ async function bordereauCopies(id: string) {
             [cle('Référence de transport'), examen.referenceEnvoiCopies || 'À renseigner'],
         ]),
         aPointer > 0
-            ? { text: \`Attention : \${aPointer} présence(s) reste(nt) à pointer. Les totaux de présence ci-dessus reflètent le suivi actuellement enregistré.\`, color: '#9a6700', margin: [0, 5, 0, 12] }
+            ? { text: `Attention : ${aPointer} présence(s) reste(nt) à pointer. Les totaux de présence ci-dessus reflètent le suivi actuellement enregistré.`, color: '#9a6700', margin: [0, 5, 0, 12] }
             : { text: 'Les totaux ci-dessus reflètent les présences enregistrées dans le dossier de l’épreuve.', color: '#666666', margin: [0, 5, 0, 12] },
         {
             table: {
@@ -388,8 +388,8 @@ async function bordereauCopies(id: string) {
                         { text: 'RÉCEPTION · INTEC-CNAM', bold: true, color: 'white', fillColor: BLEU },
                     ],
                     [
-                        { text: 'Nom et signature :\\n\\n\\nDate :', margin: [8, 8, 8, 8] },
-                        { text: 'Nom et signature :\\n\\n\\nDate de réception :', margin: [8, 8, 8, 8] },
+                        { text: 'Nom et signature :\n\n\nDate :', margin: [8, 8, 8, 8] },
+                        { text: 'Nom et signature :\n\n\nDate de réception :', margin: [8, 8, 8, 8] },
                     ],
                 ],
             },
@@ -399,8 +399,8 @@ async function bordereauCopies(id: string) {
     ];
 
     return {
-        nom: \`bordereau-copies-\${ue.code}-\${id}.pdf\`,
-        contenu: await document(contenu, \`Bordereau de retour des copies · \${formation.code} · \${annee.libelle}\`),
+        nom: `bordereau-copies-${ue.code}-${id}.pdf`,
+        contenu: await document(contenu, `Bordereau de retour des copies · ${formation.code} · ${annee.libelle}`),
     };
 }
 
