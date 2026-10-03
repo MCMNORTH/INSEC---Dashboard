@@ -135,6 +135,11 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                     <p class="text-lg font-bold text-green-400">{{ montant(inscription.totalVerse) }} MRU</p>
                     <p class="mt-4 text-xs text-blue-200">Solde restant (calculé)</p>
                     <p class="text-lg font-bold text-amber-400">{{ montant(soldeRestant(inscription)) }} MRU</p>
+                    <button
+                        v-if="aRole('admin', 'super_admin')"
+                        class="mt-3 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20"
+                        @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))"
+                    >Télécharger la facture PDF</button>
                     <p v-if="montantEnRetard(inscription) > 0" class="mt-2 rounded bg-red-500/20 p-2 text-xs text-red-200">En retard : {{ montant(montantEnRetard(inscription)) }} MRU</p>
 
                     <form class="mt-4 space-y-2 border-t border-blue-400/30 pt-4" @submit.prevent="majSituation">
