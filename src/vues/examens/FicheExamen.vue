@@ -66,6 +66,10 @@ const convocables = computed(() => {
 
 const saisie = reactive<Record<string, { presence: string; note: number | '' | null; commentaire: string }>>({});
 const valeur = (r: Resultat) => (saisie[r.id] ??= { presence: r.presence, note: r.note ?? '', commentaire: r.commentaire ?? '' });
+const resumePresence = computed(() =>
+    Object.fromEntries(PRESENCES.map((presence) => [presence, resultats.value.filter((r) => r.presence === presence).length])) as Record<string, number>,
+);
+const presencesEnAttente = computed(() => lignes.value.filter((r) => valeur(r).presence !== r.presence));
 const { envoi, erreurs, soumettre } = useFormulaire();
 const enCours = reactive({ id: '' });
 
@@ -80,6 +84,20 @@ async function enregistrer(r: Resultat) {
     enCours.id = r.id;
     const resultat = await soumettre(() => appeler('enregistrerResultat', { id: r.id, ...valeur(r) }));
     if (resultat) notifier(resultat.message ?? 'Résultat enregistré.');
+}
+
+async function enregistrerPresences() {
+    const changements = presencesEnAttente.value;
+    if (!changements.length) return;
+    const nombre = changements.length;
+    if (!window.confirm(`Enregistrer le statut de présence de ${nombre} étudiant(s) ? Les notes ne seront pas modifiées et aucun e-mail ne sera envoyé.`)) return;
+    const resultat = await soumettre(() =>
+        appeler<{ message: string }>('enregistrerPresencesExamen', {
+            id: props.id,
+            presences: changements.map((r) => ({ resultatId: r.id, presence: valeur(r).presence })),
+        }),
+    );
+    if (resultat) notifier(resultat.message);
 }
 
 async function envoyerToutesConvocations() {
@@ -185,6 +203,20 @@ async function envoyerConvocation(r: Resultat) {
                         @click="envoyerToutesConvocations"
                     ><i class="fa-solid fa-paper-plane"></i> Envoyer les convocations ({{ convocables.length }})</button>
                 </div>
+            </div>
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                <p class="text-sm text-gray-700">
+                    Convoqués <strong>{{ resumePresence['Convoqué'] }}</strong>
+                    · Présents <strong class="text-green-700">{{ resumePresence['Présent'] }}</strong>
+                    · Absents <strong class="text-red-700">{{ resumePresence['Absent'] }}</strong>
+                    · Dispensés <strong>{{ resumePresence['Dispensé'] }}</strong>
+                </p>
+                <button
+                    type="button"
+                    class="bouton-principal"
+                    :disabled="envoi || !presencesEnAttente.length || examen.statut === 'Annulé'"
+                    @click="enregistrerPresences"
+                >Enregistrer les présences ({{ presencesEnAttente.length }})</button>
             </div>
             <div class="space-y-3">
                 <form v-for="r in lignes" :key="r.id" class="carte grid items-end gap-3 p-4 md:grid-cols-7" @submit.prevent="enregistrer(r)">
