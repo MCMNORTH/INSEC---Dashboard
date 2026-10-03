@@ -146,9 +146,12 @@ export const enregistrerPresencesExamen = operation('enregistrerPresencesExamen'
 
     const refs = v.presences.map((p) => col.resultats().doc(p.resultatId));
     const documents = await db.getAll(...refs);
-    documents.forEach((doc) => {
+    documents.forEach((doc, index) => {
         if (!doc.exists || doc.get('examenId') !== v.id) {
             erreurChamp('presences', 'Un résultat ne correspond pas à cette épreuve.');
+        }
+        if (v.presences[index].presence !== 'Présent' && doc.get('note') !== null && doc.get('note') !== undefined) {
+            erreurChamp('presences', 'Une note existe déjà pour un résultat. Modifiez ce statut individuellement pour protéger la note.');
         }
     });
 
