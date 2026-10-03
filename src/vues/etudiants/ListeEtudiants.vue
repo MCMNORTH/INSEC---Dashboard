@@ -38,6 +38,19 @@ const inscriptionsPour = (etudiantId: string) =>
     inscriptions.value.filter((i) => i.etudiantId === etudiantId && i.anneeId === anneeId.value);
 const estInscritCetteAnnee = (etudiantId: string) =>
     inscriptionsPour(etudiantId).some((i) => i.statut === 'active');
+const situationInscription = (etudiantId: string) => {
+    const inscriptionsAnnee = inscriptionsPour(etudiantId);
+    const inscrit = inscriptionsAnnee.some((i) => i.statut === 'active');
+    const libelles: Record<string, string> = {
+        suspendue: 'Inscription suspendue',
+        annulée: 'Inscription annulée',
+        terminée: 'Inscription terminée',
+    };
+    const detail = inscrit || !inscriptionsAnnee.length
+        ? null
+        : [...new Set(inscriptionsAnnee.map((i) => libelles[i.statut] ?? 'Inscription non active'))].join(' · ');
+    return { inscrit, detail };
+};
 
 const filtres = computed(() => {
     const terme = normaliser(recherche.value.trim());
@@ -155,7 +168,7 @@ async function supprimer() {
         </section>
         <div v-else class="overflow-x-auto rounded-xl bg-white shadow">
             <table class="tableau">
-                <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation cette année</th><th>Inscription INSEC</th><th>Situation</th><th class="text-right">Actions</th></tr></thead>
+                <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation cette année</th><th>Statut pour l’année</th><th>Situation</th><th class="text-right">Actions</th></tr></thead>
                 <tbody>
                     <tr v-for="e in affiches" :key="e.id" class="cursor-pointer hover:bg-gray-50" @click="router.push(`/etudiants/${e.id}`)">
                         <td class="font-medium text-gray-800">{{ e.nom }} {{ e.prenom }}</td>
@@ -169,9 +182,12 @@ async function supprimer() {
                             <span v-else class="text-gray-400">—</span>
                         </td>
                         <td>
-                            <span v-if="estInscritCetteAnnee(e.id)" class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">Inscrit à l’INSEC</span>
-                            <span v-else-if="inscriptionsPour(e.id).length" class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">Inscription clôturée</span>
-                            <span v-else class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">Non inscrit cette année</span>
+                            <span
+                                :class="situationInscription(e.id).inscrit
+                                    ? 'inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800'
+                                    : 'inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700'"
+                            >{{ situationInscription(e.id).inscrit ? 'Inscrit à l’INSEC' : 'Non inscrit à l’INSEC' }}</span>
+                            <p v-if="situationInscription(e.id).detail" class="mt-1 text-xs text-gray-500">{{ situationInscription(e.id).detail }}</p>
                         </td>
                         <td><BadgeStatut :statut="e.statut" /></td>
                         <td class="text-right whitespace-nowrap" @click.stop>
