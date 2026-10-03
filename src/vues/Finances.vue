@@ -64,6 +64,17 @@ const ajouterEcheance = () =>
 const ajouterVersement = () =>
     executer('ajouterVersement', { inscriptionId: inscription.value!.id, ...versement }, () => Object.assign(versement, { montant: null, reference: '', note: '' }));
 
+async function envoyerDocument(type: 'facture' | 'recu', id: string, libelle: string, destinataire: string) {
+    const email = destinataire.trim();
+    if (!email) {
+        notifier('Aucune adresse e-mail n’est enregistrée pour cet étudiant.');
+        return;
+    }
+    if (!window.confirm(`Envoyer ${libelle} en pièce jointe à ${email} ? Le PDF contient des informations personnelles.`)) return;
+    const resultat = await soumettre(() => appeler('envoyerDocumentParEmail', { type, id }));
+    if (resultat) notifier(resultat.message ?? 'Document envoyé par e-mail.');
+}
+
 // Synthèse annuelle des frais facturés et encaissés.
 const anneeSynthese = ref('');
 watchEffect(() => {
@@ -140,6 +151,13 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                         class="mt-3 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20"
                         @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))"
                     >Télécharger la facture PDF</button>
+                    <button
+                        v-if="aRole('admin', 'super_admin')"
+                        type="button"
+                        class="mt-2 w-full rounded-lg border border-white/30 px-3 py-2 text-sm text-blue-50 hover:bg-white/10"
+                        :disabled="envoi"
+                        @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email)"
+                    >Envoyer la facture par e-mail</button>
                     <p v-if="montantEnRetard(inscription) > 0" class="mt-2 rounded bg-red-500/20 p-2 text-xs text-red-200">En retard : {{ montant(montantEnRetard(inscription)) }} MRU</p>
 
                     <form class="mt-4 space-y-2 border-t border-blue-400/30 pt-4" @submit.prevent="majSituation">
@@ -178,6 +196,14 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                                 <p class="px-2 text-[10px] text-blue-200">
                                     {{ v.numeroRecu }} · {{ v.modePaiement }}<template v-if="v.reference"> · {{ v.reference }}</template>
                                     <button v-if="aRole('admin', 'super_admin')" class="ml-1 cursor-pointer underline" @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))">reçu PDF</button>
+                                    <button
+                                        v-if="aRole('admin', 'super_admin')"
+                                        type="button"
+                                        class="ml-2 cursor-pointer underline"
+                                        :disabled="envoi || v.statut !== 'Validée'"
+                                        title="Envoyer le reçu par e-mail (versement validé)"
+                                        @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email)"
+                                    >Envoyer</button>
                                 </p>
                             </div>
                             <p v-if="!versements.length" class="text-xs text-blue-200">Aucun versement.</p>
