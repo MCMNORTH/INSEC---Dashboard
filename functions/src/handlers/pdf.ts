@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import pdfmake from 'pdfmake';
 import { HttpsError } from 'firebase-functions/v2/https';
-import { acteurDepuis, operation } from '../lib/contexte.js';
+import { operation } from '../lib/contexte.js';
 import { col, exiger, type Doc } from '../lib/donnees.js';
 import { db, FieldValue, FUSEAU } from '../lib/firebase.js';
 import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email.js';
