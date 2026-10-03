@@ -34,7 +34,7 @@ async function seConnecter() {
     <div class="flex min-h-screen items-center justify-center bg-[#f0f2f5] p-5">
         <div class="grid w-full max-w-[950px] overflow-hidden rounded-2xl bg-white shadow-xl md:grid-cols-12">
             <div class="flex flex-col justify-center bg-gradient-to-br from-insec to-[#293241] p-10 text-center text-white md:col-span-5">
-                <img src="/images/logo-insec.png" alt="" class="mx-auto mb-4 h-20 w-20 rounded-full bg-white/90 object-contain p-1" />
+                <img src="/images/logo-insec-2026.png" alt="Logo INSEC" class="mx-auto mb-4 block h-auto max-h-36 w-full max-w-[260px] object-contain" />
                 <h1 class="mb-3 text-2xl font-bold">ESPACE INSEC</h1>
                 <p class="mb-6 text-sm opacity-80">Gérez votre tableau de bord et vos accès en toute sécurité.</p>
                 <div class="rounded border border-white/60 bg-white/10 p-3">
