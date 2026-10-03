@@ -4,7 +4,7 @@ import { appeler } from '../api';
 import { lireEnBase64, telecharger } from '../fichiers';
 import { useFormulaire } from '../formulaire';
 
-interface Rapport { crees: number; misAJour: number; ignores: number; erreurs: string[] }
+interface Rapport { crees: number; misAJour: number; ignores: number; inscriptionsCreees: number; inscriptionsExistantes: number; erreurs: string[] }
 
 const { envoi, soumettre } = useFormulaire();
 const fichier = ref<File | null>(null);
@@ -23,7 +23,7 @@ async function importer() {
 }
 
 const exports = [
-    ['etudiants', 'Étudiants et inscriptions', 'Identité, diplôme, année et statut'],
+    ['etudiants', 'Registre complet des étudiants', 'Identité et historique de toutes les inscriptions'],
     ['finances', 'Situation financière', 'Montants dus, versés, soldes et retards'],
     ['resultats', 'Résultats académiques', 'UE, notes, présences et décisions'],
 ] as const;
@@ -37,10 +37,12 @@ const exports = [
     </div>
     <div v-if="rapport" class="mb-6 rounded-xl border bg-white p-5">
         <h2 class="font-bold text-insec">Rapport d’import</h2>
-        <div class="my-4 grid grid-cols-3 gap-3 text-center">
+        <div class="my-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-5">
             <div class="rounded bg-green-50 p-3"><strong>{{ rapport.crees }}</strong><span class="block text-xs">créés</span></div>
             <div class="rounded bg-blue-50 p-3"><strong>{{ rapport.misAJour }}</strong><span class="block text-xs">mis à jour</span></div>
             <div class="rounded bg-gray-50 p-3"><strong>{{ rapport.ignores }}</strong><span class="block text-xs">ignorés</span></div>
+            <div class="rounded bg-emerald-50 p-3"><strong>{{ rapport.inscriptionsCreees }}</strong><span class="block text-xs">inscriptions créées</span></div>
+            <div class="rounded bg-amber-50 p-3"><strong>{{ rapport.inscriptionsExistantes }}</strong><span class="block text-xs">déjà inscrits</span></div>
         </div>
         <details v-if="rapport.erreurs.length" class="text-sm text-red-700">
             <summary class="cursor-pointer font-semibold">{{ rapport.erreurs.length }} ligne(s) en erreur</summary>
@@ -50,8 +52,8 @@ const exports = [
     <div class="grid gap-6 lg:grid-cols-2">
         <section class="rounded-xl border bg-white p-6">
             <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-green-50 text-green-700"><i class="fa-solid fa-file-arrow-up"></i></div>
-            <h2 class="text-lg font-bold text-insec">Importer des étudiants</h2>
-            <p class="mt-1 mb-4 text-sm text-gray-500">Utilisez exclusivement le modèle INSEC. Chaque ligne invalide est signalée sans bloquer les autres.</p>
+            <h2 class="text-lg font-bold text-insec">Importer le registre étudiant</h2>
+            <p class="mt-1 mb-4 text-sm text-gray-500">Le modèle peut créer un dossier seul ou ajouter une inscription annuelle. Les exports reprennent tout l’historique; les erreurs sont signalées ligne par ligne.</p>
             <button class="mb-5 inline-block cursor-pointer text-sm font-semibold text-insec" :disabled="envoi" @click="soumettre(() => telecharger('exporterExcel', { type: 'modele' }))">
                 <i class="fa-solid fa-download mr-1"></i>Télécharger le modèle
             </button>
@@ -60,7 +62,7 @@ const exports = [
                     <input type="file" accept=".xlsx,.csv" required class="mt-1 block w-full rounded-lg border p-2 text-sm" @change="fichier = ($event.target as HTMLInputElement).files?.[0] ?? null" />
                 </label>
                 <label class="etiquette">Si l’e-mail existe déjà
-                    <select v-model="mode" class="champ mt-1"><option value="ignorer">Ignorer la ligne</option><option value="mettre_a_jour">Mettre à jour l’étudiant</option></select>
+                    <select v-model="mode" class="champ mt-1"><option value="ignorer">Ignorer le dossier et la ligne</option><option value="mettre_a_jour">Mettre à jour le dossier</option></select>
                 </label>
                 <button class="bouton-principal w-full py-3" :disabled="envoi"><i v-if="envoi" class="fa-solid fa-circle-notch fa-spin"></i> Analyser et importer</button>
             </form>
