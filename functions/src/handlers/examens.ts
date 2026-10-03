@@ -128,3 +128,43 @@ export const enregistrerResultat = operation('enregistrerResultat', ROLES_ADMIN,
     });
     return { message: 'Résultat enregistré.' };
 });
+
+
+const quantiteOptionnelle = z.preprocess(
+    (valeur) => (valeur === '' || valeur === undefined || valeur === null ? null : valeur),
+    z.coerce.number().int().min(0).max(500).nullable(),
+);
+
+export const mettreAJourPreparationExamen = operation('mettreAJourPreparationExamen', ROLES_ADMIN, async (donnees, acteur) => {
+    const v = valider(
+        z.object({
+            id: s.id(),
+            sujetsRecusLe: s.dateOptionnelle(),
+            nombreSujetsRecus: quantiteOptionnelle,
+            salleConfirmee: z.boolean(),
+            surveillanceConfirmee: z.boolean(),
+            nombreCopiesRassemblees: quantiteOptionnelle,
+            copiesEnvoyeesLe: s.dateOptionnelle(),
+            referenceEnvoiCopies: s.texteOptionnel(120),
+        }),
+        donnees,
+    );
+
+    await db.runTransaction(async (tx) => {
+        const ref = col.examens().doc(v.id);
+        const avant = await exiger(tx, ref, 'Examen introuvable.');
+        const apres = {
+            sujetsRecusLe: v.sujetsRecusLe,
+            nombreSujetsRecus: v.nombreSujetsRecus,
+            salleConfirmee: v.salleConfirmee,
+            surveillanceConfirmee: v.surveillanceConfirmee,
+            nombreCopiesRassemblees: v.nombreCopiesRassemblees,
+            copiesEnvoyeesLe: v.copiesEnvoyeesLe,
+            referenceEnvoiCopies: v.referenceEnvoiCopies,
+        };
+        tx.update(ref, { ...apres, ...trace(acteur) });
+        auditerModele(tx, acteur, 'Examen', v.id, 'updated', avant, apres);
+    });
+
+    return { message: 'Suivi de préparation de l’examen enregistré.' };
+});

@@ -51,7 +51,19 @@ const affiches = computed(() => examens.value.slice((page.value - 1) * PAR_PAGE,
                         <td>{{ e.nbConvoques }}</td>
                         <td>{{ e.statut }}</td>
                     </tr>
-                    <tr v-if="!examens.length"><td colspan="6" class="p-8 text-center text-gray-400">Aucun examen planifié.</td></tr>
+                    <tr v-if="!examens.length">
+                        <td colspan="6" class="p-0">
+                            <div class="flex flex-col items-center px-6 py-10 text-center">
+                                <i class="fa-solid fa-calendar-check mb-4 text-2xl text-insec" aria-hidden="true"></i>
+                                <h2 class="font-semibold text-gray-800">{{ anneeId ? 'Aucun examen pour cette année scolaire' : 'Aucune session planifiée' }}</h2>
+                                <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+                                    Après la planification, la fiche de chaque épreuve permet de suivre la réception des sujets,
+                                    la confirmation de la salle et de la surveillance, puis le retour des copies à l’INTEC.
+                                </p>
+                                <RouterLink to="/examens/nouveau" class="bouton-action mt-5">+ Planifier un examen</RouterLink>
+                            </div>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>

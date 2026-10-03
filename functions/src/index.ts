@@ -8,7 +8,7 @@ export { envoyerEmail } from './handlers/emails.js';
 export { affecterUe, creerEnseignant, modifierEnseignant, retirerAffectation, supprimerEnseignant } from './handlers/enseignants.js';
 export { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription, supprimerEtudiant } from './handlers/etudiants.js';
 export { exporterExcel, importerEtudiants } from './handlers/excel.js';
-export { creerExamen, enregistrerResultat } from './handlers/examens.js';
+export { creerExamen, enregistrerResultat, mettreAJourPreparationExamen } from './handlers/examens.js';
 export { ajouterEcheance, ajouterVersement, modifierSituationFinanciere } from './handlers/finances.js';
 export { genererPdf } from './handlers/pdf.js';
 export { sante } from './handlers/sante.js';
