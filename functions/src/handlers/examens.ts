@@ -130,6 +130,65 @@ export const enregistrerResultat = operation('enregistrerResultat', ROLES_ADMIN,
 });
 
 
+export const enregistrerPresencesExamen = operation('enregistrerPresencesExamen', ROLES_ADMIN, async (donnees, acteur) => {
+    const v = valider(
+        z.object({
+            id: s.id(),
+            presences: z.array(z.object({ resultatId: s.id(), presence: s.choix(PRESENCES) })).min(1).max(400),
+        }),
+        donnees,
+    );
+    const ids = v.presences.map((p) => p.resultatId);
+    if (new Set(ids).size !== ids.length) erreurChamp('presences', 'Un étudiant ne peut apparaître qu’une seule fois dans cette opération.');
+
+    const examen = await exiger(null, col.examens().doc(v.id), 'Examen introuvable.');
+    if (examen.statut === 'Annulé') erreurChamp('id', 'Les présences ne peuvent pas être modifiées pour un examen annulé.');
+
+    const refs = v.presences.map((p) => col.resultats().doc(p.resultatId));
+    const documents = await db.getAll(...refs);
+    documents.forEach((doc, index) => {
+        if (!doc.exists || doc.get('examenId') !== v.id) {
+            erreurChamp('presences', 'Un résultat ne correspond pas à cette épreuve.');
+        }
+        if (v.presences[index].presence !== 'Présent' && doc.get('note') !== null && doc.get('note') !== undefined) {
+            erreurChamp('presences', 'Une note existe déjà pour un résultat. Modifiez ce statut individuellement pour protéger la note.');
+        }
+    });
+
+    const changements = v.presences
+        .map((presence, index) => ({ presence, ref: refs[index], avant: documents[index].data()! }))
+        .filter(({ presence, avant }) => presence.presence !== avant.presence);
+    if (!changements.length) return { message: 'Aucune présence à mettre à jour.' };
+
+    const lot = db.batch();
+    changements.forEach(({ presence, ref, avant }) => {
+        const note = presence.presence === 'Présent' ? (avant.note ?? null) : null;
+        const apres = {
+            presence: presence.presence,
+            note,
+            valide: resultatValide({ presence: presence.presence, note, seuilValidation: avant.seuilValidation }),
+        };
+        lot.update(ref, { ...apres, ...trace(acteur) });
+    });
+    auditer(lot, acteur, {
+        action: 'updated',
+        modele: 'Examen',
+        modeleId: v.id,
+        description: `Présences enregistrées pour ${changements.length} étudiant(s) à l’examen.`,
+        avant: { resultats: changements.map(({ ref, avant }) => ({ id: ref.id, presence: avant.presence, note: avant.note ?? null })) },
+        apres: {
+            resultats: changements.map(({ presence, ref, avant }) => ({
+                id: ref.id,
+                presence: presence.presence,
+                note: presence.presence === 'Présent' ? (avant.note ?? null) : null,
+            })),
+        },
+    });
+    await lot.commit();
+    return { message: `Présences enregistrées pour ${changements.length} étudiant(s). Aucune note ni aucun e-mail n’a été envoyé.` };
+});
+
+
 const quantiteOptionnelle = z.preprocess(
     (valeur) => (valeur === '' || valeur === undefined || valeur === null ? null : valeur),
     z.coerce.number().int().min(0).max(500).nullable(),
