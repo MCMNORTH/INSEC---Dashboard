@@ -189,13 +189,80 @@ async function recu(id: string) {
     };
 }
 
-const generateurs = { attestation, releve, convocation, recu };
+async function facture(id: string) {
+    const { inscription, etudiant, formation, annee } = await contexteInscription(id);
+    const versements = (await col.versements().where('inscriptionId', '==', id).get()).docs
+        .map((doc) => doc.data())
+        .sort((a, b) => String(a.dateVersement).localeCompare(String(b.dateVersement)));
+    const echeances = [...(inscription.echeances ?? [])].sort((a: Doc, b: Doc) => String(a.dateEcheance).localeCompare(String(b.dateEcheance)));
+    const montantNet = Math.max(0, Number(inscription.montantDu ?? 0) - Number(inscription.montantRemise ?? 0));
+    const montantEncaisse = versements
+        .filter((v) => v.statut === 'Validée')
+        .reduce((total, v) => total + Number(v.montant ?? 0), 0);
+    const solde = Math.max(0, montantNet - montantEncaisse);
+    const reference = `FACT-${inscription.id.toUpperCase()}`;
+    const lignesVersements = versements.length
+        ? versements.map((v) => [
+              dateFr(String(v.dateVersement)),
+              v.numeroRecu ?? '—',
+              v.statut,
+              `${formaterMontant(v.montant)} MRU`,
+          ])
+        : [[{ text: 'Aucun versement enregistré.', colSpan: 4, alignment: 'center' }, '', '', '']];
+    const contenu = [
+        ...entete(),
+        titre('Facture d’inscription'),
+        encadre([
+            { text: reference, fontSize: 14, bold: true, color: BLEU },
+            `Émise le ${jourFr(new Date())}`,
+            `Année académique : ${annee.libelle}`,
+        ]),
+        grille([
+            [cle('Étudiant'), `${maj(etudiant.nom)} ${etudiant.prenom}`],
+            [cle('E-mail'), etudiant.email ?? 'Non renseigné'],
+            [cle('Formation'), `${formation.code} · ${formation.libelle}`],
+            [cle('Inscription'), inscription.id],
+        ]),
+        grille([
+            ['Frais de formation', `${formaterMontant(inscription.montantDu ?? 0)} MRU`],
+            ['Remise', `− ${formaterMontant(inscription.montantRemise ?? 0)} MRU`],
+            [{ text: 'Montant net dû', bold: true }, { text: `${formaterMontant(montantNet)} MRU`, bold: true }],
+        ], ['Désignation', 'Montant']),
+        { text: 'Échéancier', fontSize: 13, bold: true, color: BLEU, margin: [0, 15, 0, 0] },
+        grille(
+            echeances.length
+                ? echeances.map((e: Doc) => [String(e.libelle ?? 'Échéance'), dateFr(String(e.dateEcheance)), `${formaterMontant(e.montant ?? 0)} MRU`])
+                : [[{ text: 'Aucune échéance définie.', colSpan: 3, alignment: 'center' }, '', '']],
+            ['Échéance', 'Date limite', 'Montant'],
+        ),
+        { text: 'Versements enregistrés', fontSize: 13, bold: true, color: BLEU, margin: [0, 15, 0, 0] },
+        grille(lignesVersements, ['Date', 'Reçu', 'Statut', 'Montant']),
+        {
+            text: [
+                { text: 'Total encaissé (versements validés) : ', bold: true },
+                `${formaterMontant(montantEncaisse)} MRU`,
+                '\n',
+                { text: 'Solde restant : ', bold: true, color: BLEU },
+                { text: `${formaterMontant(solde)} MRU`, bold: true, color: BLEU },
+            ],
+            alignment: 'right',
+            margin: [0, 15, 0, 0],
+        },
+        { text: 'Document généré à partir du dossier financier de l’INSEC.', fontSize: 9, color: '#666666', margin: [0, 20, 0, 0] },
+    ];
+    return {
+        nom: `facture-inscription-${id}.pdf`,
+        contenu: await document(contenu, `Facture ${reference} · INSEC Dashboard`),
+    };
+}
+
+const generateurs = { attestation, releve, convocation, recu, facture };
 
 export const genererPdf = operation(
     'genererPdf',
     ROLES_ADMIN,
     async (donnees) => {
-        const v = valider(z.object({ type: s.choix(['attestation', 'releve', 'convocation', 'recu'] as const), id: s.id() }), donnees);
+        const v = valider(z.object({ type: s.choix(['attestation', 'releve', 'convocation', 'recu', 'facture'] as const), id: s.id() }), donnees);
         return generateurs[v.type](v.id);
     },
     { memory: '512MiB' },
