@@ -170,12 +170,21 @@ async function envoyerConvocation(r: Resultat) {
             </section>
             <div class="mt-7 mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 class="font-bold text-insec">Convocations et résultats ({{ resultats.length }})</h2>
-                <button
-                    type="button"
-                    class="bouton-principal"
-                    :disabled="envoi || !convocables.length || examen.statut === 'Annulé'"
-                    @click="envoyerToutesConvocations"
-                ><i class="fa-solid fa-paper-plane"></i> Envoyer les convocations ({{ convocables.length }})</button>
+                <div class="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        class="bouton-secondaire"
+                        :disabled="envoi || !resultats.length || examen.statut === 'Annulé'"
+                        title="Télécharger la feuille de présence PDF"
+                        @click="soumettre(() => telecharger('genererPdf', { type: 'feuillePresence', id: props.id }))"
+                    ><i class="fa-solid fa-file-pdf"></i> Feuille de présence</button>
+                    <button
+                        type="button"
+                        class="bouton-principal"
+                        :disabled="envoi || !convocables.length || examen.statut === 'Annulé'"
+                        @click="envoyerToutesConvocations"
+                    ><i class="fa-solid fa-paper-plane"></i> Envoyer les convocations ({{ convocables.length }})</button>
+                </div>
             </div>
             <div class="space-y-3">
                 <form v-for="r in lignes" :key="r.id" class="carte grid items-end gap-3 p-4 md:grid-cols-7" @submit.prevent="enregistrer(r)">

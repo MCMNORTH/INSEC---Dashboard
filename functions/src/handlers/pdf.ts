@@ -53,9 +53,10 @@ const signature = (texte: string, prefixe?: string) => ({
     margin: [0, 40, 0, 0],
 });
 
-async function document(contenu: unknown[], piedDePage: string): Promise<string> {
+async function document(contenu: unknown[], piedDePage: string, orientation: 'portrait' | 'landscape' = 'portrait'): Promise<string> {
     const buffer = await pdfmake
         .createPdf({
+            pageOrientation: orientation,
             pageMargins: [40, 50, 40, 60],
             defaultStyle: { font: 'Roboto', fontSize: 10, color: '#202020' },
             content: contenu,
@@ -258,13 +259,90 @@ async function facture(id: string) {
     };
 }
 
-const generateurs = { attestation, releve, convocation, recu, facture };
+
+async function feuillePresence(id: string) {
+    const examen = await exiger(null, col.examens().doc(id), 'Examen introuvable.');
+    if (examen.statut === 'Annulé') {
+        throw new HttpsError('failed-precondition', 'Une feuille de présence ne peut pas être générée pour un examen annulé.');
+    }
+
+    const [ueDoc, formationDoc, anneeDoc] = await db.getAll(
+        col.ues().doc(examen.ueId),
+        col.formations().doc(examen.formationId),
+        col.annees().doc(examen.anneeId),
+    );
+    const ue = ueDoc.data() as Doc;
+    const formation = formationDoc.data() as Doc;
+    const annee = anneeDoc.data() as Doc;
+    const resultats = await col.resultats().where('examenId', '==', id).get();
+    const etudiants = resultats.empty
+        ? []
+        : await db.getAll(...resultats.docs.map((r) => col.etudiants().doc(String(r.get('etudiantId')))));
+    const inscriptions = resultats.empty
+        ? []
+        : await db.getAll(...resultats.docs.map((r) => col.inscriptions().doc(String(r.get('inscriptionId')))));
+
+    const participants = resultats.docs.map((r, index) => {
+        const etudiant = etudiants[index]?.data() as Doc | undefined;
+        const inscription = inscriptions[index]?.data() as Doc | undefined;
+        return {
+            nom: `${maj(String(etudiant?.nom ?? 'Dossier incomplet'))} ${String(etudiant?.prenom ?? '')}`.trim(),
+            numeroIntec: String(inscription?.numeroIntec ?? '—'),
+        };
+    }).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+
+    const lignes = participants.length
+        ? participants.map((p, index) => [
+              String(index + 1),
+              p.nom,
+              p.numeroIntec,
+              '',
+              '',
+          ])
+        : [[{ text: 'Aucun étudiant n’est rattaché à cette épreuve.', colSpan: 5, alignment: 'center' }, '', '', '', '']];
+
+    const contenu = [
+        ...entete(),
+        titre('Feuille de présence'),
+        encadre([
+            { text: `${ue.code} · ${ue.libelle}`, fontSize: 14, bold: true, color: BLEU },
+            `${formation.code} · ${annee.libelle} · Session ${examen.session}`,
+            `Date et heure (Paris) : ${formaterDateHeure(examen.dateExamen.toDate())}`,
+            `Salle : ${examen.salle || 'À confirmer'} · Effectif convoqué : ${participants.length}`,
+        ]),
+        {
+            table: {
+                headerRows: 1,
+                widths: [28, '*', 100, 180, 110],
+                body: [
+                    ['N°', 'Étudiant(e)', 'N° INTEC', 'Signature / émargement', 'Observation'].map((texte) => ({
+                        text: texte,
+                        color: 'white',
+                        fillColor: BLEU,
+                        bold: true,
+                    })),
+                    ...lignes,
+                ],
+            },
+            layout: { hLineColor: '#dddddd', vLineColor: '#dddddd', paddingTop: () => 9, paddingBottom: () => 9 },
+            margin: [0, 10, 0, 10],
+        },
+        { text: 'Nom et signature du surveillant : ______________________________________________', margin: [0, 25, 0, 0] },
+    ];
+
+    return {
+        nom: `feuille-presence-${ue.code}-${id}.pdf`,
+        contenu: await document(contenu, `Feuille de présence · ${formation.code} · ${annee.libelle}`, 'landscape'),
+    };
+}
+
+const generateurs = { attestation, releve, convocation, recu, facture, feuillePresence };
 
 export const genererPdf = operation(
     'genererPdf',
     ROLES_ADMIN,
     async (donnees) => {
-        const v = valider(z.object({ type: s.choix(['attestation', 'releve', 'convocation', 'recu', 'facture'] as const), id: s.id() }), donnees);
+        const v = valider(z.object({ type: s.choix(['attestation', 'releve', 'convocation', 'recu', 'facture', 'feuillePresence'] as const), id: s.id() }), donnees);
         return generateurs[v.type](v.id);
     },
     { memory: '512MiB' },
