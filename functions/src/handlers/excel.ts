@@ -257,6 +257,7 @@ export const importerEtudiants = operation(
                 nom: z.string().regex(/\.(xlsx|csv)$/i, 'Seuls les fichiers .xlsx et .csv sont acceptés.'),
                 contenu: z.base64().max(7_000_000, 'Le fichier dépasse 5 Mo.'),
                 mode: s.choix(['ignorer', 'mettre_a_jour'] as const),
+                previsualiser: z.boolean().default(false),
             }),
             donnees,
         );
@@ -274,7 +275,14 @@ export const importerEtudiants = operation(
 
         const refs = await referentiel();
         let crees = 0, misAJour = 0, ignores = 0, inscriptionsCreees = 0, inscriptionsExistantes = 0;
+        const emailsTraites = new Set<string>();
         const erreurs: string[] = [];
+        const lignesApercu: { ligne: number; dossier: string; inscription: string }[] = [];
+        const dossiersApercus = new Map<string, {
+            sauve: boolean;
+            initialementPresent: boolean;
+            inscriptions: { formationId: string; anneeId: string; statut: string }[];
+        }>();
         for (const [index, ligne] of corps.entries()) {
             const numero = index + 2;
             if (ligne.every((c) => c === '')) continue;
@@ -289,9 +297,83 @@ export const importerEtudiants = operation(
                 }
                 const d = analyse.data;
                 const inscription = inscriptionImport(ligne, refs);
+                if (v.previsualiser) {
+                    const cle = cleEmailEtudiant(d.email);
+                    const resultat = await db.runTransaction(async (tx) => {
+                        let etat = dossiersApercus.get(cle);
+                        if (!etat) {
+                            const unique = await tx.get(refUnique(cle));
+                            if (unique.exists && v.mode === 'ignorer') {
+                                return { type: 'ignore' as const, inscription: 'aucune' as const, etat: { sauve: true, initialementPresent: true, inscriptions: [] } };
+                            }
+                            const etudiantId = String(unique.get('proprietaire') ?? '');
+                            if (unique.exists && !etudiantId) throw new Error('Le dossier étudiant lié à cet e-mail est introuvable.');
+                            if (unique.exists) {
+                                const etudiant = await tx.get(col.etudiants().doc(etudiantId));
+                                if (!etudiant.exists) throw new Error('Le dossier étudiant lié à cet e-mail est introuvable.');
+                            }
+                            const inscriptions = unique.exists
+                                ? await tx.get(col.inscriptions().where('etudiantId', '==', etudiantId))
+                                : null;
+                            etat = {
+                                sauve: unique.exists,
+                                initialementPresent: unique.exists,
+                                inscriptions: inscriptions?.docs.map((doc) => ({
+                                    formationId: String(doc.get('formationId') ?? ''),
+                                    anneeId: String(doc.get('anneeId') ?? ''),
+                                    statut: String(doc.get('statut') ?? ''),
+                                })) ?? [],
+                            };
+                        }
+                        if (etat.initialementPresent && v.mode === 'ignorer') {
+                            return { type: 'ignore' as const, inscription: 'aucune' as const, etat };
+                        }
+                        const inscriptionsSimulees = [...etat.inscriptions];
+                        let inscriptionResultat: 'aucune' | 'existante' | 'creee' = 'aucune';
+                        if (inscription) {
+                            const correspondantes = inscriptionsSimulees.filter((existante) =>
+                                existante.formationId === inscription.formationId && existante.anneeId === inscription.anneeId,
+                            );
+                            const memeStatut = correspondantes.some((existante) => existante.statut === inscription.statut);
+                            const activeExistante = correspondantes.some((existante) => existante.statut === 'active');
+                            if (memeStatut || (inscription.statut === 'active' && activeExistante)) {
+                                inscriptionResultat = 'existante';
+                            } else if (inscription.statut !== 'active' && activeExistante) {
+                                throw new Error('Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
+                            } else {
+                                await controlerInscription(tx, inscription);
+                                inscriptionsSimulees.push({
+                                    formationId: inscription.formationId,
+                                    anneeId: inscription.anneeId,
+                                    statut: inscription.statut,
+                                });
+                                inscriptionResultat = 'creee';
+                            }
+                        }
+                        return {
+                            type: etat.sauve ? 'maj' as const : 'cree' as const,
+                            inscription: inscriptionResultat,
+                            etat: { sauve: true, initialementPresent: etat.initialementPresent, inscriptions: inscriptionsSimulees },
+                        };
+                    });
+                    dossiersApercus.set(cle, resultat.etat);
+                    if (resultat.type === 'ignore') ignores++;
+                    else if (resultat.type === 'maj') misAJour++;
+                    else crees++;
+                    if (resultat.inscription === 'creee') inscriptionsCreees++;
+                    else if (resultat.inscription === 'existante') inscriptionsExistantes++;
+                    lignesApercu.push({
+                        ligne: numero,
+                        dossier: resultat.type === 'cree' ? 'À créer' : resultat.type === 'maj' ? 'À mettre à jour' : 'Ignoré',
+                        inscription: resultat.inscription === 'creee' ? 'À créer'
+                            : resultat.inscription === 'existante' ? 'Déjà présente'
+                                : 'Aucune',
+                    });
+                    continue;
+                }
                 const resultat = await db.runTransaction(async (tx) => {
                     const unique = await tx.get(refUnique(cleEmailEtudiant(d.email)));
-                    if (unique.exists && v.mode === 'ignorer') {
+                    if (unique.exists && v.mode === 'ignorer' && !emailsTraites.has(cleEmailEtudiant(d.email))) {
                         return { type: 'ignore' as const, inscription: 'aucune' as const };
                     }
                     const etudiantId = unique.exists ? String(unique.get('proprietaire') ?? '') : col.etudiants().doc().id;
@@ -354,8 +436,11 @@ export const importerEtudiants = operation(
                 });
 
                 if (resultat.type === 'ignore') ignores++;
-                else if (resultat.type === 'maj') misAJour++;
-                else crees++;
+                else {
+                    emailsTraites.add(cleEmailEtudiant(d.email));
+                    if (resultat.type === 'maj') misAJour++;
+                    else crees++;
+                }
                 if (resultat.inscription === 'creee') inscriptionsCreees++;
                 else if (resultat.inscription === 'existante') inscriptionsExistantes++;
             } catch (erreur) {
@@ -363,6 +448,7 @@ export const importerEtudiants = operation(
                 erreurs.push('Ligne ' + numero + ' : ' + message);
             }
         }
+        if (v.previsualiser) return { crees, misAJour, ignores, inscriptionsCreees, inscriptionsExistantes, erreurs, lignes: lignesApercu };
         await auditerDirect(acteur, {
             action: 'import', description: 'Import Excel du registre étudiant',
             apres: {
