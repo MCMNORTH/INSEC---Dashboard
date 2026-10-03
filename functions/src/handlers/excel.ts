@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import ExcelJS from 'exceljs';
 import { auditerDirect, auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
-import { col, refUnique, verifierUnique, type Doc } from '../lib/donnees.js';
+import { col, refUnique, type Doc } from '../lib/donnees.js';
 import { db, FUSEAU } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
 import { dateDuJour, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, statutPaiement, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
