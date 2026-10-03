@@ -12,11 +12,26 @@ import { creditsInscrits, creditsValides } from '../../scolarite';
 import type { Etudiant, Inscription, Resultat } from '../../types';
 
 const props = defineProps<{ id: string }>();
-const { formation, annee, ue } = useReferentiel();
+const { formation, annee, annees, ue } = useReferentiel();
 const { donnee: etudiant, chargement } = useDocument<Etudiant>(() => `etudiants/${props.id}`);
 const { donnees: inscriptionsBrutes } = useRequete<Inscription>(() => query(collection(db, 'inscriptions'), where('etudiantId', '==', props.id)));
 const { donnees: resultats } = useRequete<Resultat>(() => query(collection(db, 'resultats'), where('etudiantId', '==', props.id)));
 const inscriptions = computed(() => [...inscriptionsBrutes.value].sort((a, b) => b.ordre - a.ordre));
+const situationAnnuelle = computed(() => annees.value
+    .map((a) => {
+        const inscriptionsAnnee = inscriptions.value.filter((i) => i.anneeId === a.id);
+        const active = inscriptionsAnnee.some((i) => i.statut === 'active');
+        const suspendue = inscriptionsAnnee.some((i) => i.statut === 'suspendue');
+        const annulee = inscriptionsAnnee.length > 0 && inscriptionsAnnee.every((i) => i.statut === 'annulée');
+        return {
+            ...a,
+            inscriptions: inscriptionsAnnee,
+            statut: active ? 'active' : suspendue ? 'suspendue' : annulee ? 'annulée' : inscriptionsAnnee.length ? 'terminee' : 'absente',
+        };
+    })
+    .sort((a, b) => b.libelle.localeCompare(a.libelle)));
+const nbAnneesActives = computed(() => situationAnnuelle.value.filter((a) => a.statut === 'active').length);
+
 
 const progression = (i: Inscription) => {
     const total = creditsInscrits(i.ueIds, ue);
@@ -44,7 +59,49 @@ const progression = (i: Inscription) => {
                 </div>
             </section>
 
-            <h2 class="mt-8 mb-3 text-lg font-bold text-insec">Historique des inscriptions</h2>
+            <section class="mt-8">
+                <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                        <h2 class="text-lg font-bold text-insec">Situation par année scolaire</h2>
+                        <p class="mt-1 text-sm text-gray-500">{{ nbAnneesActives }} année(s) avec une inscription active à l’INSEC.</p>
+                    </div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <article v-for="a in situationAnnuelle" :key="a.id" class="carte p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="font-semibold text-gray-900">{{ a.libelle }}</h3>
+                            <span
+                                v-if="a.statut === 'active'"
+                                class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800"
+                            >Inscrit à l’INSEC</span>
+                            <span
+                                v-else-if="a.statut === 'suspendue'"
+                                class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
+                            >Inscription suspendue</span>
+                            <span
+                                v-else-if="a.statut === 'annulée'"
+                                class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600"
+                            >Inscription annulée</span>
+                            <span
+                                v-else-if="a.statut === 'terminee'"
+                                class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800"
+                            >Inscription terminée</span>
+                            <span v-else class="rounded-full bg-gray-50 px-2.5 py-1 text-xs text-gray-500">Non inscrit</span>
+                        </div>
+                        <div v-if="a.inscriptions.length" class="mt-3 space-y-1">
+                            <p v-for="i in a.inscriptions" :key="i.id" class="text-sm text-gray-600">
+                                {{ formation(i.formationId)?.code ?? 'Formation inconnue' }} · année {{ i.anneeParcours }}
+                            </p>
+                        </div>
+                        <p v-else class="mt-3 text-sm text-gray-400">Aucune inscription enregistrée pour cette année.</p>
+                    </article>
+                    <div v-if="!situationAnnuelle.length" class="carte p-4 text-sm text-gray-500">
+                        Aucune année scolaire n’est encore définie dans le référentiel.
+                    </div>
+                </div>
+            </section>
+
+            <h2 class="mt-8 mb-3 text-lg font-bold text-insec">Détail des inscriptions</h2>
             <div class="space-y-4">
                 <article v-for="i in inscriptions" :key="i.id" class="carte p-5">
                     <div class="flex justify-between gap-3">
