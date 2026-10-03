@@ -12,6 +12,8 @@ interface Tableau {
     impayes: { inscriptionId: string; etudiantId: string; etudiant: string; formation: string; solde: number; retard: number }[];
     examensProchains: { id: string; ue: string; dateExamen: string; salle: string | null }[];
     totalEtudiants: number;
+    etudiantsInscrits: number;
+    etudiantsSansInscription: number;
     inscriptionsActives: number;
 }
 
@@ -60,12 +62,19 @@ function heureParis(valeur: string): string {
 
 const cartes = (t: Tableau) => [
     {
-        libelle: 'Inscriptions confirmées',
-        valeur: t.inscriptionsActives,
-        detail: 'Pour l’année scolaire ' + libelleAnnee(t),
+        libelle: 'Étudiants inscrits à l’INSEC',
+        valeur: t.etudiantsInscrits,
+        detail: 'Étudiants avec une inscription active · ' + libelleAnnee(t),
         icone: 'fa-id-card',
         fond: 'bg-indigo-50',
         accent: 'text-insec',
+        lien: null,
+    },
+    {
+        libelle: 'Non inscrits cette année', valeur: t.etudiantsSansInscription,
+        detail: 'À vérifier pour ' + libelleAnnee(t), icone: 'fa-user-minus',
+        fond: 'bg-slate-50', accent: 'text-slate-700',
+        lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'non-inscrits' } },
     },
     {
         libelle: 'Étudiants au registre',
@@ -74,6 +83,7 @@ const cartes = (t: Tableau) => [
         icone: 'fa-users',
         fond: 'bg-blue-50',
         accent: 'text-blue-700',
+        lien: null,
     },
     {
         libelle: 'Examens à préparer',
@@ -82,6 +92,7 @@ const cartes = (t: Tableau) => [
         icone: 'fa-calendar-days',
         fond: 'bg-amber-50',
         accent: 'text-amber-700',
+        lien: null,
     },
     {
         libelle: 'Reste à recouvrer',
@@ -90,6 +101,7 @@ const cartes = (t: Tableau) => [
         icone: 'fa-wallet',
         fond: 'bg-emerald-50',
         accent: 'text-emerald-700',
+        lien: null,
     },
 ] as const;
 </script>
@@ -111,7 +123,7 @@ const cartes = (t: Tableau) => [
 
     <Chargement :chargement="chargement && !tableau" :erreur="erreur">
         <template v-if="tableau">
-            <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" :class="{ 'opacity-60': chargement }">
+            <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5" :class="{ 'opacity-60': chargement }">
                 <article v-for="carte in cartes(tableau)" :key="carte.libelle" :class="[carte.fond, 'rounded-2xl border border-white p-5 shadow-sm']">
                     <div class="mb-4 flex items-center justify-between">
                         <p class="text-sm font-medium text-gray-600">{{ carte.libelle }}</p>
@@ -121,6 +133,9 @@ const cartes = (t: Tableau) => [
                     </div>
                     <p :class="['text-2xl font-bold tracking-tight', carte.accent]">{{ carte.valeur }}</p>
                     <p class="mt-2 text-xs text-gray-500">{{ carte.detail }}</p>
+                    <RouterLink v-if="carte.lien" :to="carte.lien" class="mt-3 inline-flex text-xs font-semibold text-insec hover:underline">
+                        Voir la liste <i class="fa-solid fa-arrow-right ml-1"></i>
+                    </RouterLink>
                 </article>
             </section>
 
