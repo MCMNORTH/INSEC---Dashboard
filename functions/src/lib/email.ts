@@ -74,11 +74,22 @@ export function transportSmtp(): Transporter | null {
     });
 }
 
-export async function expedier(id: string, email: Email, transport: Transporter | null): Promise<void> {
+export interface PieceJointeEmail {
+    filename: string;
+    content: Buffer;
+    contentType: string;
+}
+
+export async function expedier(
+    id: string,
+    email: Email,
+    transport: Transporter | null,
+    piecesJointes: PieceJointeEmail[] = [],
+): Promise<'Envoyé' | 'Échec'> {
     const ref = db.collection('journalEmails').doc(id);
     if (!transport) {
         await ref.update({ statut: 'Échec', erreur: 'Aucun serveur SMTP n’est configuré (SMTP_HOST).' });
-        return;
+        return 'Échec';
     }
     try {
         await transport.sendMail({
@@ -86,9 +97,12 @@ export async function expedier(id: string, email: Email, transport: Transporter 
             to: email.nomDestinataire ? { name: email.nomDestinataire, address: email.destinataire } : email.destinataire,
             subject: email.sujet,
             html: rendreEmail(email, APP_URL.value()),
+            ...(piecesJointes.length ? { attachments: piecesJointes } : {}),
         });
         await ref.update({ statut: 'Envoyé', erreur: null, envoyeLe: FieldValue.serverTimestamp() });
+        return 'Envoyé';
     } catch (erreur) {
         await ref.update({ statut: 'Échec', erreur: String((erreur as Error)?.message ?? erreur).slice(0, 2000) });
+        return 'Échec';
     }
 }
