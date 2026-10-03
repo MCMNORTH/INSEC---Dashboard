@@ -336,13 +336,81 @@ async function feuillePresence(id: string) {
     };
 }
 
-const generateurs = { attestation, releve, convocation, recu, facture, feuillePresence };
+async function bordereauCopies(id: string) {
+    const examen = await exiger(null, col.examens().doc(id), 'Examen introuvable.');
+    if (examen.statut === 'Annulé') {
+        throw new HttpsError('failed-precondition', 'Un bordereau ne peut pas être généré pour un examen annulé.');
+    }
+
+    const [ueDoc, formationDoc, anneeDoc] = await db.getAll(
+        col.ues().doc(examen.ueId),
+        col.formations().doc(examen.formationId),
+        col.annees().doc(examen.anneeId),
+    );
+    const ue = ueDoc.data() as Doc;
+    const formation = formationDoc.data() as Doc;
+    const annee = anneeDoc.data() as Doc;
+    const resultats = await col.resultats().where('examenId', '==', id).get();
+    const nombre = (presence: string) => resultats.docs.filter((r) => r.get('presence') === presence).length;
+    const aPointer = nombre('Convoqué');
+    const copies = examen.nombreCopiesRassemblees ?? null;
+    const contenu = [
+        ...entete(),
+        titre('Bordereau d’accompagnement des copies d’examen'),
+        { text: 'Destinataire : INTEC-CNAM · Service des examens', bold: true, color: BLEU, margin: [0, 0, 0, 10] },
+        encadre([
+            { text: `${ue.code} · ${ue.libelle}`, fontSize: 14, bold: true, color: BLEU },
+            `${formation.code} · ${annee.libelle} · Session ${examen.session}`,
+            `Date et heure de l’épreuve (Paris) : ${formaterDateHeure(examen.dateExamen.toDate())}`,
+            `Salle : ${examen.salle || 'À confirmer'}`,
+        ]),
+        grille([
+            [cle('Étudiants convoqués'), String(resultats.size)],
+            [cle('Présents'), String(nombre('Présent'))],
+            [cle('Absents'), String(nombre('Absent'))],
+            [cle('Dispensés'), String(nombre('Dispensé'))],
+            [cle('Présences à pointer'), String(aPointer)],
+        ]),
+        grille([
+            [cle('Copies rassemblées'), copies === null ? 'À renseigner dans le suivi' : String(copies)],
+            [cle('Date d’envoi (suivi)'), examen.copiesEnvoyeesLe ? dateFr(String(examen.copiesEnvoyeesLe)) : 'À renseigner'],
+            [cle('Référence de transport'), examen.referenceEnvoiCopies || 'À renseigner'],
+        ]),
+        aPointer > 0
+            ? { text: `Attention : ${aPointer} présence(s) reste(nt) à pointer. Les totaux de présence ci-dessus reflètent le suivi actuellement enregistré.`, color: '#9a6700', margin: [0, 5, 0, 12] }
+            : { text: 'Les totaux ci-dessus reflètent les présences enregistrées dans le dossier de l’épreuve.', color: '#666666', margin: [0, 5, 0, 12] },
+        {
+            table: {
+                widths: ['*', '*'],
+                body: [
+                    [
+                        { text: 'ÉMISSION · INSEC', bold: true, color: 'white', fillColor: BLEU },
+                        { text: 'RÉCEPTION · INTEC-CNAM', bold: true, color: 'white', fillColor: BLEU },
+                    ],
+                    [
+                        { text: 'Nom et signature :\n\n\nDate :', margin: [8, 8, 8, 8] },
+                        { text: 'Nom et signature :\n\n\nDate de réception :', margin: [8, 8, 8, 8] },
+                    ],
+                ],
+            },
+            layout: { hLineColor: '#dddddd', vLineColor: '#dddddd' },
+            margin: [0, 15, 0, 0],
+        },
+    ];
+
+    return {
+        nom: `bordereau-copies-${ue.code}-${id}.pdf`,
+        contenu: await document(contenu, `Bordereau de retour des copies · ${formation.code} · ${annee.libelle}`),
+    };
+}
+
+const generateurs = { attestation, releve, convocation, recu, facture, feuillePresence, bordereauCopies };
 
 export const genererPdf = operation(
     'genererPdf',
     ROLES_ADMIN,
     async (donnees) => {
-        const v = valider(z.object({ type: s.choix(['attestation', 'releve', 'convocation', 'recu', 'facture', 'feuillePresence'] as const), id: s.id() }), donnees);
+        const v = valider(z.object({ type: s.choix(['attestation', 'releve', 'convocation', 'recu', 'facture', 'feuillePresence', 'bordereauCopies'] as const), id: s.id() }), donnees);
         return generateurs[v.type](v.id);
     },
     { memory: '512MiB' },
