@@ -7,7 +7,7 @@ import Chargement from '../../composants/Chargement.vue';
 import { indexer, useDocument, useRequete } from '../../donnees';
 import { telecharger } from '../../fichiers';
 import { db } from '../../firebase';
-import { dateHeure, nomComplet } from '../../format';
+import { dateHeureParis, nomComplet } from '../../format';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 import { useReferentiel } from '../../referentiel';
@@ -111,7 +111,7 @@ async function envoyerConvocation(r: Resultat) {
                 <p class="text-sm font-semibold text-amber-600">{{ formation(examen.formationId)?.code }} · {{ annee(examen.anneeId)?.libelle }}</p>
                 <h1 class="text-xl font-bold text-insec">{{ ue(examen.ueId)?.code }} — {{ ue(examen.ueId)?.libelle }}</h1>
                 <div class="mt-4 grid gap-3 text-sm md:grid-cols-4">
-                    <div><span class="text-gray-500">Date</span><br /><strong>{{ dateHeure(examen.dateExamen) }}</strong></div>
+                    <div><span class="text-gray-500">Date et heure (Paris)</span><br /><strong>{{ dateHeureParis(examen.dateExamen) }}</strong></div>
                     <div><span class="text-gray-500">Session</span><br /><strong>{{ examen.session }}</strong></div>
                     <div><span class="text-gray-500">Salle</span><br /><strong>{{ examen.salle || '—' }}</strong></div>
                     <div><span class="text-gray-500">Validation</span><br /><strong>{{ examen.seuilValidation }}/{{ examen.noteSur }}</strong></div>

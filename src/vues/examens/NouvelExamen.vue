@@ -3,6 +3,7 @@ import { SESSIONS_EXAMEN } from '@shared/domaine';
 import { computed, reactive, watchEffect } from 'vue';
 import { useRouter } from 'vue-router';
 import { appeler } from '../../api';
+import { instantDepuisDateHeureParis } from '../../format';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 import { useReferentiel } from '../../referentiel';
@@ -17,8 +18,12 @@ watchEffect(() => {
 });
 
 async function enregistrer() {
-    // La date saisie est locale : elle est transmise avec le fuseau du navigateur.
-    const dateExamen = f.dateExamen ? new Date(f.dateExamen).toISOString() : '';
+    // Les horaires INTEC sont exprimés à Paris, quel que soit le fuseau du navigateur.
+    const dateExamen = f.dateExamen ? instantDepuisDateHeureParis(f.dateExamen) : null;
+    if (!dateExamen) {
+        notifier('Cette date ou cette heure n’est pas valide dans le calendrier de Paris.');
+        return;
+    }
     const resultat = await soumettre(() => appeler<{ id: string; message: string }>('creerExamen', { ...f, dateExamen }));
     if (!resultat) return;
     notifier(resultat.message, { apresNavigation: true });
@@ -43,8 +48,9 @@ async function enregistrer() {
             <label class="etiquette">Session
                 <select v-model="f.session" class="champ mt-1"><option v-for="s in SESSIONS_EXAMEN" :key="s">{{ s }}</option></select>
             </label>
-            <label class="etiquette">Date et heure
+            <label class="etiquette">Date et heure (Paris)
                 <input v-model="f.dateExamen" type="datetime-local" class="champ mt-1" required />
+                <span class="mt-1 block text-xs text-gray-500">L’heure est enregistrée selon le fuseau Europe/Paris (heure d’hiver ou d’été).</span>
                 <span v-if="erreurs.dateExamen" class="text-xs text-red-600">{{ erreurs.dateExamen }}</span>
             </label>
             <label class="etiquette">Salle / lien <input v-model="f.salle" class="champ mt-1" maxlength="100" /></label>

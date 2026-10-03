@@ -6,7 +6,7 @@ import Chargement from '../../composants/Chargement.vue';
 import Pagination from '../../composants/Pagination.vue';
 import { useRequete } from '../../donnees';
 import { db } from '../../firebase';
-import { dateHeure } from '../../format';
+import { dateHeureParis } from '../../format';
 import { useReferentiel } from '../../referentiel';
 import type { Examen } from '../../types';
 
@@ -41,10 +41,10 @@ const affiches = computed(() => examens.value.slice((page.value - 1) * PAR_PAGE,
     <Chargement :chargement="chargement" :erreur="erreur">
         <div class="overflow-x-auto rounded-xl bg-white shadow">
             <table class="tableau">
-                <thead><tr><th>Date</th><th>Diplôme / UE</th><th>Session</th><th>Salle</th><th>Convoqués</th><th>Statut</th></tr></thead>
+                <thead><tr><th>Date et heure (Paris)</th><th>Diplôme / UE</th><th>Session</th><th>Salle</th><th>Convoqués</th><th>Statut</th></tr></thead>
                 <tbody>
                     <tr v-for="e in affiches" :key="e.id" class="cursor-pointer hover:bg-gray-50" @click="router.push(`/examens/${e.id}`)">
-                        <td>{{ dateHeure(e.dateExamen) }}</td>
+                        <td>{{ dateHeureParis(e.dateExamen) }}</td>
                         <td><strong>{{ formation(e.formationId)?.code }} · {{ ue(e.ueId)?.code }}</strong><br /><span class="text-gray-500">{{ ue(e.ueId)?.libelle }}</span></td>
                         <td>{{ e.session }}<br /><span class="text-xs text-gray-500">{{ annee(e.anneeId)?.libelle }}</span></td>
                         <td>{{ e.salle || '—' }}</td>
