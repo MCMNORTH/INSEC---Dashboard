@@ -54,7 +54,14 @@ const filtres = computed(() => {
 const affiches = computed(() => filtres.value.slice((page.value - 1) * PAR_PAGE, page.value * PAR_PAGE));
 const inscritsAnnee = computed(() => etudiants.value.filter((e) => estInscritCetteAnnee(e.id)).length);
 const nonInscritsAnnee = computed(() => etudiants.value.length - inscritsAnnee.value);
+const libelleAnnee = computed(() => annees.value.find((a) => a.id === anneeId.value)?.libelle ?? 'année sélectionnée');
 watch([recherche, formationId, filtreInscription, anneeId], () => (page.value = 1));
+
+function effacerFiltres() {
+    recherche.value = '';
+    formationId.value = '';
+    filtreInscription.value = 'tous';
+}
 
 const aSupprimer = ref<Etudiant | null>(null);
 const { envoi, soumettre } = useFormulaire();
@@ -116,7 +123,37 @@ async function supprimer() {
     </div>
 
     <Chargement :chargement="chargement || chargementInscriptions" :erreur="erreur || erreurInscriptions">
-        <div class="overflow-x-auto rounded-xl bg-white shadow">
+        <section v-if="!etudiants.length" class="carte my-2 overflow-hidden">
+            <div class="grid gap-6 p-6 sm:grid-cols-[auto_1fr] sm:items-center sm:p-8">
+                <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-insec">
+                    <i class="fa-solid fa-users text-2xl" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-insec">Démarrer le registre</p>
+                    <h2 class="mt-1 text-xl font-bold text-gray-900">Aucun étudiant n’est encore enregistré</h2>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+                        Créez le premier dossier et son inscription pour {{ libelleAnnee }}, ou importez votre registre avec le modèle INSEC.
+                        Les années suivantes seront ajoutées au même dossier pour conserver tout l’historique.
+                    </p>
+                    <div class="mt-5 flex flex-wrap gap-3">
+                        <RouterLink to="/etudiants/nouveau" class="bouton-action">+ Créer le premier dossier</RouterLink>
+                        <RouterLink to="/excel" class="bouton border border-gray-200 bg-white text-insec hover:bg-gray-50">
+                            <i class="fa-solid fa-file-arrow-up mr-2" aria-hidden="true"></i>Importer le registre
+                        </RouterLink>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t border-gray-100 bg-gray-50 px-6 py-3 text-xs text-gray-500 sm:px-8">
+                L’import Excel demande le modèle INSEC afin de conserver les liens entre étudiants et inscriptions annuelles.
+            </div>
+        </section>
+        <section v-else-if="!filtres.length" class="carte my-2 flex flex-col items-center px-6 py-12 text-center">
+            <i class="fa-solid fa-magnifying-glass mb-4 text-2xl text-gray-400" aria-hidden="true"></i>
+            <h2 class="font-semibold text-gray-800">Aucun résultat pour ces critères</h2>
+            <p class="mt-1 text-sm text-gray-500">Changez l’année scolaire ou effacez la recherche et les filtres.</p>
+            <button class="mt-4 cursor-pointer text-sm font-semibold text-insec underline" @click="effacerFiltres">Effacer la recherche et les filtres</button>
+        </section>
+        <div v-else class="overflow-x-auto rounded-xl bg-white shadow">
             <table class="tableau">
                 <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation cette année</th><th>Inscription INSEC</th><th>Situation</th><th class="text-right">Actions</th></tr></thead>
                 <tbody>
@@ -142,11 +179,10 @@ async function supprimer() {
                             <button class="cursor-pointer text-gray-400 hover:text-red-600" title="Supprimer" @click="aSupprimer = e"><i class="fa-solid fa-trash"></i></button>
                         </td>
                     </tr>
-                    <tr v-if="!filtres.length"><td colspan="6" class="text-center text-gray-400">Aucun étudiant ne correspond à ces critères.</td></tr>
                 </tbody>
             </table>
         </div>
-        <Pagination v-model="page" :total="filtres.length" :par-page="PAR_PAGE" />
+        <Pagination v-if="filtres.length" v-model="page" :total="filtres.length" :par-page="PAR_PAGE" />
     </Chargement>
 
     <ModaleConfirmation
