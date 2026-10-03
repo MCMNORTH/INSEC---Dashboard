@@ -12,28 +12,49 @@ import { db } from '../../firebase';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 import { useReferentiel } from '../../referentiel';
-import type { Etudiant } from '../../types';
+import type { Etudiant, Inscription } from '../../types';
 
 const router = useRouter();
-const { formationsActives, annees, formation, annee } = useReferentiel();
+const { formationsActives, annees, formation } = useReferentiel();
 const { donnees: etudiants, chargement, erreur } = useRequete<Etudiant>(() => query(collection(db, 'etudiants'), orderBy('nom')));
+const {
+    donnees: inscriptions,
+    chargement: chargementInscriptions,
+    erreur: erreurInscriptions,
+} = useRequete<Inscription>(() => query(collection(db, 'inscriptions')));
 const recherche = ref('');
 const formationId = ref('');
 const anneeId = ref('');
+const filtreInscription = ref<'tous' | 'inscrits' | 'non-inscrits'>('tous');
 const page = ref(1);
 const PAR_PAGE = 10;
 
+watch(annees, (liste) => {
+    if (!anneeId.value && liste.length) anneeId.value = liste[0].id;
+}, { immediate: true });
+
 const normaliser = (v: string) => v.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+const inscriptionsPour = (etudiantId: string) =>
+    inscriptions.value.filter((i) => i.etudiantId === etudiantId && i.anneeId === anneeId.value);
+const estInscritCetteAnnee = (etudiantId: string) =>
+    inscriptionsPour(etudiantId).some((i) => i.statut === 'active');
+
 const filtres = computed(() => {
     const terme = normaliser(recherche.value.trim());
-    return etudiants.value.filter((e) =>
-        (!terme || [e.nom, e.prenom, e.email].some((v) => normaliser(v ?? '').includes(terme)))
-        && (!formationId.value || e.formationIds?.includes(formationId.value))
-        && (!anneeId.value || e.anneeIds?.includes(anneeId.value)),
-    );
+    return etudiants.value.filter((e) => {
+        const inscriptionsAnnee = inscriptionsPour(e.id);
+        const inscrit = inscriptionsAnnee.some((i) => i.statut === 'active');
+        return (!terme || [e.nom, e.prenom, e.email].some((v) => normaliser(v ?? '').includes(terme)))
+            && (!formationId.value || inscriptionsAnnee.some((i) => i.formationId === formationId.value))
+            && (filtreInscription.value === 'tous'
+                || (filtreInscription.value === 'inscrits' && inscrit)
+                || (filtreInscription.value === 'non-inscrits' && !inscrit));
+    });
 });
 const affiches = computed(() => filtres.value.slice((page.value - 1) * PAR_PAGE, page.value * PAR_PAGE));
-watch([recherche, formationId, anneeId], () => (page.value = 1));
+const inscritsAnnee = computed(() => etudiants.value.filter((e) => estInscritCetteAnnee(e.id)).length);
+const nonInscritsAnnee = computed(() => etudiants.value.length - inscritsAnnee.value);
+watch([recherche, formationId, filtreInscription, anneeId], () => (page.value = 1));
 
 const aSupprimer = ref<Etudiant | null>(null);
 const { envoi, soumettre } = useFormulaire();
@@ -47,43 +68,87 @@ async function supprimer() {
 </script>
 
 <template>
-    <div class="mb-4 flex items-center justify-between">
-        <h1 class="text-xl font-bold text-insec">Gestion des étudiants</h1>
+    <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <p class="text-sm text-gray-500">Registre INSEC</p>
+            <h1 class="text-xl font-bold text-insec">Étudiants</h1>
+            <p class="mt-1 text-sm text-gray-500">Vérifiez l’inscription à l’INSEC pour chaque année scolaire. L’historique reste sur la fiche de l’étudiant.</p>
+        </div>
         <RouterLink to="/etudiants/nouveau" class="bouton-action">+ Nouvel étudiant</RouterLink>
     </div>
+
+    <section class="mb-5 grid gap-3 sm:grid-cols-3" aria-label="Résumé des inscriptions">
+        <article class="carte flex items-center justify-between p-4">
+            <div><p class="text-sm text-gray-500">Inscrits à l’INSEC</p><p class="mt-1 text-2xl font-semibold text-emerald-700">{{ inscritsAnnee }}</p></div>
+            <i class="fa-solid fa-user-check rounded-xl bg-emerald-50 p-3 text-emerald-700" aria-hidden="true"></i>
+        </article>
+        <article class="carte flex items-center justify-between p-4">
+            <div><p class="text-sm text-gray-500">Non inscrits cette année</p><p class="mt-1 text-2xl font-semibold text-gray-700">{{ nonInscritsAnnee }}</p></div>
+            <i class="fa-solid fa-user-minus rounded-xl bg-gray-100 p-3 text-gray-600" aria-hidden="true"></i>
+        </article>
+        <article class="carte flex items-center justify-between p-4">
+            <div><p class="text-sm text-gray-500">Dossiers au registre</p><p class="mt-1 text-2xl font-semibold text-insec">{{ etudiants.length }}</p></div>
+            <i class="fa-solid fa-users rounded-xl bg-blue-50 p-3 text-blue-700" aria-hidden="true"></i>
+        </article>
+    </section>
+
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <label class="flex items-center gap-2 text-sm text-gray-600">
+            <span>Année scolaire</span>
+            <select v-model="anneeId" class="champ w-auto" aria-label="Année scolaire">
+                <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
+            </select>
+        </label>
+        <p class="text-xs text-gray-500">« Non inscrit » signifie qu’aucune inscription active n’existe pour l’année sélectionnée.</p>
+    </div>
+
     <div class="mb-4 flex flex-wrap gap-2">
         <input v-model="recherche" type="search" placeholder="Rechercher un étudiant…" class="champ min-w-[200px] flex-1" aria-label="Rechercher" />
-        <select v-model="formationId" class="champ w-auto" aria-label="Formation">
-            <option value="">Formation</option>
-            <option v-for="f in formationsActives" :key="f.id" :value="f.id">{{ f.nom }}</option>
+        <select v-model="formationId" class="champ w-auto" aria-label="Formation pour l’année sélectionnée">
+            <option value="">Toutes les formations</option>
+            <option v-for="f in formationsActives" :key="f.id" :value="f.id">{{ f.code }} · {{ f.nom }}</option>
         </select>
-        <select v-model="anneeId" class="champ w-auto" aria-label="Année">
-            <option value="">Année</option>
-            <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
+        <select v-model="filtreInscription" class="champ w-auto" aria-label="Filtrer par inscription">
+            <option value="tous">Tous les étudiants</option>
+            <option value="inscrits">Inscrits cette année</option>
+            <option value="non-inscrits">Non inscrits cette année</option>
         </select>
     </div>
-    <Chargement :chargement="chargement" :erreur="erreur">
+
+    <Chargement :chargement="chargement || chargementInscriptions" :erreur="erreur || erreurInscriptions">
         <div class="overflow-x-auto rounded-xl bg-white shadow">
             <table class="tableau">
-                <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation</th><th>Année</th><th>Statut</th><th class="text-right">Actions</th></tr></thead>
+                <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation cette année</th><th>Inscription INSEC</th><th>Situation</th><th class="text-right">Actions</th></tr></thead>
                 <tbody>
                     <tr v-for="e in affiches" :key="e.id" class="cursor-pointer hover:bg-gray-50" @click="router.push(`/etudiants/${e.id}`)">
                         <td class="font-medium text-gray-800">{{ e.nom }} {{ e.prenom }}</td>
                         <td class="text-gray-600">{{ e.email }}</td>
-                        <td class="text-gray-600">{{ formation(e.derniere?.formationId)?.nom ?? '-' }}</td>
-                        <td class="text-gray-600">{{ annee(e.derniere?.anneeId)?.libelle ?? '-' }}</td>
+                        <td class="text-gray-600">
+                            <template v-if="inscriptionsPour(e.id).length">
+                                <span v-for="(i, index) in inscriptionsPour(e.id)" :key="i.id">
+                                    {{ index ? ', ' : '' }}{{ formation(i.formationId)?.code ?? 'Formation inconnue' }}
+                                </span>
+                            </template>
+                            <span v-else class="text-gray-400">—</span>
+                        </td>
+                        <td>
+                            <span v-if="estInscritCetteAnnee(e.id)" class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">Inscrit à l’INSEC</span>
+                            <span v-else-if="inscriptionsPour(e.id).length" class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">Inscription clôturée</span>
+                            <span v-else class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">Non inscrit cette année</span>
+                        </td>
                         <td><BadgeStatut :statut="e.statut" /></td>
                         <td class="text-right whitespace-nowrap" @click.stop>
                             <RouterLink :to="`/etudiants/${e.id}/modifier`" class="mr-3 text-gray-400 hover:text-blue-600" title="Modifier"><i class="fa-solid fa-pen"></i></RouterLink>
                             <button class="cursor-pointer text-gray-400 hover:text-red-600" title="Supprimer" @click="aSupprimer = e"><i class="fa-solid fa-trash"></i></button>
                         </td>
                     </tr>
-                    <tr v-if="!filtres.length"><td colspan="6" class="text-center text-gray-400">Aucun étudiant trouvé.</td></tr>
+                    <tr v-if="!filtres.length"><td colspan="6" class="text-center text-gray-400">Aucun étudiant ne correspond à ces critères.</td></tr>
                 </tbody>
             </table>
         </div>
         <Pagination v-model="page" :total="filtres.length" :par-page="PAR_PAGE" />
     </Chargement>
+
     <ModaleConfirmation
         :ouverte="!!aSupprimer"
         :envoi="envoi"
