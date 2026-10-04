@@ -48,6 +48,7 @@ const routes: RouteRecordRaw[] = [
     { path: '/communications', component: () => import('./vues/Communications.vue'), meta: { ...admin, titre: 'Communications' } },
     { path: '/excel', component: () => import('./vues/Excel.vue'), meta: { ...admin, titre: 'Imports & exports' } },
     { path: '/gestion', component: () => import('./vues/admin/CentreGestion.vue'), meta: { ...admin, titre: 'Centre de gestion' } },
+    { path: '/convention-intec', component: () => import('./vues/admin/ConventionIntec.vue'), meta: { ...admin, titre: 'Convention INTEC' } },
     { path: '/audit', component: () => import('./vues/Audit.vue'), meta: { ...admin, titre: 'Journal d’audit' } },
     { path: '/sauvegardes', component: () => import('./vues/Sauvegardes.vue'), meta: { roles: ['super_admin'], titre: 'Sauvegardes' } },
     { path: '/finances', component: () => import('./vues/Finances.vue'), meta: { roles: ROLES_FINANCE, titre: 'Finances' } },
