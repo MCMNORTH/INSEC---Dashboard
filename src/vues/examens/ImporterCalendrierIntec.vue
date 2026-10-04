@@ -62,6 +62,26 @@ const mois: Record<string, number> = {
     juillet: 7, aout: 8, septembre: 9, octobre: 10, novembre: 11, decembre: 12,
 };
 
+const intitulesOfficiels: Record<string, string> = {
+    '111': 'Fondamentaux du droit',
+    '112': 'Droit des affaires',
+    '113': 'Droit social',
+    '114': 'Droit fiscal',
+    '115': 'Economie contemporaine',
+    '116': "Finance d'entreprise",
+    '117': 'Management des organisations',
+    '118': 'Systèmes d’information de gestion',
+    '119': 'Comptabilité',
+    '120': 'Comptabilité approfondie',
+    '121': 'Contrôle de gestion',
+    '122': 'Anglais des affaires',
+    '211': 'Gestion juridique, fiscale et sociale',
+    '212': 'Finance',
+    '213': 'Contrôle de gestion et stratégie',
+    '214': 'Comptabilité et audit',
+    '215': 'Management des systèmes d’information',
+};
+
 function extraireExamens(pages: string[], anneePdf: string): ExamenIntec[] {
     const [debut, fin] = anneePdf.split('-').map(Number);
     const trouves: ExamenIntec[] = [];
@@ -71,7 +91,7 @@ function extraireExamens(pages: string[], anneePdf: string): ExamenIntec[] {
 
     for (const page of pages) {
         const texte = sansAccents(page);
-        if (!texte.includes('calendrier des epreuves ecrites') || /rattrapage|soutenance|qcu|revision/.test(texte)) continue;
+        if (!texte.includes('calendrier des epreuves ecrites') || /rattrapage|qcu|revision/.test(texte)) continue;
         const diplome: ExamenIntec['diplome'] | null =
             /diplome superieur de gestion et comptabilite\s*\(dsgc\)/.test(texte) ? 'DSGC'
                 : /diplome de gestion et comptabilite\s*\(dgc\)/.test(texte) ? 'DGC' : null;
@@ -98,7 +118,10 @@ function extraireExamens(pages: string[], anneePdf: string): ExamenIntec[] {
                 const codeUE = match[1];
                 if (!dateCourante || (diplome === 'DGC' && !codeUE.startsWith('1')) || (diplome === 'DSGC' && !codeUE.startsWith('2'))) continue;
                 if (codes.has(codeUE)) throw new Error(`L’UE ${codeUE} apparaît plusieurs fois. L’aperçu est refusé pour éviter une importation ambiguë.`);
-                const intitule = match[2].replace(/\s+/g, ' ').trim().replace(/[|•]+$/g, '').trim();
+                const extraitIntitule = match[2].replace(/\s+/g, ' ').trim().replace(/[|•]+$/g, '').trim();
+                const intitule = /\b\d{1,2}\s*h\s*\d{0,2}\b/i.test(extraitIntitule)
+                    ? intitulesOfficiels[codeUE] ?? ''
+                    : extraitIntitule;
                 const heure = `${String(Number(match[3])).padStart(2, '0')}:${match[4]}`;
                 if (intitule.length < 2 || intitule.length > 160) continue;
                 codes.add(codeUE);
