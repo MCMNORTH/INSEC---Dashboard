@@ -63,7 +63,7 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
         if (v.statut === 'Validée') {
             tx.update(inscriptionRef, { totalVerse: FieldValue.increment(v.montant), ...trace(acteur) });
             const email = String(etudiant.email ?? '').trim();
-            if (/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 mettreEnFileEmail(tx, {
                     destinataire: email,
                     nomDestinataire: nomComplet(etudiant),
