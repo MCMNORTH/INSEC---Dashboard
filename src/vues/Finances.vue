@@ -213,7 +213,13 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                                 </div>
                                 <p class="px-2 text-[10px] text-blue-200">
                                     {{ v.numeroRecu }} · {{ v.modePaiement }}<template v-if="v.reference"> · {{ v.reference }}</template>
-                                    <button v-if="aRole('admin', 'super_admin')" class="ml-1 cursor-pointer underline" @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))">reçu PDF</button>
+                                    <button
+                                        v-if="aRole('admin', 'super_admin')"
+                                        class="ml-1 cursor-pointer underline disabled:cursor-not-allowed disabled:opacity-50"
+                                        :disabled="envoi || v.statut !== 'Validée'"
+                                        :title="v.statut === 'Validée' ? 'Télécharger le reçu PDF' : 'Disponible après validation du versement'"
+                                        @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))"
+                                    >reçu PDF</button>
                                     <button
                                         v-if="aRole('admin', 'super_admin')"
                                         type="button"
