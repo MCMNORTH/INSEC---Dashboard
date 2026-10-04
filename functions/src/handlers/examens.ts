@@ -39,7 +39,6 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
     if (!annee.exists) erreurChamp('anneeId', 'Année académique inconnue.');
 
     const eligibles = await col.inscriptions().where('anneeId', '==', v.anneeId).where('ueIds', 'array-contains', v.ueId).get();
-    const etudiants = eligibles.empty ? [] : await db.getAll(...eligibles.docs.map((i) => col.etudiants().doc(i.get('etudiantId'))));
     const dateExamen = Timestamp.fromDate(new Date(v.dateExamen));
     const ref = col.examens().doc();
 
@@ -60,8 +59,8 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
     auditerModele(lotExamen, acteur, 'Examen', ref.id, 'created', null, examen);
     await lotExamen.commit();
 
-    const convocations = eligibles.docs.map((inscription, index) => ({ inscription, etudiant: etudiants[index], numero: premier + index }));
-    await ecrireParLots(convocations, (lot, { inscription, etudiant, numero }) => {
+    const convocations = eligibles.docs.map((inscription, index) => ({ inscription, numero: premier + index }));
+    await ecrireParLots(convocations, (lot, { inscription, numero }) => {
         lot.set(col.resultats().doc(`${ref.id}_${inscription.id}`), {
             examenId: ref.id, inscriptionId: inscription.id, etudiantId: inscription.get('etudiantId'),
             ueId: v.ueId, formationId: examen.formationId, anneeId: v.anneeId, session: v.session, dateExamen,
@@ -69,23 +68,15 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
             presence: 'Convoqué', note: null, commentaire: null, valide: false, numeroConvocation: numero,
             ...trace(acteur, true),
         });
-        if (etudiant?.exists) {
-            mettreEnFileEmail(lot, {
-                destinataire: etudiant.get('email'), nomDestinataire: nomComplet(etudiant.data()), type: 'Convocation',
-                sujet: 'Convocation à un examen INSEC', titre: 'Nouvelle convocation',
-                message: 'Vous êtes convoqué(e) à l’examen ci-dessous.',
-                details: { UE: ue.get('code'), Session: v.session, Date: formaterDateHeure(dateExamen.toDate()), Salle: v.salle || 'À confirmer' },
-            });
-        }
     });
     const lotAudit = db.batch();
     auditer(lotAudit, acteur, {
         action: 'created', modele: 'Examen', modeleId: ref.id,
-        description: `Convocation de ${eligibles.size} étudiant(s) à l’examen ${ue.get('code')}`,
-        apres: { convocations: eligibles.size },
+        description: 'Planification de l’examen ' + ue.get('code') + ' pour ' + eligibles.size + ' étudiant(s). Aucun e-mail envoyé.',
+        apres: { candidatsAjoutes: eligibles.size, convocationsEnvoyees: 0 },
     });
     await lotAudit.commit();
-    return { id: ref.id, message: 'Examen créé et étudiants éligibles convoqués.' };
+    return { id: ref.id, message: 'Examen planifié avec ' + eligibles.size + ' étudiant(s). Aucun e-mail n’a été envoyé.' };
 });
 
 export const enregistrerResultat = operation('enregistrerResultat', ROLES_ADMIN, async (donnees, acteur) => {
