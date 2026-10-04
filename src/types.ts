@@ -113,6 +113,9 @@ export interface Resultat {
     commentaire: string | null;
     valide: boolean;
     numeroConvocation: number;
+    convocationEnvoiStatut?: 'En cours' | 'Envoyée' | 'Échec';
+    convocationEnvoyeeLe?: Timestamp | null;
+    convocationEnvoiDemarreeLe?: Timestamp | null;
 }
 
 export interface Piece {

@@ -52,17 +52,24 @@ const progressionPreparation = computed(() => {
 const lignes = computed(() =>
     [...resultats.value].sort((a, b) => nomComplet(parEtudiant.value.get(a.etudiantId)).localeCompare(nomComplet(parEtudiant.value.get(b.etudiantId)))),
 );
+const adresseValide = (email?: string | null) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email?.trim() ?? '');
 const convocables = computed(() => {
     if (examen.value?.statut === 'Annulé') return [];
     const uniques = new Map<string, Resultat>();
     for (const resultat of resultats.value) {
-        const email = parEtudiant.value.get(resultat.etudiantId)?.email?.trim() ?? '';
-        if (resultat.presence === 'Convoqué' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+        const email = parEtudiant.value.get(resultat.etudiantId)?.email;
+        const dejaEnvoyee = resultat.convocationEnvoiStatut === 'Envoyée' || resultat.convocationEnvoiStatut === 'En cours';
+        if (resultat.presence === 'Convoqué' && !dejaEnvoyee && adresseValide(email)) {
             uniques.set(resultat.etudiantId, resultat);
         }
     }
     return [...uniques.values()];
 });
+const resumeConvocations = computed(() => ({
+    envoyees: resultats.value.filter((r) => r.convocationEnvoiStatut === 'Envoyée').length,
+    enCours: resultats.value.filter((r) => r.convocationEnvoiStatut === 'En cours').length,
+    sansAdresse: resultats.value.filter((r) => r.presence === 'Convoqué' && !adresseValide(parEtudiant.value.get(r.etudiantId)?.email)).length,
+}));
 
 const saisie = reactive<Record<string, { presence: string; note: number | '' | null; commentaire: string }>>({});
 const valeur = (r: Resultat) => (saisie[r.id] ??= { presence: r.presence, note: r.note ?? '', commentaire: r.commentaire ?? '' });
@@ -103,7 +110,7 @@ async function enregistrerPresences() {
 async function envoyerToutesConvocations() {
     const nombre = convocables.value.length;
     if (!nombre || examen.value?.statut === 'Annulé') return;
-    if (!window.confirm(`Envoyer ${nombre} convocation(s) ? Chaque étudiant recevra un e-mail séparé avec son PDF personnalisé.`)) return;
+    if (!window.confirm(`Envoyer ${nombre} convocation(s) ? Les convocations déjà marquées « Envoyée » seront ignorées et ne seront pas renvoyées.`)) return;
     const resultat = await soumettre(() => appeler('envoyerConvocationsExamen', { id: props.id }));
     if (resultat) notifier(resultat.message ?? 'Envoi groupé terminé.');
 }
@@ -111,7 +118,15 @@ async function envoyerToutesConvocations() {
 async function envoyerConvocation(r: Resultat) {
     const etudiant = parEtudiant.value.get(r.etudiantId);
     const email = etudiant?.email?.trim();
-    if (!email) {
+    if (r.convocationEnvoiStatut === 'Envoyée') {
+        notifier('Cette convocation a déjà été envoyée ; elle ne sera pas transmise une seconde fois.');
+        return;
+    }
+    if (r.convocationEnvoiStatut === 'En cours') {
+        notifier('L’envoi de cette convocation est déjà en cours.');
+        return;
+    }
+    if (!adresseValide(email)) {
         notifier('Aucune adresse e-mail n’est enregistrée pour cet étudiant.');
         return;
     }
@@ -208,11 +223,17 @@ async function envoyerConvocation(r: Resultat) {
                         class="bouton-principal"
                         :disabled="envoi || !convocables.length || examen.statut === 'Annulé'"
                         @click="envoyerToutesConvocations"
-                    ><i class="fa-solid fa-paper-plane"></i> Envoyer les convocations ({{ convocables.length }})</button>
+                    ><i class="fa-solid fa-paper-plane"></i> Envoyer les convocations ({{ convocables.length }} à envoyer)</button>
                 </div>
             </div>
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
-                <p class="text-sm text-gray-700">
+            <div class="mb-3 grid gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 md:grid-cols-2">
+                <p>
+                    Convocations : <strong>{{ convocables.length }} à envoyer</strong>
+                    · <strong class="text-green-700">{{ resumeConvocations.envoyees }} déjà envoyée(s)</strong>
+                    <span v-if="resumeConvocations.enCours"> · {{ resumeConvocations.enCours }} en cours</span>
+                    <span v-if="resumeConvocations.sansAdresse" class="text-amber-700"> · {{ resumeConvocations.sansAdresse }} adresse(s) à vérifier</span>
+                </p>
+                <p>
                     À pointer <strong>{{ resumePresence['Convoqué'] }}</strong>
                     · Présents <strong class="text-green-700">{{ resumePresence['Présent'] }}</strong>
                     · Absents <strong class="text-red-700">{{ resumePresence['Absent'] }}</strong>
@@ -242,10 +263,13 @@ async function envoyerConvocation(r: Resultat) {
                     <button type="button" class="bouton-secondaire" :disabled="envoi" title="Convocation PDF" @click="soumettre(() => telecharger('genererPdf', { type: 'convocation', id: r.id }))">
                         <i class="fa-solid fa-file-pdf"></i> Convocation
                     </button>
+                    <p v-if="r.convocationEnvoiStatut === 'Envoyée'" class="text-xs font-medium text-green-700 md:col-span-7">Convocation envoyée — aucun nouvel envoi ne sera effectué.</p>
+                    <p v-else-if="r.convocationEnvoiStatut === 'En cours'" class="text-xs text-blue-700 md:col-span-7">Envoi en cours — un nouvel envoi est bloqué.</p>
+                    <p v-else-if="r.convocationEnvoiStatut === 'Échec'" class="text-xs text-amber-700 md:col-span-7">Échec du dernier envoi. Vérifiez le journal des communications avant de réessayer.</p>
                     <button
                         type="button"
                         class="bouton-secondaire"
-                        :disabled="envoi || examen.statut === 'Annulé' || !parEtudiant.get(r.etudiantId)?.email"
+                        :disabled="envoi || examen.statut === 'Annulé' || !adresseValide(parEtudiant.get(r.etudiantId)?.email) || r.convocationEnvoiStatut === 'Envoyée' || r.convocationEnvoiStatut === 'En cours'"
                         title="Envoyer la convocation par e-mail"
                         @click="envoyerConvocation(r)"
                     ><i class="fa-solid fa-paper-plane"></i> Envoyer par e-mail</button>
