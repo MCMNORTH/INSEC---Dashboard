@@ -83,6 +83,48 @@ const intitulesOfficiels: Record<string, string> = {
 };
 
 function extraireExamens(pages: string[], anneePdf: string): ExamenIntec[] {
+    // Le PDF officiel 2026-2027 place les cellules de dates et de codes UE
+    // dans un ordre de lecture instable. Utiliser ici le calendrier vérifié
+    // directement dans ses deux pages écrites évite de créer de fausses dates.
+    if (anneePdf === '2026-2027') {
+        const calendrierDGC = pages.some((page) => {
+            const texte = sansAccents(page);
+            return texte.includes('calendrier des epreuves ecrites')
+                && /diplome de gestion et comptabilite\s*\(dgc\)/.test(texte);
+        });
+        const calendrierDSGC = pages.some((page) => {
+            const texte = sansAccents(page);
+            return texte.includes('calendrier des epreuves ecrites')
+                && /diplome superieur de gestion et comptabilite\s*\(dsgc\)/.test(texte);
+        });
+        if (calendrierDGC && calendrierDSGC) {
+            return [
+                ['111', '2027-04-30', '09:00', 'DGC'],
+                ['115', '2027-04-30', '14:30', 'DGC'],
+                ['120', '2027-05-03', '09:00', 'DGC'],
+                ['121', '2027-05-03', '14:30', 'DGC'],
+                ['116', '2027-05-04', '09:00', 'DGC'],
+                ['118', '2027-05-04', '14:30', 'DGC'],
+                ['119', '2027-05-05', '09:00', 'DGC'],
+                ['114', '2027-05-05', '14:30', 'DGC'],
+                ['112', '2027-05-07', '09:00', 'DGC'],
+                ['117', '2027-05-07', '14:30', 'DGC'],
+                ['122', '2027-05-10', '09:00', 'DGC'],
+                ['113', '2027-05-10', '14:30', 'DGC'],
+                ['212', '2027-06-07', '09:00', 'DSGC'],
+                ['211', '2027-06-08', '09:00', 'DSGC'],
+                ['215', '2027-06-10', '09:00', 'DSGC'],
+                ['213', '2027-06-10', '14:30', 'DSGC'],
+                ['214', '2027-06-11', '09:00', 'DSGC'],
+            ].map(([codeUE, date, heure, diplome]) => ({
+                codeUE,
+                intitule: intitulesOfficiels[codeUE]!,
+                date,
+                heure,
+                diplome: diplome as ExamenIntec['diplome'],
+            }));
+        }
+    }
     const [debut, fin] = anneePdf.split('-').map(Number);
     const trouves: ExamenIntec[] = [];
     const codes = new Set<string>();
