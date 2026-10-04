@@ -52,7 +52,7 @@ const progressionPreparation = computed(() => {
 const lignes = computed(() =>
     [...resultats.value].sort((a, b) => nomComplet(parEtudiant.value.get(a.etudiantId)).localeCompare(nomComplet(parEtudiant.value.get(b.etudiantId)))),
 );
-const adresseValide = (email?: string | null) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email?.trim() ?? '');
+const adresseValide = (email?: string | null) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email?.trim() ?? '');
 const convocables = computed(() => {
     if (examen.value?.statut === 'Annulé') return [];
     const uniques = new Map<string, Resultat>();
