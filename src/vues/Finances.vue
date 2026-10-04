@@ -64,6 +64,18 @@ const ajouterEcheance = () =>
     executer('ajouterEcheance', { inscriptionId: inscription.value!.id, ...echeance }, () => Object.assign(echeance, { libelle: '', montant: null, dateEcheance: '' }));
 const ajouterVersement = () =>
     executer('ajouterVersement', { inscriptionId: inscription.value!.id, ...versement }, () => Object.assign(versement, { montant: null, reference: '', note: '' }));
+const confirmerVersement = async () => {
+    if (versement.statut === 'Validée') {
+        const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
+        const email = selectionne.value?.email?.trim() ?? '';
+        const notification = emailEtudiantValide.value
+            ? `Une confirmation sera mise en file d’envoi à ${email}.`
+            : 'Aucune adresse e-mail valide : le paiement sera enregistré sans notification par e-mail.';
+        const resume = `Valider le versement de ${montant(versement.montant ?? 0)} MRU pour ${nom}, le ${date(versement.dateVersement)}, par ${versement.modePaiement} ?\n\nCe versement sera immédiatement ajouté au total encaissé. ${notification}`;
+        if (!window.confirm(resume)) return;
+    }
+    await ajouterVersement();
+};
 
 async function envoyerDocument(type: 'facture' | 'recu', id: string, libelle: string, destinataire: string) {
     const email = destinataire.trim();
@@ -214,7 +226,7 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                             </div>
                             <p v-if="!versements.length" class="text-xs text-blue-200">Aucun versement.</p>
                         </div>
-                        <form class="space-y-2" @submit.prevent="ajouterVersement">
+                        <form class="space-y-2" @submit.prevent="confirmerVersement">
                             <p class="text-xs text-blue-200">Ajouter un versement</p>
                             <div class="flex gap-2">
                                 <input v-model.number="versement.montant" type="number" min="1" placeholder="Montant" class="w-1/2 rounded-lg text-xs text-gray-900" required />
