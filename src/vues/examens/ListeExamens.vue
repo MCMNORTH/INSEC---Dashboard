@@ -47,7 +47,7 @@ const calendrierOfficiel = computed(() =>
     ?? null,
 );
 const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? []).map((e) => {
-    const diplome = e.diplome ?? e.diplôme ?? 'DGC';
+    const diplome = (e as ExamenOfficiel).diplome ?? (e as ExamenOfficiel).diplôme ?? 'DGC';
     const date = e.date;
     const dateFr = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long', year: 'numeric' })
         .format(new Date(`${date}T12:00:00+01:00`));
