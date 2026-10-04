@@ -72,10 +72,10 @@ async function enregistrer() {
                 <span v-if="erreurs.seuilValidation" class="text-xs text-red-600">{{ erreurs.seuilValidation }}</span>
             </label>
             <p v-if="route.query.source === 'intec'" class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950 md:col-span-2">
-                Les données du calendrier INTEC sont préremplies. Vérifiez l’UE, l’année et l’heure de Paris. Les convocations ne partiront qu’après votre validation avec « Créer et convoquer ».
+                Les données du calendrier INTEC sont préremplies. Vérifiez l’UE, l’année et l’heure de Paris. La planification n’envoie aucun e-mail. Vérifiez les candidats, puis envoyez les convocations depuis la fiche de l’examen.
             </p>
-            <p v-else class="text-sm text-gray-500 md:col-span-2">Les étudiants inscrits à cette UE pendant l’année choisie seront convoqués automatiquement.</p>
-            <button class="bouton-action md:col-span-2" :disabled="envoi">Créer et convoquer</button>
+            <p v-else class="text-sm text-gray-500 md:col-span-2">La session sera créée sans envoyer d’e-mail. Vous pourrez vérifier les candidats puis lancer l’envoi depuis la fiche de l’examen.</p>
+            <button class="bouton-action md:col-span-2" :disabled="envoi">Planifier l’examen</button>
         </form>
     </div>
 </template>
