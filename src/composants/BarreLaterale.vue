@@ -46,7 +46,7 @@ async function quitter() {
 
     <aside :class="[ouverte ? 'block' : 'hidden', 'z-40 w-full border-r border-slate-200 bg-white px-4 py-3 lg:relative lg:z-auto lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:overflow-hidden lg:px-4 lg:py-4']">
         <header class="hidden border-b border-slate-100 pb-3 text-center lg:block">
-            <img src="/images/logo-insec-2026.png" alt="Logo INSEC" class="mx-auto block h-12 w-auto max-w-[145px] object-contain" />
+            <img src="/images/logo-insec-2026.png" alt="Logo INSEC" class="mx-auto block h-20 w-auto max-w-[200px] object-contain" />
             <p class="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">Espace administration</p>
         </header>
 
