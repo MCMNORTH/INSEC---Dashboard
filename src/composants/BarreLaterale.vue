@@ -35,7 +35,7 @@ async function quitter() {
         <span class="font-bold text-insec">INSEC</span>
         <button class="text-gray-600" aria-label="Ouvrir le menu" @click="ouverte = !ouverte"><i class="fa-solid fa-bars text-xl"></i></button>
     </div>
-    <aside :class="[ouverte ? 'block' : 'hidden', 'w-full border-r border-gray-200 bg-white p-4 lg:block lg:min-h-screen lg:w-64 lg:shrink-0']">
+    <aside :class="[ouverte ? 'block' : 'hidden', 'w-full border-r border-gray-200 bg-white p-4 lg:block lg:h-screen lg:w-64 lg:shrink-0 lg:overflow-y-auto']">
         <div class="mb-8 hidden text-center lg:block">
             <img src="/images/logo-insec-2026.png" alt="Logo INSEC" class="mx-auto mb-3 block h-auto max-h-28 w-full max-w-[190px] object-contain" />
             <p class="mb-7 text-xs text-gray-400">{{ session.role === 'finance' ? 'Espace finance' : 'Espace administration' }}</p>
