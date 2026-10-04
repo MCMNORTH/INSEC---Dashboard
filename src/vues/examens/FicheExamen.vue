@@ -40,6 +40,11 @@ watch(examen, (e) => {
     preparation.copiesEnvoyeesLe = e.copiesEnvoyeesLe ?? '';
     preparation.referenceEnvoiCopies = e.referenceEnvoiCopies ?? '';
 }, { immediate: true });
+const candidatsPresents = computed(() => resultats.value.filter((resultat) => resultat.presence === 'Présent').length);
+const incoherenceCopies = computed(() =>
+    (preparation.nombreCopiesRassemblees !== null && preparation.nombreCopiesRassemblees > candidatsPresents.value)
+    || (!!preparation.copiesEnvoyeesLe && preparation.nombreCopiesRassemblees !== candidatsPresents.value),
+);
 const progressionPreparation = computed(() => {
     const total = 4;
     const termine = Number(!!preparation.sujetsRecusLe && preparation.nombreSujetsRecus !== null)
@@ -155,6 +160,7 @@ async function envoyerConvocation(r: Resultat) {
                     <div>
                         <h2 class="text-lg font-bold text-insec">Préparation de l’épreuve et retour des copies</h2>
                         <p class="mt-1 text-sm text-gray-500">Suivez les sujets reçus, l’organisation de la salle et l’envoi des copies à l’INTEC.</p>
+                        <p class="mt-1 text-sm text-gray-600">{{ candidatsPresents }} candidat(s) marqué(s) présent(s) : le nombre de copies doit correspondre avant d’enregistrer leur envoi.</p>
                     </div>
                     <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-800">
                         {{ progressionPreparation.termine }}/{{ progressionPreparation.total }} étapes terminées
@@ -185,7 +191,7 @@ async function envoyerConvocation(r: Resultat) {
                         <section class="rounded-lg border border-gray-200 p-4">
                             <h3 class="mb-3 font-semibold text-gray-800">3. Retour des copies</h3>
                             <label class="etiquette">Copies rassemblées
-                                <input v-model.number="preparation.nombreCopiesRassemblees" type="number" min="0" max="500" step="1" class="champ mt-1" />
+                                <input v-model.number="preparation.nombreCopiesRassemblees" type="number" min="0" :max="candidatsPresents" step="1" class="champ mt-1" />
                             </label>
                             <label class="etiquette mt-3 block">Date d’envoi à l’INTEC
                                 <input v-model="preparation.copiesEnvoyeesLe" type="date" class="champ mt-1" />
@@ -195,9 +201,12 @@ async function envoyerConvocation(r: Resultat) {
                             </label>
                         </section>
                     </div>
+                    <p v-if="incoherenceCopies" role="alert" class="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        Le nombre de copies doit correspondre aux {{ candidatsPresents }} candidat(s) présents avant de renseigner la date d’envoi. Vérifiez d’abord les présences ci-dessous.
+                    </p>
                     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
                         <p class="text-xs text-gray-500">Chaque modification est enregistrée dans le journal d’audit.</p>
-                        <button class="bouton-action" :disabled="envoi">Enregistrer le suivi</button>
+                        <button class="bouton-action" :disabled="envoi || incoherenceCopies">Enregistrer le suivi</button>
                     </div>
                 </form>
             </section>
