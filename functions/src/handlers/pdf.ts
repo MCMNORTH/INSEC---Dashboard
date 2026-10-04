@@ -625,12 +625,7 @@ export const envoyerConvocationsExamen = operation(
             echecs,
             sansAdresse,
         };
-        return {
-            message: `Envoi terminé : ${envoyes} envoyé(s), ${echecs} échec(s), ${ignores} ignoré(s).`,
-            envoyes,
-            echecs,
-            ignores,
-        };
+
     },
     { memory: '1GiB', timeoutSeconds: 300, secrets: [SMTP_PASSWORD] },
 );
