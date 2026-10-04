@@ -27,7 +27,7 @@ const recherche = ref('');
 const formationId = ref('');
 const anneeId = ref(typeof route.query.anneeId === 'string' ? route.query.anneeId : '');
 const filtreInscription = ref<'tous' | 'inscrits' | 'non-inscrits'>(
-    route.query.inscription === 'non-inscrits' ? 'non-inscrits' : 'tous',
+    route.query.inscription === 'inscrits' || route.query.inscription === 'non-inscrits' ? route.query.inscription : 'tous',
 );
 const page = ref(1);
 const PAR_PAGE = 10;

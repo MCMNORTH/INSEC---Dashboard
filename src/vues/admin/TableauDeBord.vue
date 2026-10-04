@@ -68,7 +68,7 @@ const cartes = (t: Tableau) => [
         icone: 'fa-id-card',
         fond: 'bg-indigo-50',
         accent: 'text-insec',
-        lien: null,
+        lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'inscrits' } },
     },
     {
         libelle: 'Non inscrits cette année', valeur: t.etudiantsSansInscription,
