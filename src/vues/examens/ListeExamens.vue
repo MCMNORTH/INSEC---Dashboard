@@ -56,7 +56,7 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
         diplôme: diplome,
         dateFr: e.dateFr ?? dateFr,
         ue: ues.value.find((u) => u.code === `TEC${e.codeUE}` && formation(u.formationId)?.code === diplome),
-        dateHeure: `${date}T${e.heure}:00+01:00`,
+        dateHeure: `${date}T${e.heure}`,
     };
 }));
 </script>
