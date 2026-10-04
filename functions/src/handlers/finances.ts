@@ -40,6 +40,7 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
     );
     const ref = col.versements().doc();
     let numeroRecu = '';
+    let confirmationMiseEnFile = false;
     await db.runTransaction(async (tx) => {
         const inscriptionRef = col.inscriptions().doc(v.inscriptionId);
         const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
@@ -61,19 +62,28 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
         tx.set(ref, { ...versement, ...trace(acteur, true) });
         if (v.statut === 'Validée') {
             tx.update(inscriptionRef, { totalVerse: FieldValue.increment(v.montant), ...trace(acteur) });
-            mettreEnFileEmail(tx, {
-                destinataire: etudiant.email,
-                nomDestinataire: nomComplet(etudiant),
-                type: 'Paiement',
-                sujet: 'Confirmation de votre paiement INSEC',
-                titre: 'Paiement validé',
-                message: 'Votre versement a été validé et enregistré dans votre dossier financier.',
-                details: { Reçu: numeroRecu, Montant: `${formaterMontant(v.montant)} MRU`, Date: formaterDate(v.dateVersement) },
-            });
+            const email = String(etudiant.email ?? '').trim();
+            if (/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+                mettreEnFileEmail(tx, {
+                    destinataire: email,
+                    nomDestinataire: nomComplet(etudiant),
+                    type: 'Paiement',
+                    sujet: 'Confirmation de votre paiement INSEC',
+                    titre: 'Paiement validé',
+                    message: 'Votre versement a été validé et enregistré dans votre dossier financier.',
+                    details: { Reçu: numeroRecu, Montant: `${formaterMontant(v.montant)} MRU`, Date: formaterDate(v.dateVersement) },
+                });
+                confirmationMiseEnFile = true;
+            }
         }
         auditerModele(tx, acteur, 'Versement', ref.id, 'created', null, versement);
     });
-    return { id: ref.id, numeroRecu, message: 'Versement enregistré avec un numéro de reçu.' };
+    const message = v.statut !== 'Validée'
+        ? 'Versement en attente enregistré avec un numéro de reçu.'
+        : confirmationMiseEnFile
+          ? 'Versement validé et enregistré. La confirmation de paiement a été mise en file d’envoi.'
+          : 'Versement validé et enregistré. Aucune adresse e-mail valide : aucune notification n’a été mise en file d’envoi.';
+    return { id: ref.id, numeroRecu, message };
 });
 
 export const ajouterEcheance = operation('ajouterEcheance', ROLES_FINANCE, async (donnees, acteur) => {
