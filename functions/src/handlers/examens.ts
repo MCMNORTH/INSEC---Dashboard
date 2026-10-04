@@ -200,6 +200,10 @@ export const mettreAJourPreparationExamen = operation('mettreAJourPreparationExa
         donnees,
     );
 
+    if (Boolean(v.sujetsRecusLe) !== (v.nombreSujetsRecus !== null)) {
+        erreurChamp('sujetsRecusLe', 'Renseignez ensemble la date de réception et le nombre de lots de sujets reçus.');
+    }
+
     const resultats = await col.resultats().where('examenId', '==', v.id).get();
     const presents = resultats.docs.filter((resultat) => resultat.get('presence') === 'Présent').length;
     if (v.nombreCopiesRassemblees !== null && v.nombreCopiesRassemblees > presents) {
