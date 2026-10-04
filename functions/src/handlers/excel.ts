@@ -277,6 +277,37 @@ export const importerEtudiants = operation(
         let crees = 0, misAJour = 0, ignores = 0, inscriptionsCreees = 0, inscriptionsExistantes = 0;
         const emailsTraites = new Set<string>();
         const erreurs: string[] = [];
+        const identitesParEmail = new Map<string, { ligne: number; signature: string }>();
+        const normaliserIdentiteImport = (valeur: string) =>
+            valeur.normalize('NFD').replace(/\\p{Diacritic}/gu, '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr-FR');
+        for (const [index, ligne] of corps.entries()) {
+            if (ligne.every((cellule) => cellule === '')) continue;
+            const analyse = ligneEtudiant.safeParse({
+                prenom: ligne[0], nom: ligne[1], email: ligne[2], telephone: ligne[3], statut: ligne[4],
+            });
+            if (!analyse.success) continue;
+            const d = analyse.data;
+            const signature = JSON.stringify([
+                normaliserIdentiteImport(d.prenom),
+                normaliserIdentiteImport(d.nom),
+                (d.telephone ?? '').replace(/[\\s().-]/g, ''),
+                d.statut,
+            ]);
+            const cle = cleEmailEtudiant(d.email);
+            const precedente = identitesParEmail.get(cle);
+            if (precedente && precedente.signature !== signature) {
+                erreurs.push(
+                    `Ligne ${index + 2} : l’adresse e-mail apparaît avec une identité différente de la ligne ${precedente.ligne}. Vérifiez le prénom, le nom, le téléphone et le statut étudiant.`,
+                );
+            } else if (!precedente) {
+                identitesParEmail.set(cle, { ligne: index + 2, signature });
+            }
+        }
+        if (!v.previsualiser && erreurs.length) {
+            const details = erreurs.slice(0, 20).join(' ');
+            const suite = erreurs.length > 20 ? ` ${erreurs.length - 20} autre(s) conflit(s) détecté(s).` : '';
+            refuser(`Aucune donnée n’a été importée : ${details}${suite}`);
+        }
         const lignesApercu: { ligne: number; etudiant: string; email: string; dossier: string; inscription: string }[] = [];
         const dossiersApercus = new Map<string, {
             sauve: boolean;
