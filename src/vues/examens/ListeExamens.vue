@@ -35,8 +35,8 @@ const afficherCalendrierIntec = computed(() => !anneeId.value || anneeId.value =
 <template>
     <div class="mb-5 flex flex-wrap justify-between gap-3">
         <div>
-            <h1 class="text-xl font-bold text-insec">Examens & résultats</h1>
-            <p class="text-sm text-gray-500">Planification, convocations et validation des UE</p>
+            <h1 class="text-xl font-bold text-insec">Examens & convocations</h1>
+            <p class="text-sm text-gray-500">Préparation des épreuves, convocations et retour des copies à l’INTEC</p>
         </div>
         <RouterLink to="/examens/nouveau" class="bouton-action">+ Planifier un examen</RouterLink>
     </div>
