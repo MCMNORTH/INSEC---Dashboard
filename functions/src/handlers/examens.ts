@@ -40,6 +40,48 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
 
     const eligibles = await col.inscriptions().where('anneeId', '==', v.anneeId).where('ueIds', 'array-contains', v.ueId).get();
     const dateExamen = Timestamp.fromDate(new Date(v.dateExamen));
+    const examensDeCetteUe = await col.examens().where('ueId', '==', v.ueId).get();
+    const examenExistant = examensDeCetteUe.docs.find((document) =>
+        document.get('anneeId') === v.anneeId
+        && document.get('session') === v.session
+        && (document.get('dateExamen') as Timestamp | undefined)?.toMillis() === dateExamen.toMillis(),
+    );
+    if (examenExistant) {
+        const resultatsExistants = await col.resultats().where('examenId', '==', examenExistant.id).get();
+        const inscriptionsDejaAjoutees = new Set(resultatsExistants.docs.map((document) => document.get('inscriptionId') as string));
+        const inscriptionsAajouter = eligibles.docs.filter((inscription) => !inscriptionsDejaAjoutees.has(inscription.id));
+        if (inscriptionsAajouter.length && examenExistant.get('statut') !== 'Annulé') {
+            const premierNumero = await db.runTransaction(async (tx) => {
+                const compteur = col.compteurs().doc('convocations');
+                const valeur = ((await tx.get(compteur)).get('valeur') as number | undefined) ?? 0;
+                tx.set(compteur, { valeur: valeur + inscriptionsAajouter.length });
+                return valeur + 1;
+            });
+            const existant = examenExistant.data();
+            await ecrireParLots(inscriptionsAajouter, (lot, inscription) => {
+                lot.set(col.resultats().doc(`${examenExistant.id}_${inscription.id}`), {
+                    examenId: examenExistant.id, inscriptionId: inscription.id, etudiantId: inscription.get('etudiantId'),
+                    ueId: existant.ueId, formationId: existant.formationId, anneeId: existant.anneeId,
+                    session: existant.session, dateExamen: existant.dateExamen, salle: existant.salle,
+                    noteSur: existant.noteSur, seuilValidation: existant.seuilValidation, statutExamen: existant.statut,
+                    presence: 'Convoqué', note: null, commentaire: null, valide: false,
+                    numeroConvocation: premierNumero + inscriptionsAajouter.indexOf(inscription),
+                    ...trace(acteur, true),
+                });
+            });
+            const apres = { nbConvoques: resultatsExistants.size + inscriptionsAajouter.length };
+            const lotSuivi = db.batch();
+            lotSuivi.update(examenExistant.ref, { ...apres, ...trace(acteur) });
+            auditerModele(lotSuivi, acteur, 'Examen', examenExistant.id, 'updated', existant, apres);
+            await lotSuivi.commit();
+        }
+        return {
+            id: examenExistant.id,
+            message: inscriptionsAajouter.length
+                ? `Suivi INSEC déjà ouvert : ${inscriptionsAajouter.length} nouveau(x) candidat(s) ajouté(s).`
+                : `Suivi INSEC déjà ouvert avec ${resultatsExistants.size} candidat(s).`,
+        };
+    }
     const ref = col.examens().doc();
 
     // Réserve une plage de numéros de convocation.
@@ -72,11 +114,11 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
     const lotAudit = db.batch();
     auditer(lotAudit, acteur, {
         action: 'created', modele: 'Examen', modeleId: ref.id,
-        description: 'Planification de l’examen ' + ue.get('code') + ' pour ' + eligibles.size + ' étudiant(s). Aucun e-mail envoyé.',
+        description: 'Ouverture du suivi local de l’épreuve INTEC ' + ue.get('code') + ' pour ' + eligibles.size + ' étudiant(s). Aucun e-mail envoyé.',
         apres: { candidatsAjoutes: eligibles.size, convocationsEnvoyees: 0 },
     });
     await lotAudit.commit();
-    return { id: ref.id, message: 'Examen planifié avec ' + eligibles.size + ' étudiant(s). Aucun e-mail n’a été envoyé.' };
+    return { id: ref.id, message: 'Suivi INSEC ouvert pour l’épreuve INTEC avec ' + eligibles.size + ' candidat(s). Aucun e-mail n’a été envoyé.' };
 });
 
 export const enregistrerResultat = operation('enregistrerResultat', ROLES_ADMIN, async (donnees, acteur) => {
