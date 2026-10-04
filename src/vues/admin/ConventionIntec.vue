@@ -7,8 +7,6 @@ const joursAvantEcheance = computed(() => {
     const echeance = new Date(2027, 9, 19);
     return Math.max(0, Math.ceil((echeance.getTime() - aujourdHuiLocale.getTime()) / 86_400_000));
 });
-const formatDate = (annee: number, mois: number, jour: number) =>
-    new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(annee, mois - 1, jour));
 </script>
 
 <template>
