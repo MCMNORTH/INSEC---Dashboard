@@ -4,6 +4,14 @@ import { useReferentiel } from '../referentiel';
 import type { Formation } from '../types';
 
 const { formationsActives, ues } = useReferentiel();
+
+const certificatsSpecialisation = [
+    { code: 'TEC 712', libelle: 'Audit et contrôle légal des comptes' },
+    { code: 'TEC 714', libelle: 'Gestion des associations' },
+    { code: 'TEC 715', libelle: 'Comptabilité internationale' },
+    { code: 'TEC 716', libelle: 'Gestion comptable et financière des collectivités territoriales' },
+    { code: 'TEC 761', libelle: 'Audit des systèmes d’information' },
+];
 const uesDe = (f: Formation, annee: number) => ues.value.filter((u) => u.formationId === f.id && u.anneeParcours === annee);
 const credits = (f: Formation, annee: number) => uesDe(f, annee).reduce((t, u) => t + u.credits, 0);
 </script>
@@ -48,4 +56,24 @@ const credits = (f: Formation, annee: number) => uesDe(f, annee).reduce((t, u) =
             <footer v-if="f.sourceVerifieeLe" class="border-t border-gray-100 px-6 py-3 text-xs text-gray-400">Source vérifiée le {{ date(f.sourceVerifieeLe) }}</footer>
         </section>
     </div>
+
+    <section class="mt-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+        <header class="flex flex-wrap items-start justify-between gap-4 bg-insec px-6 py-5 text-white">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-amber-300">Formations couvertes par la convention INSEC–CNAM</p>
+                <h2 class="mt-1 text-xl font-bold">Certificats de spécialisation</h2>
+                <p class="mt-2 max-w-2xl text-sm text-blue-100">Un certificat correspond à une UE de spécialisation, préparée sur une année universitaire. Ce sont des certificats non diplômants.</p>
+            </div>
+            <a href="https://intec.cnam.fr/certificats-de-specialisation-291170.kjsp" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-white/30 px-3 py-2 text-xs font-medium hover:bg-white/10">Catalogue officiel INTEC ↗</a>
+        </header>
+        <div class="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
+            <article v-for="certificat in certificatsSpecialisation" :key="certificat.code" class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <p class="text-xs font-bold text-amber-700">{{ certificat.code }}</p>
+                <h3 class="mt-1 font-semibold text-gray-800">{{ certificat.libelle }}</h3>
+            </article>
+        </div>
+        <div class="mx-5 mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+            Le catalogue officiel INTEC consulté pour 2026–2027 répertorie cinq certificats : TEC 712, 714, 715, 716 et 761. La convention fournie mentionne les certificats de spécialisation, mais son exemplaire ne contient pas l’annexe détaillant six intitulés. Le sixième intitulé reste à confirmer auprès de l’INTEC avant ajout.
+        </div>
+    </section>
 </template>
