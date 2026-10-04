@@ -11,7 +11,7 @@ interface Rapport {
     inscriptionsCreees: number;
     inscriptionsExistantes: number;
     erreurs: string[];
-    lignes?: { ligne: number; dossier: string; inscription: string }[];
+    lignes?: { ligne: number; etudiant: string; email: string; dossier: string; inscription: string }[];
 }
 
 const { envoi, soumettre } = useFormulaire();
@@ -87,9 +87,9 @@ const exports = [
         </div>
         <div v-if="apercu.lignes?.length" class="max-h-64 overflow-auto rounded-lg border">
             <table class="w-full text-left text-sm">
-                <thead class="sticky top-0 bg-gray-50"><tr><th class="p-2">Ligne</th><th class="p-2">Dossier</th><th class="p-2">Inscription annuelle</th></tr></thead>
+                <thead class="sticky top-0 bg-gray-50"><tr><th class="p-2">Ligne</th><th class="p-2">Étudiant</th><th class="p-2">E-mail</th><th class="p-2">Dossier</th><th class="p-2">Inscription annuelle</th></tr></thead>
                 <tbody><tr v-for="ligne in apercu.lignes" :key="ligne.ligne" class="border-t">
-                    <td class="p-2">{{ ligne.ligne }}</td><td class="p-2">{{ ligne.dossier }}</td><td class="p-2">{{ ligne.inscription }}</td>
+                    <td class="p-2">{{ ligne.ligne }}</td><td class="p-2 font-medium">{{ ligne.etudiant }}</td><td class="p-2">{{ ligne.email }}</td><td class="p-2">{{ ligne.dossier }}</td><td class="p-2">{{ ligne.inscription }}</td>
                 </tr></tbody>
             </table>
         </div>
