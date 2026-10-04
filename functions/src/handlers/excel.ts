@@ -277,7 +277,7 @@ export const importerEtudiants = operation(
         let crees = 0, misAJour = 0, ignores = 0, inscriptionsCreees = 0, inscriptionsExistantes = 0;
         const emailsTraites = new Set<string>();
         const erreurs: string[] = [];
-        const lignesApercu: { ligne: number; dossier: string; inscription: string }[] = [];
+        const lignesApercu: { ligne: number; etudiant: string; email: string; dossier: string; inscription: string }[] = [];
         const dossiersApercus = new Map<string, {
             sauve: boolean;
             initialementPresent: boolean;
@@ -364,6 +364,8 @@ export const importerEtudiants = operation(
                     else if (resultat.inscription === 'existante') inscriptionsExistantes++;
                     lignesApercu.push({
                         ligne: numero,
+                        etudiant: `${d.prenom} ${d.nom}`,
+                        email: d.email,
                         dossier: resultat.type === 'cree' ? 'À créer' : resultat.type === 'maj' ? 'À mettre à jour' : 'Ignoré',
                         inscription: resultat.inscription === 'creee' ? 'À créer'
                             : resultat.inscription === 'existante' ? 'Déjà présente'
