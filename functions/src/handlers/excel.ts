@@ -279,7 +279,7 @@ export const importerEtudiants = operation(
         const erreurs: string[] = [];
         const identitesParEmail = new Map<string, { ligne: number; signature: string }>();
         const normaliserIdentiteImport = (valeur: string) =>
-            valeur.normalize('NFD').replace(/\\p{Diacritic}/gu, '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr-FR');
+            valeur.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr-FR');
         for (const [index, ligne] of corps.entries()) {
             if (ligne.every((cellule) => cellule === '')) continue;
             const analyse = ligneEtudiant.safeParse({
@@ -290,7 +290,7 @@ export const importerEtudiants = operation(
             const signature = JSON.stringify([
                 normaliserIdentiteImport(d.prenom),
                 normaliserIdentiteImport(d.nom),
-                (d.telephone ?? '').replace(/[\\s().-]/g, ''),
+                (d.telephone ?? '').replace(/[\s().-]/g, ''),
                 d.statut,
             ]);
             const cle = cleEmailEtudiant(d.email);
