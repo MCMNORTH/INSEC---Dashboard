@@ -169,6 +169,9 @@ async function convocation(id: string) {
 
 async function recu(id: string) {
     const versement = await exiger(null, col.versements().doc(id), 'Versement introuvable.');
+    if (versement.statut !== 'Validée') {
+        throw new HttpsError('failed-precondition', 'Un reçu officiel ne peut être généré qu’après validation du versement.');
+    }
     const { etudiant, formation, annee } = await contexteInscription(versement.inscriptionId);
     const contenu = [
         ...entete(),
