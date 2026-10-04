@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { CALENDRIER_INTEC_2026_2027, SOURCE_CALENDRIER_INTEC_2026_2027 } from '../../calendrierIntec';
+import { CALENDRIERS_INTEC, CALENDRIER_INTEC_2026_2027 } from '../../calendrierIntec';
 import { appeler, messageErreur } from '../../api';
 import Chargement from '../../composants/Chargement.vue';
 import { montant } from '../../format';
@@ -41,19 +41,25 @@ watch(anneeId, (nouvelle, ancienne) => {
 });
 void charger();
 
+const anneeSelectionnee = computed(() => tableau.value ? libelleAnnee(tableau.value) : '');
+const calendrierIntec = computed(() =>
+    CALENDRIERS_INTEC[anneeSelectionnee.value as keyof typeof CALENDRIERS_INTEC] ?? null,
+);
 const prochainesEpreuvesOfficielles = computed(() => {
+    const calendrier = calendrierIntec.value;
+    if (!calendrier) return [];
     const pieces = new Intl.DateTimeFormat('fr-FR', {
         timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
     }).formatToParts(new Date());
     const dateParis = Object.fromEntries(pieces.map((p) => [p.type, p.value]));
     const aujourdHui = `${dateParis.year}-${dateParis.month}-${dateParis.day}`;
-    return CALENDRIER_INTEC_2026_2027.filter((e) => e.date >= aujourdHui).slice(0, 4);
+    return calendrier.examens.filter((e) => e.date >= aujourdHui).slice(0, 4);
 });
 
 function lienPreparationIntec(e: (typeof CALENDRIER_INTEC_2026_2027)[number]) {
     return {
         path: '/examens/nouveau',
-        query: { source: 'intec', ue: e.codeUE, annee: '2026-2027', dateHeure: `${e.date}T${e.heure}`, session: 'Normale' },
+        query: { source: 'intec', ue: e.codeUE, annee: anneeSelectionnee.value, dateHeure: `${e.date}T${e.heure}`, session: 'Normale' },
     };
 }
 
@@ -159,13 +165,18 @@ const cartes = (t: Tableau) => [
             <section class="mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-white">
                 <header class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Calendrier officiel INTEC · 2026–2027</p>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Calendrier officiel INTEC · {{ anneeSelectionnee }}</p>
                         <h2 class="mt-1 font-bold text-insec">Prochaines épreuves écrites</h2>
                         <p class="mt-1 text-xs text-gray-500">Horaires de Paris · distincts des sessions planifiées localement</p>
                     </div>
-                    <a :href="SOURCE_CALENDRIER_INTEC_2026_2027" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Document officiel ↗</a>
+                    <a v-if="calendrierIntec" :href="calendrierIntec.source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Document officiel ↗</a>
+                    <a v-else href="https://intec.cnam.fr/planning-des-examens--1559071.kjsp" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Vérifier les publications INTEC ↗</a>
                 </header>
-                <div v-if="prochainesEpreuvesOfficielles.length" class="divide-y divide-gray-100">
+                <div v-if="!calendrierIntec" class="px-5 py-5">
+                    <p class="font-semibold text-gray-800">Aucun calendrier {{ anneeSelectionnee }} n’est intégré dans le tableau de bord.</p>
+                    <p class="mt-1 text-sm text-gray-600">Consultez la page officielle de l’INTEC pour vérifier si les dates de cette année ont été publiées.</p>
+                </div>
+                <div v-else-if="prochainesEpreuvesOfficielles.length" class="divide-y divide-gray-100">
                     <div v-for="e in prochainesEpreuvesOfficielles" :key="e.codeUE" class="flex flex-wrap items-center gap-4 px-5 py-3">
                         <span class="min-w-32 rounded-lg bg-indigo-50 px-3 py-2 text-center text-sm font-semibold text-insec">
                             {{ e.dateFr }}<span class="ml-2 text-xs font-normal text-gray-600">{{ e.heure }}</span>
