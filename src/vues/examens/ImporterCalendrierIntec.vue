@@ -127,7 +127,7 @@ async function analyserPdf() {
         const pdfjs = await import('pdfjs-dist');
         const worker = await import('pdfjs-dist/build/pdf.worker.mjs?url');
         pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-        const documentPdf = await pdfjs.getDocument({ data: new Uint8Array(await fichier.value.arrayBuffer()), isEvalSupported: false }).promise;
+        const documentPdf = await pdfjs.getDocument({ data: new Uint8Array(await fichier.value.arrayBuffer()) }).promise;
         if (documentPdf.numPages > 60) throw new Error('Ce document contient plus de 60 pages. Vérifiez qu’il s’agit bien du calendrier INTEC.');
         const pages: string[] = [];
         for (let numero = 1; numero <= documentPdf.numPages; numero++) {
