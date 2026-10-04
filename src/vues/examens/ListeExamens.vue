@@ -7,7 +7,7 @@ import Pagination from '../../composants/Pagination.vue';
 import { useRequete } from '../../donnees';
 import { db } from '../../firebase';
 import { dateHeureParis } from '../../format';
-import { CALENDRIERS_INTEC, CALENDRIER_INTEC_2026_2027 } from '../../calendrierIntec';
+import { CALENDRIERS_INTEC } from '../../calendrierIntec';
 import { useReferentiel } from '../../referentiel';
 import type { Examen } from '../../types';
 
