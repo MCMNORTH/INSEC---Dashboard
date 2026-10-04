@@ -70,18 +70,18 @@ async function quitter() {
             <section>
                 <p class="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Scolarité & opérations</p>
                 <div class="space-y-1">
-                    <RouterLink
-                        v-for="lien in liens"
-                        v-if="aRole(...lien.roles)"
-                        :key="lien.vers"
-                        :to="lien.vers"
-                        :class="['group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition', actif(lien.vers) ? 'bg-blue-50 text-insec ring-1 ring-inset ring-blue-100' : 'text-slate-600 hover:bg-slate-100 hover:text-insec']"
-                    >
-                        <span :class="['flex h-8 w-8 items-center justify-center rounded-lg transition', actif(lien.vers) ? 'bg-white text-insec shadow-sm' : 'text-slate-400 group-hover:bg-white group-hover:text-insec']">
-                            <i :class="['fa-solid text-sm', lien.icone]"></i>
-                        </span>
-                        {{ lien.libelle }}
-                    </RouterLink>
+                    <template v-for="lien in liens" :key="lien.vers">
+                        <RouterLink
+                            v-if="aRole(...lien.roles)"
+                            :to="lien.vers"
+                            :class="['group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition', actif(lien.vers) ? 'bg-blue-50 text-insec ring-1 ring-inset ring-blue-100' : 'text-slate-600 hover:bg-slate-100 hover:text-insec']"
+                        >
+                            <span :class="['flex h-8 w-8 items-center justify-center rounded-lg transition', actif(lien.vers) ? 'bg-white text-insec shadow-sm' : 'text-slate-400 group-hover:bg-white group-hover:text-insec']">
+                                <i :class="['fa-solid text-sm', lien.icone]"></i>
+                            </span>
+                            {{ lien.libelle }}
+                        </RouterLink>
+                    </template>
                 </div>
             </section>
         </nav>
@@ -112,7 +112,7 @@ async function quitter() {
 
             <button
                 type="button"
-                class="mt-2 flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-500 transition hover:bg-red-50 hover:text-red-700"
+                class="group mt-2 flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-500 transition hover:bg-red-50 hover:text-red-700"
                 @click="quitter"
             >
                 <span class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition group-hover:text-red-600">
