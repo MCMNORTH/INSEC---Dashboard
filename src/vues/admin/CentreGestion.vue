@@ -59,7 +59,7 @@ const modules = computed(() => {
                 </p>
             </div>
             <div class="mt-6 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm text-blue-50">
-                <i class="fa-solid fa-grid-2 text-amber-300"></i>
+                <i class="fa-solid fa-layer-group text-amber-300"></i>
                 {{ modules.length }} espaces de gestion
             </div>
         </header>
