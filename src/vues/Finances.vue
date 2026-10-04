@@ -31,6 +31,7 @@ const etudiantsFiltres = computed(() => {
 
 const etudiantId = computed(() => (typeof route.query.etudiant === 'string' ? route.query.etudiant : null));
 const selectionne = computed(() => etudiants.value.find((e) => e.id === etudiantId.value) ?? null);
+const emailEtudiantValide = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(selectionne.value?.email?.trim() ?? ''));
 const dossiers = computed(() => inscriptions.value.filter((i) => i.etudiantId === etudiantId.value).sort((a, b) => b.ordre - a.ordre));
 const inscription = computed(() => {
     const demandee = typeof route.query.inscription === 'string' ? route.query.inscription : null;
@@ -66,11 +67,12 @@ const ajouterVersement = () =>
 
 async function envoyerDocument(type: 'facture' | 'recu', id: string, libelle: string, destinataire: string) {
     const email = destinataire.trim();
-    if (!email) {
-        notifier('Aucune adresse e-mail n’est enregistrée pour cet étudiant.');
+    const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        notifier('Adresse e-mail absente ou invalide. Corrigez-la dans la fiche de l’étudiant avant l’envoi.');
         return;
     }
-    if (!window.confirm(`Envoyer ${libelle} en pièce jointe à ${email} ? Le PDF contient des informations personnelles.`)) return;
+    if (!window.confirm(`Envoyer ${libelle} en PDF à ${nom} (${email}) ? Le document contient des informations personnelles.`)) return;
     const resultat = await soumettre(() => appeler('envoyerDocumentParEmail', { type, id }));
     if (resultat) notifier(resultat.message ?? 'Document envoyé par e-mail.');
 }
@@ -155,9 +157,13 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                         v-if="aRole('admin', 'super_admin')"
                         type="button"
                         class="mt-2 w-full rounded-lg border border-white/30 px-3 py-2 text-sm text-blue-50 hover:bg-white/10"
-                        :disabled="envoi"
+                        :disabled="envoi || !emailEtudiantValide"
                         @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email)"
                     >Envoyer la facture par e-mail</button>
+                    <p v-if="emailEtudiantValide" role="status" class="mt-2 text-xs text-blue-100">Destinataire : {{ selectionne.email }}</p>
+                    <p v-else class="mt-2 rounded bg-amber-400/15 p-2 text-xs text-amber-100">
+                        Adresse e-mail absente ou invalide. <RouterLink :to="`/etudiants/${selectionne.id}/modifier`" class="underline">Corriger la fiche étudiant</RouterLink> avant l’envoi.
+                    </p>
                     <p v-if="montantEnRetard(inscription) > 0" class="mt-2 rounded bg-red-500/20 p-2 text-xs text-red-200">En retard : {{ montant(montantEnRetard(inscription)) }} MRU</p>
 
                     <form class="mt-4 space-y-2 border-t border-blue-400/30 pt-4" @submit.prevent="majSituation">
@@ -200,7 +206,7 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                                         v-if="aRole('admin', 'super_admin')"
                                         type="button"
                                         class="ml-2 cursor-pointer underline"
-                                        :disabled="envoi || v.statut !== 'Validée'"
+                                        :disabled="envoi || v.statut !== 'Validée' || !emailEtudiantValide"
                                         title="Envoyer le reçu par e-mail (versement validé)"
                                         @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email)"
                                     >Envoyer</button>
