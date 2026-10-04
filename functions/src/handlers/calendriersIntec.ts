@@ -6,10 +6,10 @@ import { erreurChamp, valider, z } from '../lib/validation.js';
 import { ROLES_ADMIN } from '../shared/domaine.js';
 
 const examenCalendrier = z.object({
-    codeUE: z.string().regex(/^\\d{3}$/),
+    codeUE: z.string().regex(/^\d{3}$/),
     intitule: z.string().trim().min(2).max(160),
     date: z.iso.date(),
-    heure: z.string().regex(/^(?:[01]\\d|2[0-3]):[0-5]\\d$/),
+    heure: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
     diplome: z.enum(['DGC', 'DSGC']),
 });
 
@@ -36,7 +36,7 @@ export const lireCalendriersIntec = operation('lireCalendriersIntec', ROLES_ADMI
 export const importerCalendrierIntec = operation('importerCalendrierIntec', ROLES_ADMIN, async (donnees, acteur) => {
     const v = valider(
         z.object({
-            annee: z.string().regex(/^20\\d{2}-20\\d{2}$/),
+            annee: z.string().regex(/^20\d{2}-20\d{2}$/),
             source: z.string().url().max(2000),
             examens: z.array(examenCalendrier).min(1).max(100),
         }),
