@@ -83,7 +83,7 @@ const cartes = (t: Tableau) => [
         icone: 'fa-users',
         fond: 'bg-blue-50',
         accent: 'text-blue-700',
-        lien: null,
+        lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'tous' } },
     },
     {
         libelle: 'Examens à préparer',
