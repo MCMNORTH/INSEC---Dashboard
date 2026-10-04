@@ -71,7 +71,7 @@ const confirmerVersement = async () => {
         const notification = emailEtudiantValide.value
             ? `Une confirmation sera mise en file d’envoi à ${email}.`
             : 'Aucune adresse e-mail valide : le paiement sera enregistré sans notification par e-mail.';
-        const resume = `Valider le versement de ${montant(versement.montant ?? 0)} MRU pour ${nom}, le ${date(versement.dateVersement)}, par ${versement.modePaiement} ?\\n\\nCe versement sera immédiatement ajouté au total encaissé. ${notification}`;
+        const resume = `Valider le versement de ${montant(versement.montant ?? 0)} MRU pour ${nom}, le ${date(versement.dateVersement)}, par ${versement.modePaiement} ?\n\nCe versement sera immédiatement ajouté au total encaissé. ${notification}`;
         if (!window.confirm(resume)) return;
     }
     await ajouterVersement();
