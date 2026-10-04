@@ -200,6 +200,15 @@ export const mettreAJourPreparationExamen = operation('mettreAJourPreparationExa
         donnees,
     );
 
+    const resultats = await col.resultats().where('examenId', '==', v.id).get();
+    const presents = resultats.docs.filter((resultat) => resultat.get('presence') === 'Présent').length;
+    if (v.nombreCopiesRassemblees !== null && v.nombreCopiesRassemblees > presents) {
+        erreurChamp('nombreCopiesRassemblees', 'Le nombre de copies rassemblées dépasse les ' + presents + ' candidat(s) marqué(s) présent(s).');
+    }
+    if (v.copiesEnvoyeesLe && v.nombreCopiesRassemblees !== presents) {
+        erreurChamp('copiesEnvoyeesLe', 'Avant d’indiquer l’envoi, renseignez les ' + presents + ' copie(s) correspondant aux candidats présents.');
+    }
+
     await db.runTransaction(async (tx) => {
         const ref = col.examens().doc(v.id);
         const avant = await exiger(tx, ref, 'Examen introuvable.');
