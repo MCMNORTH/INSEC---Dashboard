@@ -492,6 +492,38 @@ async function expedierDocument(
     return { statut, email, libelle };
 }
 
+type StatutConvocation = 'Envoyée' | 'Déjà envoyée' | 'En cours' | 'Échec';
+
+async function envoyerConvocationSuivie(id: string, acteurId: string, transport: ReturnType<typeof transportSmtp>): Promise<StatutConvocation> {
+    const ref = col.resultats().doc(id);
+    const reservation = await db.runTransaction(async (tx): Promise<'Prise' | 'Déjà envoyée' | 'En cours'> => {
+        const resultat = await exiger(tx, ref, 'Résultat introuvable.');
+        if (resultat.convocationEnvoiStatut === 'Envoyée') return 'Déjà envoyée';
+        if (resultat.convocationEnvoiStatut === 'En cours') return 'En cours';
+        tx.update(ref, {
+            convocationEnvoiStatut: 'En cours',
+            convocationEnvoyeeLe: null,
+            convocationEnvoiDemarreeLe: FieldValue.serverTimestamp(),
+        });
+        return 'Prise';
+    });
+    if (reservation !== 'Prise') return reservation;
+
+    let resultat: Awaited<ReturnType<typeof expedierDocument>>;
+    try {
+        resultat = await expedierDocument('convocation', id, acteurId, transport);
+    } catch (erreur) {
+        await ref.update({ convocationEnvoiStatut: 'Échec', convocationEnvoyeeLe: null });
+        throw erreur;
+    }
+
+    await ref.update({
+        convocationEnvoiStatut: resultat.statut,
+        convocationEnvoyeeLe: resultat.statut === 'Envoyé' ? FieldValue.serverTimestamp() : null,
+    });
+    return resultat.statut === 'Envoyé' ? 'Envoyée' : 'Échec';
+}
+
 export const envoyerDocumentParEmail = operation(
     'envoyerDocumentParEmail',
     ROLES_ADMIN,
@@ -501,6 +533,15 @@ export const envoyerDocumentParEmail = operation(
         if (!id) throw new HttpsError('invalid-argument', 'Identifiant du document manquant.');
         const acteurId = String(acteur.uid ?? '');
         if (!acteurId) throw new HttpsError('unauthenticated', 'Session administrateur introuvable.');
+        if (v.type === 'convocation') {
+            const statut = await envoyerConvocationSuivie(id, acteurId, transportSmtp());
+            if (statut === 'Échec') {
+                throw new HttpsError('unavailable', 'La convocation n’a pas pu être envoyée. Consultez le journal des communications.');
+            }
+            if (statut === 'Déjà envoyée') return { message: 'Cette convocation a déjà été envoyée ; aucun nouvel e-mail n’a été transmis.' };
+            if (statut === 'En cours') return { message: 'L’envoi de cette convocation est déjà en cours.' };
+            return { message: 'Convocation envoyée.' };
+        }
         const resultat = await expedierDocument(v.type, id, acteurId, transportSmtp());
         if (resultat.statut === 'Échec') {
             throw new HttpsError('unavailable', 'Le document n’a pas pu être envoyé. Consultez le journal des communications.');
@@ -542,27 +583,32 @@ export const envoyerConvocationsExamen = operation(
             throw new HttpsError('failed-precondition', 'Aucun étudiant n’est marqué « Convoqué » pour cet examen.');
         }
 
-        const fiches = await db.getAll(...cibles.map((resultat) => col.etudiants().doc(resultat.etudiantId)));
+        const dejaEnvoyesInitiaux = cibles.filter((r) => r.convocationEnvoiStatut === 'Envoyée').length;
+        const enCoursInitiaux = cibles.filter((r) => r.convocationEnvoiStatut === 'En cours').length;
+        const aVerifier = cibles.filter((r) => r.convocationEnvoiStatut !== 'Envoyée' && r.convocationEnvoiStatut !== 'En cours');
+        const fiches = aVerifier.length
+            ? await db.getAll(...aVerifier.map((resultat) => col.etudiants().doc(resultat.etudiantId)))
+            : [];
         const emailValide = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-        const eligibles = cibles.filter((_, index) => {
+        const eligibles = aVerifier.filter((_, index) => {
             const email = String(fiches[index].get('email') ?? '').trim();
             return fiches[index].exists && emailValide.test(email);
         });
-        const ignores = convoques.length - eligibles.length;
-        if (!eligibles.length) {
-            throw new HttpsError('failed-precondition', 'Aucun étudiant convoqué ne possède une adresse e-mail valide.');
-        }
-
+        const sansAdresse = aVerifier.length - eligibles.length;
         const transport = transportSmtp();
         let prochain = 0;
         let envoyes = 0;
+        let dejaEnvoyes = dejaEnvoyesInitiaux;
+        let enCours = enCoursInitiaux;
         let echecs = 0;
         const travailleurs = Array.from({ length: Math.min(3, eligibles.length) }, async () => {
             while (prochain < eligibles.length) {
                 const cible = eligibles[prochain++];
                 try {
-                    const resultat = await expedierDocument('convocation', cible.id, acteurId, transport);
-                    if (resultat.statut === 'Envoyé') envoyes += 1;
+                    const statut = await envoyerConvocationSuivie(cible.id, acteurId, transport);
+                    if (statut === 'Envoyée') envoyes += 1;
+                    else if (statut === 'Déjà envoyée') dejaEnvoyes += 1;
+                    else if (statut === 'En cours') enCours += 1;
                     else echecs += 1;
                 } catch {
                     echecs += 1;
@@ -571,6 +617,14 @@ export const envoyerConvocationsExamen = operation(
         });
         await Promise.all(travailleurs);
 
+        return {
+            message: `Envoi terminé : ${envoyes} envoyé(s), ${dejaEnvoyes} déjà envoyé(s), ${enCours} en cours, ${echecs} échec(s), ${sansAdresse} adresse(s) invalide(s).`,
+            envoyes,
+            dejaEnvoyes,
+            enCours,
+            echecs,
+            sansAdresse,
+        };
         return {
             message: `Envoi terminé : ${envoyes} envoyé(s), ${echecs} échec(s), ${ignores} ignoré(s).`,
             envoyes,
