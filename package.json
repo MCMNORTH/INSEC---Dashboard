@@ -7,13 +7,13 @@
         "build": "vue-tsc --noEmit && vite build",
         "typecheck": "vue-tsc --noEmit",
         "emulateurs": "npm --prefix functions run build && firebase emulators:start --project demo-insec --only auth,firestore,storage,functions",
-        "amorcer:local": "npm --prefix functions run amorcer:local",
-        "test": "npm --prefix functions test"
+        "amorcer:local": "npm --prefix functions run amorcer:local"
     },
     "dependencies": {
         "@fortawesome/fontawesome-free": "^7.3.1",
         "chart.js": "^4.5.1",
         "firebase": "^12.19.0",
+        "pdfjs-dist": "^6.3.289",
         "vue": "^3.5.43",
         "vue-router": "^5.3.1"
     },

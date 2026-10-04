@@ -10,6 +10,7 @@ export const col = {
     inscriptions: () => db.collection('inscriptions'),
     versements: () => db.collection('versements'),
     examens: () => db.collection('examens'),
+    calendriersIntec: () => db.collection('calendriersIntec'),
     resultats: () => db.collection('resultats'),
     pieces: () => db.collection('pieces'),
     candidatures: () => db.collection('candidatures'),

@@ -2,6 +2,7 @@ import './lib/firebase.js';
 
 export { synchroniserAlertes } from './handlers/alertes.js';
 export { confirmationCandidature, convertirCandidature, deciderCandidature, deposerCandidature } from './handlers/candidatures.js';
+export { lireCalendriersIntec, importerCalendrierIntec } from './handlers/calendriersIntec.js';
 export { basculerCompte, creerCompte } from './handlers/comptes.js';
 export { enregistrerPiece, modifierPiece, telechargerPiece } from './handlers/documents.js';
 export { envoyerEmail } from './handlers/emails.js';

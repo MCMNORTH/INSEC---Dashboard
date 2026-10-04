@@ -39,6 +39,7 @@ const routes: RouteRecordRaw[] = [
     { path: '/inscriptions/:id/modifier', component: () => import('./vues/etudiants/EditionInscription.vue'), props: (r) => ({ inscriptionId: r.params.id }), meta: { ...admin, titre: 'Modifier l’inscription' } },
     { path: '/formations', component: () => import('./vues/Formations.vue'), meta: { ...admin, titre: 'Diplômes & UE' } },
     { path: '/examens', component: () => import('./vues/examens/ListeExamens.vue'), meta: { ...admin, titre: 'Examens' } },
+    { path: '/examens/importer-calendrier', component: () => import('./vues/examens/ImporterCalendrierIntec.vue'), meta: { ...admin, titre: 'Importer le calendrier INTEC' } },
     { path: '/examens/nouveau', component: () => import('./vues/examens/NouvelExamen.vue'), meta: { ...admin, titre: 'Planifier un examen' } },
     { path: '/examens/:id', component: () => import('./vues/examens/FicheExamen.vue'), props: true, meta: { ...admin, titre: 'Examen' } },
     { path: '/enseignants', redirect: '/admin/tableau-de-bord' },
