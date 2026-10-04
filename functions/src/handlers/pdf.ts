@@ -496,6 +496,24 @@ type StatutConvocation = 'Envoyée' | 'Déjà envoyée' | 'En cours' | 'Échec';
 
 async function envoyerConvocationSuivie(id: string, acteurId: string, transport: ReturnType<typeof transportSmtp>): Promise<StatutConvocation> {
     const ref = col.resultats().doc(id);
+    const resultatInitial = await exiger(null, ref, 'Résultat introuvable.');
+    if (resultatInitial.convocationEnvoiStatut !== 'Envoyée' && resultatInitial.convocationEnvoiStatut !== 'En cours') {
+        const nomPdf = `convocation-examen-${numeroFormate('CONV', Number(resultatInitial.numeroConvocation ?? 0))}.pdf`;
+        const anciensEnvois = await db.collection('journalEmails').where('nomPieceJointe', '==', nomPdf).get();
+        const dejaEnvoyee = anciensEnvois.docs.find((document) => document.get('statut') === 'Envoyé');
+        if (dejaEnvoyee) {
+            await db.runTransaction(async (tx) => {
+                const resultat = await exiger(tx, ref, 'Résultat introuvable.');
+                if (resultat.convocationEnvoiStatut !== 'Envoyée' && resultat.convocationEnvoiStatut !== 'En cours') {
+                    tx.update(ref, {
+                        convocationEnvoiStatut: 'Envoyée',
+                        convocationEnvoyeeLe: dejaEnvoyee.get('envoyeLe') ?? FieldValue.serverTimestamp(),
+                    });
+                }
+            });
+            return 'Déjà envoyée';
+        }
+    }
     const reservation = await db.runTransaction(async (tx): Promise<'Prise' | 'Déjà envoyée' | 'En cours'> => {
         const resultat = await exiger(tx, ref, 'Résultat introuvable.');
         if (resultat.convocationEnvoiStatut === 'Envoyée') return 'Déjà envoyée';
@@ -589,7 +607,7 @@ export const envoyerConvocationsExamen = operation(
         const fiches = aVerifier.length
             ? await db.getAll(...aVerifier.map((resultat) => col.etudiants().doc(resultat.etudiantId)))
             : [];
-        const emailValide = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+        const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const eligibles = aVerifier.filter((_, index) => {
             const email = String(fiches[index].get('email') ?? '').trim();
             return fiches[index].exists && emailValide.test(email);
