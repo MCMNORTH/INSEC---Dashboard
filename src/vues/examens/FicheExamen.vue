@@ -40,6 +40,9 @@ watch(examen, (e) => {
     preparation.copiesEnvoyeesLe = e.copiesEnvoyeesLe ?? '';
     preparation.referenceEnvoiCopies = e.referenceEnvoiCopies ?? '';
 }, { immediate: true });
+const incoherenceReceptionSujets = computed(() =>
+    Boolean(preparation.sujetsRecusLe) !== (String(preparation.nombreSujetsRecus ?? '').trim() !== ''),
+);
 const candidatsPresents = computed(() => resultats.value.filter((resultat) => resultat.presence === 'Présent').length);
 const incoherenceCopies = computed(() =>
     (preparation.nombreCopiesRassemblees !== null && preparation.nombreCopiesRassemblees > candidatsPresents.value)
@@ -176,6 +179,7 @@ async function envoyerConvocation(r: Resultat) {
                             <label class="etiquette mt-3 block">Nombre de lots reçus
                                 <input v-model.number="preparation.nombreSujetsRecus" type="number" min="0" max="500" step="1" class="champ mt-1" />
                             </label>
+                            <p class="mt-2 text-xs text-gray-500">Renseignez la date et le nombre de lots ensemble pour confirmer la réception.</p>
                         </section>
                         <section class="rounded-lg border border-gray-200 p-4">
                             <h3 class="mb-3 font-semibold text-gray-800">2. Organisation de la salle</h3>
@@ -201,12 +205,15 @@ async function envoyerConvocation(r: Resultat) {
                             </label>
                         </section>
                     </div>
+                    <p v-if="incoherenceReceptionSujets" role="alert" class="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        Pour confirmer la réception des sujets, indiquez à la fois la date et le nombre de lots reçus.
+                    </p>
                     <p v-if="incoherenceCopies" role="alert" class="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
                         Le nombre de copies doit correspondre aux {{ candidatsPresents }} candidat(s) présents avant de renseigner la date d’envoi. Vérifiez d’abord les présences ci-dessous.
                     </p>
                     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
                         <p class="text-xs text-gray-500">Chaque modification est enregistrée dans le journal d’audit.</p>
-                        <button class="bouton-action" :disabled="envoi || incoherenceCopies">Enregistrer le suivi</button>
+                        <button class="bouton-action" :disabled="envoi || incoherenceCopies || incoherenceReceptionSujets">Enregistrer le suivi</button>
                     </div>
                 </form>
             </section>
