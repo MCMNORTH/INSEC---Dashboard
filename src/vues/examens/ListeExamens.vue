@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { collection, orderBy, query, where } from 'firebase/firestore';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { appeler, messageErreur } from '../../api';
 import { useRouter } from 'vue-router';
 import Chargement from '../../composants/Chargement.vue';
 import Pagination from '../../composants/Pagination.vue';
@@ -11,30 +12,53 @@ import { CALENDRIERS_INTEC } from '../../calendrierIntec';
 import { useReferentiel } from '../../referentiel';
 import type { Examen } from '../../types';
 
+interface ExamenOfficiel { codeUE: string; intitule: string; date: string; heure: string; diplome?: 'DGC' | 'DSGC'; diplôme?: 'DGC' | 'DSGC'; dateFr?: string; }
+interface CalendrierImporte { annee: string; source: string; examens: ExamenOfficiel[]; }
+
 const router = useRouter();
 const { annees, annee, ue, ues, formation } = useReferentiel();
 const anneeId = ref('');
 const page = ref(1);
 const PAR_PAGE = 15;
+const calendriersImportes = ref<CalendrierImporte[]>([]);
+const erreurCalendrier = ref('');
 const { donnees: examens, chargement, erreur } = useRequete<Examen>(() =>
     anneeId.value
         ? query(collection(db, 'examens'), where('anneeId', '==', anneeId.value), orderBy('dateExamen', 'desc'))
         : query(collection(db, 'examens'), orderBy('dateExamen', 'desc')),
 );
+onMounted(async () => {
+    try {
+        const resultat = await appeler<{ calendriers: CalendrierImporte[] }>('lireCalendriersIntec');
+        calendriersImportes.value = resultat.calendriers;
+    } catch (e) {
+        erreurCalendrier.value = messageErreur(e);
+    }
+});
 watch(anneeId, () => (page.value = 1));
 const affiches = computed(() => examens.value.slice((page.value - 1) * PAR_PAGE, page.value * PAR_PAGE));
-const anneeCalendrierIntec = computed(() => {
-    if (anneeId.value) return annee(anneeId.value)?.libelle ?? '';
-    return Object.keys(CALENDRIERS_INTEC).sort().reverse()[0] ?? '';
-});
+const toutesAnneesCalendrier = computed(() => [
+    ...new Set([...Object.keys(CALENDRIERS_INTEC), ...calendriersImportes.value.map((c) => c.annee)]),
+].sort().reverse());
+const anneeCalendrierIntec = computed(() => anneeId.value ? annee(anneeId.value)?.libelle ?? '' : toutesAnneesCalendrier.value[0] ?? '');
 const calendrierOfficiel = computed(() =>
-    CALENDRIERS_INTEC[anneeCalendrierIntec.value as keyof typeof CALENDRIERS_INTEC] ?? null,
+    calendriersImportes.value.find((c) => c.annee === anneeCalendrierIntec.value)
+    ?? CALENDRIERS_INTEC[anneeCalendrierIntec.value as keyof typeof CALENDRIERS_INTEC]
+    ?? null,
 );
-const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? []).map((e) => ({
-    ...e,
-    ue: ues.value.find((u) => u.code === `TEC${e.codeUE}` && formation(u.formationId)?.code === e.diplôme),
-    dateHeure: `${e.date}T${e.heure}`,
-})));
+const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? []).map((e) => {
+    const diplome = e.diplome ?? e.diplôme ?? 'DGC';
+    const date = e.date;
+    const dateFr = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long', year: 'numeric' })
+        .format(new Date(`${date}T12:00:00+01:00`));
+    return {
+        ...e,
+        diplôme: diplome,
+        dateFr: e.dateFr ?? dateFr,
+        ue: ues.value.find((u) => u.code === `TEC${e.codeUE}` && formation(u.formationId)?.code === diplome),
+        dateHeure: `${date}T${e.heure}:00+01:00`,
+    };
+}));
 </script>
 
 <template>
@@ -43,8 +67,12 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
             <h1 class="text-xl font-bold text-insec">Examens & convocations</h1>
             <p class="text-sm text-gray-500">Préparation des épreuves, convocations et retour des copies à l’INTEC</p>
         </div>
-        <RouterLink to="/examens/nouveau" class="bouton-action">+ Planifier un examen</RouterLink>
+        <div class="flex flex-wrap gap-2">
+            <RouterLink to="/examens/importer-calendrier" class="bouton-secondaire">Importer un calendrier INTEC</RouterLink>
+            <RouterLink to="/examens/nouveau" class="bouton-action">+ Planifier un examen</RouterLink>
+        </div>
     </div>
+    <div v-if="erreurCalendrier" role="status" class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Le calendrier enregistré n’a pas pu être chargé : {{ erreurCalendrier }}</div>
     <div class="carte mb-4 p-3">
         <select v-model="anneeId" class="champ w-auto" aria-label="Année académique">
             <option value="">Toutes les années</option>
