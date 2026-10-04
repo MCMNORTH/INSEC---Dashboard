@@ -20,3 +20,14 @@ export const CALENDRIER_INTEC_2026_2027 = [
 
 export const SOURCE_CALENDRIER_INTEC_2026_2027 =
     'https://intec.cnam.fr/medias/fichier/dates-examens-2026-2027-cnam-intec_1783677891445-pdf?ID_FICHE=1169162&INLINE=FALSE';
+
+
+/** Calendriers officiels effectivement intégrés à l’application, indexés par année scolaire. */
+export const CALENDRIERS_INTEC = {
+    '2026-2027': {
+        examens: CALENDRIER_INTEC_2026_2027,
+        source: SOURCE_CALENDRIER_INTEC_2026_2027,
+    },
+} as const;
+
+export type AnneeCalendrierIntec = keyof typeof CALENDRIERS_INTEC;

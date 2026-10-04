@@ -7,7 +7,7 @@ import Pagination from '../../composants/Pagination.vue';
 import { useRequete } from '../../donnees';
 import { db } from '../../firebase';
 import { dateHeureParis } from '../../format';
-import { CALENDRIER_INTEC_2026_2027, SOURCE_CALENDRIER_INTEC_2026_2027 } from '../../calendrierIntec';
+import { CALENDRIERS_INTEC, CALENDRIER_INTEC_2026_2027 } from '../../calendrierIntec';
 import { useReferentiel } from '../../referentiel';
 import type { Examen } from '../../types';
 
@@ -23,13 +23,18 @@ const { donnees: examens, chargement, erreur } = useRequete<Examen>(() =>
 );
 watch(anneeId, () => (page.value = 1));
 const affiches = computed(() => examens.value.slice((page.value - 1) * PAR_PAGE, page.value * PAR_PAGE));
-const anneeOfficielleId = computed(() => annees.value.find((a) => a.libelle === '2026-2027')?.id ?? '');
-const calendrierIntec = computed(() => CALENDRIER_INTEC_2026_2027.map((e) => ({
+const anneeCalendrierIntec = computed(() => {
+    if (anneeId.value) return annee.value(anneeId.value)?.libelle ?? '';
+    return Object.keys(CALENDRIERS_INTEC).sort().reverse()[0] ?? '';
+});
+const calendrierOfficiel = computed(() =>
+    CALENDRIERS_INTEC[anneeCalendrierIntec.value as keyof typeof CALENDRIERS_INTEC] ?? null,
+);
+const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? []).map((e) => ({
     ...e,
     ue: ues.value.find((u) => u.code === `TEC${e.codeUE}` && formation(u.formationId)?.code === e.diplôme),
     dateHeure: `${e.date}T${e.heure}`,
 })));
-const afficherCalendrierIntec = computed(() => !anneeId.value || anneeId.value === anneeOfficielleId.value);
 </script>
 
 <template>
@@ -50,14 +55,15 @@ const afficherCalendrierIntec = computed(() => !anneeId.value || anneeId.value =
         <header class="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Source officielle INTEC</p>
-                <h2 class="mt-1 text-lg font-bold text-insec">Épreuves DGC et DSGC · 2026–2027</h2>
-                <p class="mt-1 text-sm text-gray-600">17 épreuves écrites, horaires de Paris. Choisissez une épreuve pour ouvrir sa planification locale préremplie.</p>
+                <h2 class="mt-1 text-lg font-bold text-insec">Épreuves DGC et DSGC · {{ anneeCalendrierIntec || 'aucune année' }}</h2>
+                <p v-if="calendrierOfficiel" class="mt-1 text-sm text-gray-600">{{ calendrierIntec.length }} épreuves écrites, horaires de Paris. Choisissez une épreuve pour ouvrir sa planification locale préremplie.</p>
             </div>
-            <a :href="SOURCE_CALENDRIER_INTEC_2026_2027" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Consulter le document INTEC ↗</a>
+            <a v-if="calendrierOfficiel" :href="calendrierOfficiel.source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Consulter le document INTEC ↗</a>
+            <a v-else href="https://intec.cnam.fr/planning-des-examens--1559071.kjsp" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Vérifier les publications INTEC ↗</a>
         </header>
-        <div v-if="!afficherCalendrierIntec" class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-            <p class="text-sm text-gray-600">Le calendrier officiel affiché concerne l’année 2026–2027.</p>
-            <button type="button" class="bouton-principal" @click="anneeId = anneeOfficielleId">Afficher 2026–2027</button>
+        <div v-if="!calendrierOfficiel" class="px-5 py-5">
+            <p class="font-semibold text-gray-800">Aucun calendrier {{ anneeCalendrierIntec }} n’est intégré dans l’application.</p>
+            <p class="mt-1 text-sm text-gray-600">Consultez la page officielle de l’INTEC pour vérifier si les dates de cette année ont été publiées.</p>
         </div>
         <div v-else>
             <div class="overflow-x-auto">
@@ -73,8 +79,8 @@ const afficherCalendrierIntec = computed(() => !anneeId.value || anneeId.value =
                             </td>
                             <td>
                                 <RouterLink
-                                    v-if="e.ue && anneeOfficielleId"
-                                    :to="{ path: '/examens/nouveau', query: { source: 'intec', ue: e.codeUE, annee: '2026-2027', dateHeure: e.dateHeure, session: 'Normale' } }"
+                                    v-if="e.ue && anneeCalendrierIntec"
+                                    :to="{ path: '/examens/nouveau', query: { source: 'intec', ue: e.codeUE, annee: anneeCalendrierIntec, dateHeure: e.dateHeure, session: 'Normale' } }"
                                     class="bouton-secondaire whitespace-nowrap"
                                 >Préparer</RouterLink>
                                 <span v-else class="text-sm text-gray-400">Indisponible</span>
