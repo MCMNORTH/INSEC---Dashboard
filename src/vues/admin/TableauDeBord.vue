@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { CALENDRIER_INTEC_2026_2027, SOURCE_CALENDRIER_INTEC_2026_2027 } from '../../calendrierIntec';
 import { appeler, messageErreur } from '../../api';
 import Chargement from '../../composants/Chargement.vue';
 import { montant } from '../../format';
@@ -39,6 +40,22 @@ watch(anneeId, (nouvelle, ancienne) => {
     if (ancienne !== null && nouvelle !== ancienne) void charger();
 });
 void charger();
+
+const prochainesEpreuvesOfficielles = computed(() => {
+    const pieces = new Intl.DateTimeFormat('fr-FR', {
+        timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date());
+    const dateParis = Object.fromEntries(pieces.map((p) => [p.type, p.value]));
+    const aujourdHui = `${dateParis.year}-${dateParis.month}-${dateParis.day}`;
+    return CALENDRIER_INTEC_2026_2027.filter((e) => e.date >= aujourdHui).slice(0, 4);
+});
+
+function lienPreparationIntec(e: (typeof CALENDRIER_INTEC_2026_2027)[number]) {
+    return {
+        path: '/examens/nouveau',
+        query: { source: 'intec', ue: e.codeUE, annee: '2026-2027', dateHeure: `${e.date}T${e.heure}`, session: 'Normale' },
+    };
+}
 
 function libelleAnnee(t: Tableau): string {
     return t.annees.find((a) => a.id === t.anneeId)?.libelle ?? 'Année sélectionnée';
@@ -137,6 +154,30 @@ const cartes = (t: Tableau) => [
                         Voir la liste <i class="fa-solid fa-arrow-right ml-1"></i>
                     </RouterLink>
                 </article>
+            </section>
+
+            <section class="mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-white">
+                <header class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Calendrier officiel INTEC · 2026–2027</p>
+                        <h2 class="mt-1 font-bold text-insec">Prochaines épreuves écrites</h2>
+                        <p class="mt-1 text-xs text-gray-500">Horaires de Paris · distincts des sessions planifiées localement</p>
+                    </div>
+                    <a :href="SOURCE_CALENDRIER_INTEC_2026_2027" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Document officiel ↗</a>
+                </header>
+                <div v-if="prochainesEpreuvesOfficielles.length" class="divide-y divide-gray-100">
+                    <div v-for="e in prochainesEpreuvesOfficielles" :key="e.codeUE" class="flex flex-wrap items-center gap-4 px-5 py-3">
+                        <span class="min-w-32 rounded-lg bg-indigo-50 px-3 py-2 text-center text-sm font-semibold text-insec">
+                            {{ e.dateFr }}<span class="ml-2 text-xs font-normal text-gray-600">{{ e.heure }}</span>
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <strong class="block text-sm text-gray-900">{{ e.diplôme }} · UE {{ e.codeUE }}</strong>
+                            <span class="text-xs text-gray-500">{{ e.intitule }}</span>
+                        </span>
+                        <RouterLink :to="lienPreparationIntec(e)" class="bouton-secondaire whitespace-nowrap">Préparer</RouterLink>
+                    </div>
+                </div>
+                <p v-else class="px-5 py-4 text-sm text-gray-600">Les épreuves de ce calendrier sont passées. Consultez le document INTEC pour les prochaines dates publiées.</p>
             </section>
 
             <div v-if="tableau.montantEnRetard > 0" class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
