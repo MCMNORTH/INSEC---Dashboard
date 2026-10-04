@@ -24,7 +24,7 @@ const { donnees: examens, chargement, erreur } = useRequete<Examen>(() =>
 watch(anneeId, () => (page.value = 1));
 const affiches = computed(() => examens.value.slice((page.value - 1) * PAR_PAGE, page.value * PAR_PAGE));
 const anneeCalendrierIntec = computed(() => {
-    if (anneeId.value) return annee.value(anneeId.value)?.libelle ?? '';
+    if (anneeId.value) return annee(anneeId.value)?.libelle ?? '';
     return Object.keys(CALENDRIERS_INTEC).sort().reverse()[0] ?? '';
 });
 const calendrierOfficiel = computed(() =>
