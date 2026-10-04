@@ -38,7 +38,7 @@ export async function exiger(tx: Transaction | null, ref: DocumentReference, mes
  * Contrainte d'unicité (équivalent d'un index UNIQUE SQL). Lecture à faire avant toute écriture de la transaction :
  * retourne une fonction qui réserve la clé.
  */
-export const refUnique = (cle: string) => col.uniques().doc(cle.replace(/\\//g, '∕'));
+export const refUnique = (cle: string) => col.uniques().doc(cle.replace(/\//g, '∕'));
 
 export async function verifierUnique(tx: Transaction, cle: string, proprietaire: string, message: string, champ: string) {
     const ref = refUnique(cle);
