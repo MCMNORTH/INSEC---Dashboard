@@ -65,11 +65,11 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
     <div class="mb-5 flex flex-wrap justify-between gap-3">
         <div>
             <h1 class="text-xl font-bold text-insec">Examens & convocations</h1>
-            <p class="text-sm text-gray-500">Préparation des épreuves, convocations et retour des copies à l’INTEC</p>
+            <p class="text-sm text-gray-500">Calendrier officiel INTEC, candidats, convocations et retour des copies</p>
         </div>
         <div class="flex flex-wrap gap-2">
             <RouterLink to="/examens/importer-calendrier" class="bouton-secondaire">Importer un calendrier INTEC</RouterLink>
-            <RouterLink to="/examens/nouveau" class="bouton-action">+ Planifier un examen</RouterLink>
+            
         </div>
     </div>
     <div v-if="erreurCalendrier" role="status" class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Le calendrier enregistré n’a pas pu être chargé : {{ erreurCalendrier }}</div>
@@ -84,7 +84,7 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Source officielle INTEC</p>
                 <h2 class="mt-1 text-lg font-bold text-insec">Épreuves DGC et DSGC · {{ anneeCalendrierIntec || 'aucune année' }}</h2>
-                <p v-if="calendrierOfficiel" class="mt-1 text-sm text-gray-600">{{ calendrierIntec.length }} épreuves écrites, horaires de Paris. Choisissez une épreuve pour ouvrir sa planification locale préremplie.</p>
+                <p v-if="calendrierOfficiel" class="mt-1 text-sm text-gray-600">{{ calendrierIntec.length }} épreuves écrites, horaires de Paris. Les dates et horaires sont ceux publiés par l’INTEC. L’INSEC peut ouvrir un suivi local pour gérer les candidats, la salle et les convocations.</p>
             </div>
             <a v-if="calendrierOfficiel" :href="calendrierOfficiel.source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Consulter le document INTEC ↗</a>
             <a v-else href="https://intec.cnam.fr/planning-des-examens--1559071.kjsp" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Vérifier les publications INTEC ↗</a>
@@ -96,10 +96,10 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
         <div v-else>
             <div class="overflow-x-auto">
                 <table class="tableau">
-                    <thead><tr><th>Date et heure (Paris)</th><th>Diplôme / UE INTEC</th><th>UE locale</th><th>Planification</th></tr></thead>
+                    <thead><tr><th>Date et heure (Paris)</th><th>Diplôme / UE INTEC</th><th>UE locale</th><th>Suivi INSEC</th></tr></thead>
                     <tbody>
                         <tr v-for="e in calendrierIntec" :key="e.codeUE">
-                            <td><strong>{{ e.dateFr }}</strong><br /><span class="text-gray-500">{{ e.heure }}</span></td>
+                            <td><strong>{{ e.dateFr }}</strong><br /><span class="text-gray-500">{{ e.heure }} (Paris)</span></td>
                             <td><span class="font-semibold">{{ e.diplôme }} · {{ e.codeUE }}</span><br /><span class="text-gray-500">{{ e.intitule }}</span></td>
                             <td>
                                 <span v-if="e.ue" class="font-medium">{{ e.ue.code }} · {{ e.ue.libelle }}</span>
@@ -110,7 +110,7 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
                                     v-if="e.ue && anneeCalendrierIntec"
                                     :to="{ path: '/examens/nouveau', query: { source: 'intec', ue: e.codeUE, annee: anneeCalendrierIntec, dateHeure: e.dateHeure, session: 'Normale' } }"
                                     class="bouton-secondaire whitespace-nowrap"
-                                >Préparer</RouterLink>
+                                >Suivre l’épreuve</RouterLink>
                                 <span v-else class="text-sm text-gray-400">Indisponible</span>
                             </td>
                         </tr>
@@ -118,8 +118,7 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
                 </table>
             </div>
             <div class="border-t border-gray-100 bg-amber-50/60 px-5 py-3 text-sm text-amber-950">
-                Les dates individuelles des soutenances sont communiquées séparément par l’INTEC et ne sont pas ajoutées comme épreuves datées.
-                Vérifiez la page officielle avant chaque planification : le calendrier peut évoluer.
+                Les dates individuelles des soutenances sont communiquées séparément par l’INTEC. Les informations du calendrier restent sous la responsabilité de l’INTEC ; le suivi local ne permet pas de modifier leur date ou leur horaire.
             </div>
         </div>
     </section>
@@ -134,18 +133,17 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
                         <td>{{ e.session }}<br /><span class="text-xs text-gray-500">{{ annee(e.anneeId)?.libelle }}</span></td>
                         <td>{{ e.salle || '—' }}</td>
                         <td>{{ e.nbConvoques }}</td>
-                        <td>{{ e.statut }}</td>
+                        <td>{{ e.statut === 'Planifié' ? 'À venir · calendrier INTEC' : e.statut }}</td>
                     </tr>
                     <tr v-if="!examens.length">
                         <td colspan="6" class="p-0">
                             <div class="flex flex-col items-center px-6 py-10 text-center">
                                 <i class="fa-solid fa-calendar-check mb-4 text-2xl text-insec" aria-hidden="true"></i>
-                                <h2 class="font-semibold text-gray-800">{{ anneeId ? 'Aucun examen pour cette année scolaire' : 'Aucune session planifiée' }}</h2>
+                                <h2 class="font-semibold text-gray-800">{{ anneeId ? 'Aucun examen pour cette année scolaire' : 'Aucun suivi local n’est encore ouvert' }}</h2>
                                 <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-                                    Après la planification, la fiche de chaque épreuve permet de suivre la réception des sujets,
-                                    la confirmation de la salle et de la surveillance, puis le retour des copies à l’INTEC.
+                                    Ouvrez le suivi d’une épreuve du calendrier officiel pour gérer les candidats, les convocations, la réception des sujets, la salle et le retour des copies à l’INTEC.
                                 </p>
-                                <RouterLink to="/examens/nouveau" class="bouton-action mt-5">+ Planifier un examen</RouterLink>
+                                <RouterLink to="/examens/importer-calendrier" class="bouton-action mt-5">Consulter le calendrier INTEC</RouterLink>
                             </div>
                         </td>
                     </tr>

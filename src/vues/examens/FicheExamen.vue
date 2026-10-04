@@ -92,7 +92,7 @@ async function enregistrerPreparation() {
     const sauvegarde = await soumettre(() =>
         appeler('mettreAJourPreparationExamen', { id: props.id, ...preparation }),
     );
-    if (sauvegarde) notifier(sauvegarde.message ?? 'Suivi de préparation enregistré.');
+    if (sauvegarde) notifier(sauvegarde.message ?? 'Suivi local enregistré.');
 }
 
 async function enregistrer(r: Resultat) {
@@ -152,7 +152,7 @@ async function envoyerConvocation(r: Resultat) {
                 <p class="text-sm font-semibold text-amber-600">{{ formation(examen.formationId)?.code }} · {{ annee(examen.anneeId)?.libelle }}</p>
                 <h1 class="text-xl font-bold text-insec">{{ ue(examen.ueId)?.code }} — {{ ue(examen.ueId)?.libelle }}</h1>
                 <div class="mt-4 grid gap-3 text-sm md:grid-cols-4">
-                    <div><span class="text-gray-500">Date et heure (Paris)</span><br /><strong>{{ dateHeureParis(examen.dateExamen) }}</strong></div>
+                    <div><span class="text-gray-500">Date officielle INTEC (Paris)</span><br /><strong>{{ dateHeureParis(examen.dateExamen) }}</strong></div>
                     <div><span class="text-gray-500">Session</span><br /><strong>{{ examen.session }}</strong></div>
                     <div><span class="text-gray-500">Salle</span><br /><strong>{{ examen.salle || '—' }}</strong></div>
                     <div><span class="text-gray-500">Validation</span><br /><strong>{{ examen.seuilValidation }}/{{ examen.noteSur }}</strong></div>
@@ -161,8 +161,8 @@ async function envoyerConvocation(r: Resultat) {
             <section class="carte mt-6 p-5">
                 <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h2 class="text-lg font-bold text-insec">Préparation de l’épreuve et retour des copies</h2>
-                        <p class="mt-1 text-sm text-gray-500">Suivez les sujets reçus, l’organisation de la salle et l’envoi des copies à l’INTEC.</p>
+                        <h2 class="text-lg font-bold text-insec">Suivi local INSEC et retour des copies</h2>
+                        <p class="mt-1 text-sm text-gray-500">L’INTEC fixe l’épreuve. L’INSEC suit les consignes : sujets reçus, salle et surveillance, présence des candidats, puis retour des copies.</p>
                         <p class="mt-1 text-sm text-gray-600">{{ candidatsPresents }} candidat(s) marqué(s) présent(s) : le nombre de copies doit correspondre avant d’enregistrer leur envoi.</p>
                     </div>
                     <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-800">

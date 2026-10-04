@@ -40,7 +40,7 @@ const routes: RouteRecordRaw[] = [
     { path: '/formations', component: () => import('./vues/Formations.vue'), meta: { ...admin, titre: 'Diplômes & UE' } },
     { path: '/examens', component: () => import('./vues/examens/ListeExamens.vue'), meta: { ...admin, titre: 'Examens' } },
     { path: '/examens/importer-calendrier', component: () => import('./vues/examens/ImporterCalendrierIntec.vue'), meta: { ...admin, titre: 'Importer le calendrier INTEC' } },
-    { path: '/examens/nouveau', component: () => import('./vues/examens/NouvelExamen.vue'), meta: { ...admin, titre: 'Planifier un examen' } },
+    { path: '/examens/nouveau', component: () => import('./vues/examens/NouvelExamen.vue'), meta: { ...admin, titre: 'Suivi local de l’épreuve INTEC' } },
     { path: '/examens/:id', component: () => import('./vues/examens/FicheExamen.vue'), props: true, meta: { ...admin, titre: 'Examen' } },
     { path: '/enseignants', redirect: '/admin/tableau-de-bord' },
     { path: '/enseignants/:pathMatch(.*)*', redirect: '/admin/tableau-de-bord' },
@@ -65,6 +65,7 @@ router.beforeEach(async (vers) => {
     await sessionPrete();
     const connecte = !!session.uid;
     if (vers.meta.invite && connecte && session.role) return accueil();
+    if (vers.path === '/examens/nouveau' && vers.query.source !== 'intec') return '/examens';
     if (vers.meta.publique) return true;
     if (!connecte) return { path: '/connexion', query: vers.fullPath !== '/' ? { redirection: vers.fullPath } : {} };
     if (vers.meta.roles && !aRole(...vers.meta.roles)) return vers.path === '/acces-refuse' ? true : '/acces-refuse';

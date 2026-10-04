@@ -1,42 +1,45 @@
 <script setup lang="ts">
-import { SESSIONS_EXAMEN } from '@shared/domaine';
 import { computed, reactive, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { appeler } from '../../api';
-import { instantDepuisDateHeureParis } from '../../format';
+import { dateHeureParis, instantDepuisDateHeureParis } from '../../format';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 import { useReferentiel } from '../../referentiel';
 
 const router = useRouter();
 const route = useRoute();
-const { ues, annees, formation } = useReferentiel();
-const uesActives = computed(() => [...ues.value].filter((u) => u.active !== false).sort((a, b) => a.code.localeCompare(b.code)));
+const { ues, annees, ue, annee } = useReferentiel();
 const { envoi, erreurs, soumettre } = useFormulaire();
 const f = reactive({ ueId: '', anneeId: '', session: 'Normale', dateExamen: '', salle: '', noteSur: 20, seuilValidation: 10, statut: 'Planifié' });
+const codeUE = computed(() => typeof route.query.ue === 'string' ? route.query.ue : '');
+const libelleAnnee = computed(() => typeof route.query.annee === 'string' ? route.query.annee : '');
+const dateHeureIso = computed(() => instantDepuisDateHeureParis(f.dateExamen));
+const dateHeureOfficielle = computed(() => dateHeureIso.value ? dateHeureParis(dateHeureIso.value) : 'Date officielle invalide');
+const suiviValide = computed(() => route.query.source === 'intec' && !!f.ueId && !!f.anneeId && !!dateHeureIso.value);
+
 watchEffect(() => {
-    if (!f.anneeId && annees.value[0]) f.anneeId = annees.value[0].id;
     if (route.query.source !== 'intec') return;
-    const codeUE = typeof route.query.ue === 'string' ? `TEC${route.query.ue}` : '';
-    const ueOfficielle = uesActives.value.find((u) => u.code === codeUE);
+    const codeCatalogue = codeUE.value ? `TEC${codeUE.value}` : '';
+    const ueOfficielle = ues.value.find((u) => u.code === codeCatalogue);
     if (ueOfficielle) f.ueId = ueOfficielle.id;
-    const libelleAnnee = typeof route.query.annee === 'string' ? route.query.annee : '';
-    const anneeOfficielle = annees.value.find((a) => a.libelle === libelleAnnee);
+    const anneeOfficielle = annees.value.find((a) => a.libelle === libelleAnnee.value);
     if (anneeOfficielle) f.anneeId = anneeOfficielle.id;
-    if (typeof route.query.dateHeure === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(route.query.dateHeure)) {
-        f.dateExamen = route.query.dateHeure;
-    }
-    if (route.query.session === 'Normale' || route.query.session === 'Rattrapage') f.session = route.query.session;
+    if (typeof route.query.dateHeure === 'string') f.dateExamen = route.query.dateHeure;
+    f.session = 'Normale';
 });
 
 async function enregistrer() {
-    // Les horaires INTEC sont exprimés à Paris, quel que soit le fuseau du navigateur.
-    const dateExamen = f.dateExamen ? instantDepuisDateHeureParis(f.dateExamen) : null;
-    if (!dateExamen) {
-        notifier('Cette date ou cette heure n’est pas valide dans le calendrier de Paris.');
+    if (!suiviValide.value) {
+        notifier('Impossible d’ouvrir le suivi : vérifiez l’épreuve et le calendrier INTEC sélectionnés.');
         return;
     }
-    const resultat = await soumettre(() => appeler<{ id: string; message: string }>('creerExamen', { ...f, dateExamen }));
+    const resultat = await soumettre(() => appeler<{ id: string; message: string }>('creerExamen', {
+        ...f,
+        codeUE: codeUE.value,
+        annee: libelleAnnee.value,
+        dateExamen: dateHeureIso.value,
+    }));
     if (!resultat) return;
     notifier(resultat.message, { apresNavigation: true });
     await router.push(`/examens/${resultat.id}`);
@@ -45,37 +48,32 @@ async function enregistrer() {
 
 <template>
     <div class="max-w-3xl">
-        <RouterLink to="/examens" class="text-sm text-gray-500">← Retour</RouterLink>
-        <h1 class="mt-2 mb-5 text-xl font-bold text-insec">Planifier un examen</h1>
-        <form class="carte grid gap-4 p-6 md:grid-cols-2" @submit.prevent="enregistrer">
-            <label class="etiquette md:col-span-2">UE
-                <select v-model="f.ueId" class="champ mt-1" required>
-                    <option value="">Sélectionner…</option>
-                    <option v-for="ue in uesActives" :key="ue.id" :value="ue.id">{{ formation(ue.formationId)?.code }} · {{ ue.code }} — {{ ue.libelle }}</option>
-                </select>
-            </label>
-            <label class="etiquette">Année académique
-                <select v-model="f.anneeId" class="champ mt-1"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
-            </label>
-            <label class="etiquette">Session
-                <select v-model="f.session" class="champ mt-1"><option v-for="s in SESSIONS_EXAMEN" :key="s">{{ s }}</option></select>
-            </label>
-            <label class="etiquette">Date et heure (Paris)
-                <input v-model="f.dateExamen" type="datetime-local" class="champ mt-1" required />
-                <span class="mt-1 block text-xs text-gray-500">L’heure est enregistrée selon le fuseau Europe/Paris (heure d’hiver ou d’été).</span>
+        <RouterLink to="/examens" class="text-sm text-gray-500">← Retour au calendrier INTEC</RouterLink>
+        <h1 class="mt-2 mb-2 text-xl font-bold text-insec">Ouvrir le suivi local</h1>
+        <p class="mb-5 text-sm text-gray-600">L’INTEC fixe l’épreuve et son horaire. Cette fiche sert uniquement au suivi des opérations de l’INSEC.</p>
+        <form v-if="route.query.source === 'intec'" class="carte grid gap-4 p-6 md:grid-cols-2" @submit.prevent="enregistrer">
+            <div class="etiquette md:col-span-2">Épreuve INTEC
+                <p class="champ mt-1 bg-gray-50">{{ ue(f.ueId)?.code }} — {{ ue(f.ueId)?.libelle }}</p>
+            </div>
+            <div class="etiquette">Année académique
+                <p class="champ mt-1 bg-gray-50">{{ annee(f.anneeId)?.libelle || libelleAnnee }}</p>
+            </div>
+            <div class="etiquette">Session INTEC
+                <p class="champ mt-1 bg-gray-50">Normale</p>
+            </div>
+            <div class="etiquette">Date et heure officielles (Paris)
+                <p class="champ mt-1 bg-gray-50">{{ dateHeureOfficielle }}</p>
+                <span class="mt-1 block text-xs text-gray-500">Cette date provient du calendrier INTEC et ne peut pas être modifiée ici.</span>
                 <span v-if="erreurs.dateExamen" class="text-xs text-red-600">{{ erreurs.dateExamen }}</span>
+            </div>
+            <label class="etiquette">Salle / lieu (organisation INSEC)
+                <input v-model="f.salle" class="champ mt-1" maxlength="100" placeholder="À renseigner quand la salle est connue" />
             </label>
-            <label class="etiquette">Salle / lien <input v-model="f.salle" class="champ mt-1" maxlength="100" /></label>
-            <label class="etiquette">Note sur <input v-model.number="f.noteSur" type="number" step="0.01" min="1" max="100" class="champ mt-1" required /></label>
-            <label class="etiquette">Seuil de validation
-                <input v-model.number="f.seuilValidation" type="number" step="0.01" min="0" class="champ mt-1" required />
-                <span v-if="erreurs.seuilValidation" class="text-xs text-red-600">{{ erreurs.seuilValidation }}</span>
-            </label>
-            <p v-if="route.query.source === 'intec'" class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950 md:col-span-2">
-                Les données du calendrier INTEC sont préremplies. Vérifiez l’UE, l’année et l’heure de Paris. La planification n’envoie aucun e-mail. Vérifiez les candidats, puis envoyez les convocations depuis la fiche de l’examen.
+            <p class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950 md:col-span-2">
+                Ouvrir ce suivi ne change pas le calendrier de l’INTEC et n’envoie aucun e-mail. La fiche sert à suivre les candidats, les convocations locales, la réception des sujets et le retour des copies.
             </p>
-            <p v-else class="text-sm text-gray-500 md:col-span-2">La session sera créée sans envoyer d’e-mail. Vous pourrez vérifier les candidats puis lancer l’envoi depuis la fiche de l’examen.</p>
-            <button class="bouton-action md:col-span-2" :disabled="envoi">Planifier l’examen</button>
+            <button class="bouton-action md:col-span-2" :disabled="envoi || !suiviValide">Ouvrir le suivi INSEC</button>
         </form>
+        <div v-else class="carte p-6 text-gray-600">Sélectionnez une épreuve depuis le calendrier officiel de l’INTEC.</div>
     </div>
 </template>
