@@ -12,7 +12,13 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
     const v = valider(z.object({ anneeId: s.texteOptionnel(50) }), donnees);
     const annees = (await col.annees().get()).docs.map((d) => ({ id: d.id, libelle: d.get('libelle') as string }))
         .sort((a, b) => b.libelle.localeCompare(a.libelle));
-    const anneeId = v.anneeId ?? annees[0]?.id ?? null;
+    const maintenant = new Date();
+    const debutAnneeAcademique = maintenant.getUTCMonth() >= 8
+        ? maintenant.getUTCFullYear()
+        : maintenant.getUTCFullYear() - 1;
+    const libelleAnneeCourante = `${debutAnneeAcademique}-${debutAnneeAcademique + 1}`;
+    const anneeParDefaut = annees.find((a) => a.libelle === libelleAnneeCourante) ?? annees[0];
+    const anneeId = v.anneeId ?? anneeParDefaut?.id ?? null;
     if (anneeId && !annees.some((a) => a.id === anneeId)) throw new HttpsError('invalid-argument', 'Année académique invalide.');
 
     const [inscriptionsSnap, formationsSnap, resultatsSnap, examensSnap, versementsSnap, uesSnap] = await Promise.all([
