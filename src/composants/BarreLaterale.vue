@@ -13,6 +13,7 @@ watch(() => route.path, () => (ouverte.value = false));
 const liens = [
     { vers: '/etudiants', icone: 'fa-user', libelle: 'Étudiants', roles: ['admin', 'super_admin'] },
     { vers: '/formations', icone: 'fa-graduation-cap', libelle: 'Diplômes & UE', roles: ['admin', 'super_admin'] },
+    { vers: '/convention-intec', icone: 'fa-file-contract', libelle: 'Convention INTEC', roles: ['admin', 'super_admin'] },
     { vers: '/examens', icone: 'fa-clipboard-check', libelle: 'Examens & convocations', roles: ['admin', 'super_admin'] },
     { vers: '/finances', icone: 'fa-dollar-sign', libelle: 'Finances', roles: ['admin', 'super_admin', 'finance'] },
     { vers: '/excel', icone: 'fa-file-excel', libelle: 'Imports & exports', roles: ['admin', 'super_admin'] },
