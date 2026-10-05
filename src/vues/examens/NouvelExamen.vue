@@ -9,7 +9,7 @@ import { useReferentiel } from '../../referentiel';
 
 const router = useRouter();
 const route = useRoute();
-const { ues, annees, ue, annee } = useReferentiel();
+const { ues, annees, anneeCourante, ue, annee } = useReferentiel();
 const { envoi, erreurs, soumettre } = useFormulaire();
 const f = reactive({ ueId: '', anneeId: '', session: 'Normale', dateExamen: '', salle: '', noteSur: 20, seuilValidation: 10, statut: 'Planifié' });
 const codeUE = computed(() => typeof route.query.ue === 'string' ? route.query.ue : '');
@@ -25,6 +25,7 @@ watchEffect(() => {
     if (ueOfficielle) f.ueId = ueOfficielle.id;
     const anneeOfficielle = annees.value.find((a) => a.libelle === libelleAnnee.value);
     if (anneeOfficielle) f.anneeId = anneeOfficielle.id;
+    else if (!f.anneeId && anneeCourante.value) f.anneeId = anneeCourante.value.id;
     if (typeof route.query.dateHeure === 'string') f.dateExamen = route.query.dateHeure;
     f.session = 'Normale';
 });
