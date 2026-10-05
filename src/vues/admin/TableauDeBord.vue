@@ -15,6 +15,7 @@ interface Tableau {
     totalEtudiants: number;
     etudiantsInscrits: number;
     etudiantsSansInscription: number;
+    etudiantsAvecDossierAnnee: number;
     inscriptionsActives: number;
 }
 
@@ -94,19 +95,19 @@ const cartes = (t: Tableau) => [
         lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'inscrits' } },
     },
     {
-        libelle: 'Non inscrits cette année', valeur: t.etudiantsSansInscription,
-        detail: 'À vérifier pour ' + libelleAnnee(t), icone: 'fa-user-minus',
+        libelle: 'Dossiers annuels à vérifier', valeur: t.etudiantsSansInscription,
+        detail: 'Inscription annuelle non active · ' + libelleAnnee(t), icone: 'fa-user-minus',
         fond: 'bg-slate-50', accent: 'text-slate-700',
-        lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'non-inscrits' } },
+        lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'non-actifs' } },
     },
     {
-        libelle: 'Étudiants au registre',
-        valeur: t.totalEtudiants,
-        detail: 'Tous les dossiers conservés',
+        libelle: 'Élèves avec dossier annuel',
+        valeur: t.etudiantsAvecDossierAnnee,
+        detail: 'Dossiers présents pour ' + libelleAnnee(t),
         icone: 'fa-users',
         fond: 'bg-blue-50',
         accent: 'text-blue-700',
-        lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'tous' } },
+        lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'dossiers-annee' } },
     },
     {
         libelle: 'Examens à préparer',
@@ -263,3 +264,4 @@ const cartes = (t: Tableau) => [
         </template>
     </Chargement>
 </template>
+

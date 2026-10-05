@@ -26,9 +26,15 @@ const {
 const recherche = ref('');
 const formationId = ref('');
 const anneeId = ref(typeof route.query.anneeId === 'string' ? route.query.anneeId : '');
-const filtreInscription = ref<'tous' | 'inscrits' | 'non-inscrits'>(
-    route.query.inscription === 'inscrits' || route.query.inscription === 'non-inscrits' ? route.query.inscription : 'tous',
-);
+type FiltreInscription = 'dossiers-annee' | 'inscrits' | 'non-actifs' | 'annuaire';
+const lireFiltreInscription = (valeur: unknown): FiltreInscription => {
+    if (valeur === 'inscrits') return 'inscrits';
+    if (valeur === 'non-actifs' || valeur === 'non-inscrits') return 'non-actifs';
+    if (valeur === 'annuaire' || valeur === 'tous') return 'annuaire';
+    if (valeur === 'dossiers-annee') return 'dossiers-annee';
+    return 'dossiers-annee';
+};
+const filtreInscription = ref<FiltreInscription>(lireFiltreInscription(route.query.inscription));
 const page = ref(1);
 const PAR_PAGE = 10;
 
@@ -43,16 +49,18 @@ watch(annees, (liste) => {
 
 watch(() => [route.query.anneeId, route.query.inscription] as const, ([annee, inscription]) => {
     if (typeof annee === 'string') anneeId.value = annee;
-    if (inscription === 'tous' || inscription === 'inscrits' || inscription === 'non-inscrits') {
-        filtreInscription.value = inscription;
-    }
+    if (inscription !== undefined) filtreInscription.value = lireFiltreInscription(inscription);
 });
 
 const normaliser = (v: string) => v.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const inscriptionsPour = (etudiantId: string) =>
     inscriptions.value.filter((i) => i.etudiantId === etudiantId && i.anneeId === anneeId.value);
-const estInscritCetteAnnee = (etudiantId: string) =>
-    inscriptionsPour(etudiantId).some((i) => i.statut === 'active');
+const etudiantsAvecDossierAnnee = computed(() => new Set(
+    inscriptions.value.filter((i) => i.anneeId === anneeId.value).map((i) => i.etudiantId),
+).size);
+const etudiantsInscritsAnnee = computed(() => new Set(
+    inscriptions.value.filter((i) => i.anneeId === anneeId.value && i.statut === 'active').map((i) => i.etudiantId),
+).size);
 const situationInscription = (etudiantId: string) => {
     const inscriptionsAnnee = inscriptionsPour(etudiantId);
     const inscrit = inscriptionsAnnee.some((i) => i.statut === 'active');
@@ -61,10 +69,12 @@ const situationInscription = (etudiantId: string) => {
         annulée: 'Inscription annulée',
         terminée: 'Inscription terminée',
     };
-    const detail = inscrit || !inscriptionsAnnee.length
-        ? null
-        : [...new Set(inscriptionsAnnee.map((i) => libelles[i.statut] ?? 'Inscription non active'))].join(' · ');
-    return { inscrit, detail };
+    const detail = !inscriptionsAnnee.length
+        ? `Aucune inscription enregistrée pour ${libelleAnnee.value}.`
+        : inscrit
+            ? null
+            : [...new Set(inscriptionsAnnee.map((i) => libelles[i.statut] ?? 'Inscription non active'))].join(' · ');
+    return { inscrit, aDossier: inscriptionsAnnee.length > 0, detail };
 };
 
 const filtres = computed(() => {
@@ -74,21 +84,22 @@ const filtres = computed(() => {
         const inscrit = inscriptionsAnnee.some((i) => i.statut === 'active');
         return (!terme || [e.nom, e.prenom, e.email].some((v) => normaliser(v ?? '').includes(terme)))
             && (!formationId.value || inscriptionsAnnee.some((i) => i.formationId === formationId.value))
-            && (filtreInscription.value === 'tous'
+            && (filtreInscription.value === 'annuaire'
+                || (filtreInscription.value === 'dossiers-annee' && inscriptionsAnnee.length > 0)
                 || (filtreInscription.value === 'inscrits' && inscrit)
-                || (filtreInscription.value === 'non-inscrits' && !inscrit));
+                || (filtreInscription.value === 'non-actifs' && inscriptionsAnnee.length > 0 && !inscrit));
     });
 });
 const affiches = computed(() => filtres.value.slice((page.value - 1) * PAR_PAGE, page.value * PAR_PAGE));
-const inscritsAnnee = computed(() => etudiants.value.filter((e) => estInscritCetteAnnee(e.id)).length);
-const nonInscritsAnnee = computed(() => etudiants.value.length - inscritsAnnee.value);
+const inscritsAnnee = etudiantsInscritsAnnee;
+const dossiersAverifierAnnee = computed(() => Math.max(0, etudiantsAvecDossierAnnee.value - inscritsAnnee.value));
 const libelleAnnee = computed(() => annees.value.find((a) => a.id === anneeId.value)?.libelle ?? 'année sélectionnée');
 watch([recherche, formationId, filtreInscription, anneeId], () => (page.value = 1));
 
 function effacerFiltres() {
     recherche.value = '';
     formationId.value = '';
-    filtreInscription.value = 'tous';
+    filtreInscription.value = 'dossiers-annee';
 }
 
 const aSupprimer = ref<Etudiant | null>(null);
@@ -112,21 +123,6 @@ async function supprimer() {
         <RouterLink to="/etudiants/nouveau" class="bouton-action">+ Nouvel étudiant</RouterLink>
     </div>
 
-    <section class="mb-5 grid gap-3 sm:grid-cols-3" aria-label="Résumé des inscriptions">
-        <article class="carte flex items-center justify-between p-4">
-            <div><p class="text-sm text-gray-500">Inscrits à l’INSEC</p><p class="mt-1 text-2xl font-semibold text-emerald-700">{{ inscritsAnnee }}</p></div>
-            <i class="fa-solid fa-user-check rounded-xl bg-emerald-50 p-3 text-emerald-700" aria-hidden="true"></i>
-        </article>
-        <article class="carte flex items-center justify-between p-4">
-            <div><p class="text-sm text-gray-500">Non inscrits cette année</p><p class="mt-1 text-2xl font-semibold text-gray-700">{{ nonInscritsAnnee }}</p></div>
-            <i class="fa-solid fa-user-minus rounded-xl bg-gray-100 p-3 text-gray-600" aria-hidden="true"></i>
-        </article>
-        <article class="carte flex items-center justify-between p-4">
-            <div><p class="text-sm text-gray-500">Dossiers au registre</p><p class="mt-1 text-2xl font-semibold text-insec">{{ etudiants.length }}</p></div>
-            <i class="fa-solid fa-users rounded-xl bg-blue-50 p-3 text-blue-700" aria-hidden="true"></i>
-        </article>
-    </section>
-
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
         <label class="flex items-center gap-2 text-sm text-gray-600">
             <span>Année scolaire</span>
@@ -134,8 +130,23 @@ async function supprimer() {
                 <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
             </select>
         </label>
-        <p class="text-xs text-gray-500">« Non inscrit » signifie qu’aucune inscription active n’existe pour l’année sélectionnée.</p>
+        <p class="text-xs text-gray-500">La liste par défaut ne contient que les dossiers de l’année. L’annuaire conserve les élèves des années précédentes.</p>
     </div>
+
+    <section class="mb-5 grid gap-3 sm:grid-cols-3" aria-label="Résumé des inscriptions pour l’année sélectionnée">
+        <article class="carte flex items-center justify-between p-4">
+            <div><p class="text-sm text-gray-500">Inscrits à l’INSEC</p><p class="mt-1 text-2xl font-semibold text-emerald-700">{{ inscritsAnnee }}</p></div>
+            <i class="fa-solid fa-user-check rounded-xl bg-emerald-50 p-3 text-emerald-700" aria-hidden="true"></i>
+        </article>
+        <article class="carte flex items-center justify-between p-4">
+            <div><p class="text-sm text-gray-500">Dossiers annuels à vérifier</p><p class="mt-1 text-2xl font-semibold text-gray-700">{{ dossiersAverifierAnnee }}</p></div>
+            <i class="fa-solid fa-user-minus rounded-xl bg-gray-100 p-3 text-gray-600" aria-hidden="true"></i>
+        </article>
+        <article class="carte flex items-center justify-between p-4">
+            <div><p class="text-sm text-gray-500">Élèves avec dossier annuel</p><p class="mt-1 text-2xl font-semibold text-insec">{{ etudiantsAvecDossierAnnee }}</p></div>
+            <i class="fa-solid fa-users rounded-xl bg-blue-50 p-3 text-blue-700" aria-hidden="true"></i>
+        </article>
+    </section>
 
     <div class="mb-4 flex flex-wrap gap-2">
         <input v-model="recherche" type="search" placeholder="Rechercher un étudiant…" class="champ min-w-[200px] flex-1" aria-label="Rechercher" />
@@ -144,9 +155,10 @@ async function supprimer() {
             <option v-for="f in formationsActives" :key="f.id" :value="f.id">{{ f.code }} · {{ f.nom }}</option>
         </select>
         <select v-model="filtreInscription" class="champ w-auto" aria-label="Filtrer par inscription">
-            <option value="tous">Tous les étudiants</option>
+            <option value="dossiers-annee">Dossiers de l’année</option>
             <option value="inscrits">Inscrits cette année</option>
-            <option value="non-inscrits">Non inscrits cette année</option>
+            <option value="non-actifs">Dossiers annuels à vérifier</option>
+            <option value="annuaire">Annuaire complet · toutes les années</option>
         </select>
     </div>
 
@@ -177,9 +189,10 @@ async function supprimer() {
         </section>
         <section v-else-if="!filtres.length" class="carte my-2 flex flex-col items-center px-6 py-12 text-center">
             <i class="fa-solid fa-magnifying-glass mb-4 text-2xl text-gray-400" aria-hidden="true"></i>
-            <h2 class="font-semibold text-gray-800">Aucun résultat pour ces critères</h2>
-            <p class="mt-1 text-sm text-gray-500">Changez l’année scolaire ou effacez la recherche et les filtres.</p>
-            <button class="mt-4 cursor-pointer text-sm font-semibold text-insec underline" @click="effacerFiltres">Effacer la recherche et les filtres</button>
+            <h2 class="font-semibold text-gray-800">{{ !etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire' ? `Aucun dossier enregistré pour ${libelleAnnee}` : 'Aucun résultat pour ces critères' }}</h2>
+            <p class="mt-1 text-sm text-gray-500">{{ !etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire' ? 'Les élèves des années précédentes restent dans l’annuaire complet.' : 'Changez l’année scolaire ou effacez la recherche et les filtres.' }}</p>
+            <button v-if="!etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire'" class="mt-4 cursor-pointer text-sm font-semibold text-insec underline" @click="filtreInscription = 'annuaire'">Afficher l’annuaire complet</button>
+            <button v-else class="mt-4 cursor-pointer text-sm font-semibold text-insec underline" @click="effacerFiltres">Effacer la recherche et les filtres</button>
         </section>
         <div v-else class="overflow-x-auto rounded-xl bg-white shadow">
             <table class="tableau">
@@ -200,8 +213,10 @@ async function supprimer() {
                             <span
                                 :class="situationInscription(e.id).inscrit
                                     ? 'inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800'
-                                    : 'inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700'"
-                            >{{ situationInscription(e.id).inscrit ? 'Inscrit à l’INSEC' : 'Non inscrit à l’INSEC' }}</span>
+                                    : situationInscription(e.id).aDossier
+                                        ? 'inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800'
+                                        : 'inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700'"
+                            >{{ situationInscription(e.id).inscrit ? 'Inscrit à l’INSEC' : situationInscription(e.id).aDossier ? 'Dossier à vérifier' : `Aucun dossier · ${libelleAnnee}` }}</span>
                             <p v-if="situationInscription(e.id).detail" class="mt-1 text-xs text-gray-500">{{ situationInscription(e.id).detail }}</p>
                         </td>
                         <td><BadgeStatut :statut="e.statut" /></td>
@@ -224,3 +239,4 @@ async function supprimer() {
         @confirmer="supprimer"
     />
 </template>
+
