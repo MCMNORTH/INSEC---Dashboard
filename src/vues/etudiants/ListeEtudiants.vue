@@ -16,7 +16,7 @@ import type { Etudiant, Inscription } from '../../types';
 
 const router = useRouter();
 const route = useRoute();
-const { formationsActives, annees, formation } = useReferentiel();
+const { formationsActives, annees, anneeCourante, formation } = useReferentiel();
 const { donnees: etudiants, chargement, erreur } = useRequete<Etudiant>(() => query(collection(db, 'etudiants'), orderBy('nom')));
 const {
     donnees: inscriptions,
@@ -37,7 +37,7 @@ watch(annees, (liste) => {
     if (typeof anneeDemandee === 'string' && liste.some((a) => a.id === anneeDemandee)) {
         anneeId.value = anneeDemandee;
     } else if (!anneeId.value || !liste.some((a) => a.id === anneeId.value)) {
-        anneeId.value = liste[0]?.id ?? '';
+        anneeId.value = anneeCourante.value?.id ?? '';
     }
 }, { immediate: true });
 
