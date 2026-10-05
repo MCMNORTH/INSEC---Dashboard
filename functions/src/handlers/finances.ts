@@ -124,3 +124,35 @@ export const ajouterEcheance = operation('ajouterEcheance', ROLES_FINANCE, async
     });
     return { message: 'Échéance ajoutée.' };
 });
+
+
+const tauxEuroMruRef = () => db.collection('parametres').doc('tauxEuroMru');
+
+export const lireTauxEuroMru = operation('lireTauxEuroMru', ROLES_FINANCE, async () => {
+    const document = await tauxEuroMruRef().get();
+    if (!document.exists) return { taux: null, modifieLe: null };
+    const modifieLe = document.get('modifieLe');
+    return {
+        taux: typeof document.get('taux') === 'number' ? document.get('taux') as number : null,
+        modifieLe: modifieLe && typeof modifieLe.toDate === 'function' ? modifieLe.toDate().toISOString() : null,
+    };
+});
+
+export const modifierTauxEuroMru = operation('modifierTauxEuroMru', ROLES_ADMIN, async (donnees, acteur) => {
+    const v = valider(z.object({ taux: s.nombre(1, 200) }), donnees);
+    const ref = tauxEuroMruRef();
+    await db.runTransaction(async (tx) => {
+        const document = await tx.get(ref);
+        const avant = document.exists ? { taux: document.get('taux'), source: document.get('source') } : null;
+        const apres = { taux: v.taux, source: 'Saisie manuelle' };
+        tx.set(ref, { ...apres, modifieLe: FieldValue.serverTimestamp(), modifiePar: acteur.uid }, { merge: true });
+        auditerModele(tx, acteur, 'Paramètre financier', ref.id, document.exists ? 'updated' : 'created', avant, apres);
+    });
+    const document = await ref.get();
+    const modifieLe = document.get('modifieLe');
+    return {
+        taux: v.taux,
+        modifieLe: modifieLe && typeof modifieLe.toDate === 'function' ? modifieLe.toDate().toISOString() : new Date().toISOString(),
+        message: 'Taux EUR/MRU enregistré et journalisé.',
+    };
+});
