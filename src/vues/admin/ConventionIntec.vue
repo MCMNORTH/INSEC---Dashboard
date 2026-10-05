@@ -1,7 +1,30 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { appeler, messageErreur } from '../../api';
 
 const aujourdHui = ref(new Date());
+const telechargementEnCours = ref(false);
+const erreurTelechargement = ref('');
+
+async function telechargerConvention() {
+    if (telechargementEnCours.value) return;
+    erreurTelechargement.value = '';
+    telechargementEnCours.value = true;
+    try {
+        const document = await appeler<{ nom: string; mimeType: string; contenu: string }>('telechargerConventionIntec');
+        const octets = Uint8Array.from(atob(document.contenu), (caractere) => caractere.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([octets], { type: document.mimeType || 'application/pdf' }));
+        const lien = document.createElement('a');
+        lien.href = url;
+        lien.download = document.nom;
+        lien.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (erreur) {
+        erreurTelechargement.value = messageErreur(erreur);
+    } finally {
+        telechargementEnCours.value = false;
+    }
+}
 const joursAvantEcheance = computed(() => {
     const aujourdHuiLocale = new Date(aujourdHui.value.getFullYear(), aujourdHui.value.getMonth(), aujourdHui.value.getDate());
     const echeance = new Date(2027, 9, 19);
@@ -16,10 +39,21 @@ const joursAvantEcheance = computed(() => {
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-blue-100">Partenariat de formation · CNAM–INTEC × INSEC Mauritanie</p>
             <h1 class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Notre convention avec l’INTEC</h1>
             <p class="mt-3 max-w-2xl text-sm leading-6 text-blue-100 sm:text-base">Les engagements du centre, les modalités d’examens et les échéances contractuelles, réunis sur une seule page.</p>
-            <div class="mt-6 flex flex-wrap gap-3">
+            <div class="mt-6 flex flex-wrap items-center gap-3">
                 <span class="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm">Prise d’effet : 19 octobre 2024</span>
                 <span class="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm">Durée prévue : 3 ans</span>
+                <button
+                    type="button"
+                    class="inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-insec shadow-sm transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-70"
+                    :disabled="telechargementEnCours"
+                    @click="telechargerConvention"
+                >
+                    <i :class="['fa-solid', telechargementEnCours ? 'fa-spinner fa-spin' : 'fa-file-arrow-down']"></i>
+                    {{ telechargementEnCours ? 'Préparation du PDF…' : 'Télécharger la convention PDF' }}
+                </button>
             </div>
+            <p v-if="erreurTelechargement" role="alert" class="mt-3 text-sm font-medium text-rose-100">{{ erreurTelechargement }}</p>
+            <p class="mt-2 text-xs text-blue-100">PDF original réservé aux comptes administrateurs INSEC.</p>
         </header>
 
         <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Repères contractuels">
