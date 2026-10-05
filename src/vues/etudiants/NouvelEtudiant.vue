@@ -4,17 +4,17 @@ import { useRouter } from 'vue-router';
 import { appeler } from '../../api';
 import ChampsIdentite, { type Identite } from '../../composants/ChampsIdentite.vue';
 import ChampsInscription, { type ValeursInscription } from '../../composants/ChampsInscription.vue';
-import { aujourdhui } from '../../format';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 
 const router = useRouter();
 const { envoi, erreurs, soumettre } = useFormulaire();
-const identite = ref<Identite>({ nom: '', prenom: '', email: '', telephone: '', statut: 'Actif' });
-const inscription = ref<ValeursInscription>({ formationId: '', anneeId: '', anneeParcours: '', dateInscription: aujourdhui(), numeroIntec: '', ueIds: [] });
+const identite = ref<Identite>({ nom: '', prenom: '', email: '', dateNaissance: '', telephone: '', statut: 'Actif' });
+const inscription = ref<ValeursInscription>({ formationId: '', anneeId: '', anneeParcours: '', dateInscription: '', numeroIntec: '', ueIds: [] });
+const noteFinanciere = ref('');
 
 async function enregistrer() {
-    const resultat = await soumettre(() => appeler<{ id: string; message: string }>('creerEtudiant', { ...identite.value, ...inscription.value }));
+    const resultat = await soumettre(() => appeler<{ id: string; message: string }>('creerEtudiant', { ...identite.value, ...inscription.value, noteFinanciere: noteFinanciere.value }));
     if (!resultat) return;
     notifier(resultat.message, { apresNavigation: true });
     await router.push(`/etudiants/${resultat.id}`);
@@ -33,6 +33,10 @@ async function enregistrer() {
             <section class="border-t pt-5">
                 <h2 class="mb-3 font-semibold text-insec">Inscription</h2>
                 <ChampsInscription v-model="inscription" :erreurs="erreurs" />
+                <label class="etiquette mt-4 block">Note financière <span class="text-gray-400">(facultative)</span>
+                    <textarea v-model="noteFinanciere" class="champ mt-1 min-h-20" maxlength="2000" />
+                    <span v-if="erreurs.noteFinanciere" class="text-xs text-red-600">{{ erreurs.noteFinanciere }}</span>
+                </label>
             </section>
             <button class="bouton-action" :disabled="envoi">Enregistrer l’étudiant</button>
         </form>

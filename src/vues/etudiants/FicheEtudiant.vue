@@ -6,7 +6,7 @@ import BadgeStatut from '../../composants/BadgeStatut.vue';
 import Chargement from '../../composants/Chargement.vue';
 import { useDocument, useRequete } from '../../donnees';
 import { db } from '../../firebase';
-import { montant } from '../../format';
+import { date, montant } from '../../format';
 import { useReferentiel } from '../../referentiel';
 import { creditsInscrits, creditsValides } from '../../scolarite';
 import type { Etudiant, Inscription, Resultat } from '../../types';
@@ -49,7 +49,8 @@ const progression = (i: Inscription) => {
                     <div>
                         <h1 class="text-lg font-bold text-insec">{{ etudiant.prenom }} {{ etudiant.nom }}</h1>
                         <BadgeStatut :statut="etudiant.statut" />
-                        <p class="mt-2 text-sm text-gray-500">{{ etudiant.email }} · {{ etudiant.telephone || '—' }}</p>
+                        <p class="mt-2 text-sm text-gray-500">E-mail : {{ etudiant.email || '—' }} · Téléphone : {{ etudiant.telephone || '—' }}</p>
+                        <p class="mt-1 text-sm text-gray-500">Date de naissance : {{ date(etudiant.dateNaissance) }}</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <RouterLink :to="`/etudiants/${id}/documents`" class="bouton bg-blue-50 text-blue-800">Dossier documentaire</RouterLink>

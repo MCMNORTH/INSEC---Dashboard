@@ -6,7 +6,7 @@ export interface ValeursInscription {
     formationId: string;
     anneeId: string;
     anneeParcours: number | '';
-    dateInscription: string;
+    dateInscription: string | null;
     numeroIntec: string;
     statut?: string;
     ueIds: string[];
@@ -52,8 +52,8 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
                 <option v-for="i in duree" :key="i" :value="i">Année {{ i }}</option>
             </select>
         </label>
-        <label class="etiquette">Date d’inscription
-            <input v-model="valeurs.dateInscription" type="date" class="champ mt-1" required />
+        <label class="etiquette">Date d’inscription <span class="text-gray-400">(facultative)</span>
+            <input v-model="valeurs.dateInscription" type="date" class="champ mt-1" />
         </label>
         <label class="etiquette">N° d’inscription INTEC <span class="text-gray-400">(facultatif)</span>
             <input v-model="valeurs.numeroIntec" class="champ mt-1" maxlength="100" />
