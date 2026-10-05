@@ -26,8 +26,10 @@
         "@firebase/rules-unit-testing": "^5.0.2",
         "@types/node": "^22.20.4",
         "@types/nodemailer": "^8.0.2",
+        "@vue/tsconfig": "^0.9.1",
         "firebase": "^12.19.0",
         "typescript": "~5.9",
         "vitest": "^5.0.3"
     }
 }
+
