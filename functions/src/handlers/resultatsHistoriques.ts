@@ -1,12 +1,13 @@
 import ExcelJS from 'exceljs';
 import { auditerDirect, trace } from '../lib/audit.js';
-import { operation, refuser } from '../lib/contexte.js';
+import { introuvable, operation, refuser } from '../lib/contexte.js';
 import { col } from '../lib/donnees.js';
-import { db } from '../lib/firebase.js';
+import { bucket, db } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
 import { ROLES_ADMIN } from '../shared/domaine.js';
 
 const SOURCE = 'Resultat DCG-INSEC 2024-2025.xlsx';
+const MIME_CLASSEUR = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const FEUILLES: Record<string, string> = {
     'fondamentaux du droit': 'TEC111',
     'economie contemporaine': 'TEC115',
@@ -77,6 +78,23 @@ async function lireClasseur(base64: string, nom: string): Promise<LigneSource[]>
 }
 
 const payload = z.object({ fichierBase64: s.texte(8_000_000), nomFichier: s.texte(150) });
+
+/** Téléchargement contrôlé du classeur historique depuis le stockage privé, réservé aux administrateurs. */
+export const telechargerClasseurResultatsHistoriques = operation('telechargerClasseurResultatsHistoriques', ROLES_ADMIN, async (_donnees, acteur) => {
+    const fichier = bucket().file(`documents/${SOURCE}`);
+    const [existe] = await fichier.exists();
+    if (!existe) introuvable('Le classeur des résultats historiques n’est pas disponible.');
+    const [meta] = await fichier.getMetadata();
+    const taille = Number(meta.size ?? 0);
+    if (meta.contentType !== MIME_CLASSEUR || taille > 6 * 1024 * 1024) refuser('Le classeur stocké ne correspond pas au format attendu.');
+    const [contenu] = await fichier.download();
+    await auditerDirect(acteur, {
+        action: 'download', modele: 'ResultatsHistoriques', modeleId: '2024-2025',
+        description: `Téléchargement du classeur Excel historique ${SOURCE}`,
+        apres: { nom: SOURCE, taille },
+    });
+    return { nom: SOURCE, mimeType: MIME_CLASSEUR, contenu: contenu.toString('base64') };
+});
 export const analyserResultatsHistoriques = operation('analyserResultatsHistoriques', ROLES_ADMIN, async (donnees) => {
     const v = valider(payload, donnees);
     const lignes = await lireClasseur(v.fichierBase64, v.nomFichier);

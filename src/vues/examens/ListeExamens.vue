@@ -29,6 +29,7 @@ const apercuResultats = ref<{ total: number; ecarts: number; lignes: Omit<Result
 const chargementResultats = ref(false);
 const erreurResultats = ref('');
 const confirmationImportResultats = ref(false);
+const telechargementResultats = ref(false);
 const messageImportResultats = ref('');
 const calendriersImportes = ref<CalendrierImporte[]>([]);
 const erreurCalendrier = ref('');
@@ -96,7 +97,11 @@ const groupesResultats = computed(() => {
     return ['DGC', 'DSGC'].flatMap((diplome) => {
         const groupe = groupes.get(diplome);
         if (!groupe?.size) return [];
-        const codesUe = [...new Set([...groupe.values()].flatMap((lignes) => lignes.map((r) => r.codeUe)))];
+        const uesDuDiplome = ues.value.filter((u) => {
+            const codeFormationUE = formation(u.formationId)?.code.toUpperCase() ?? u.formationId.toUpperCase();
+            return codeFormationUE === diplome;
+        });
+        const codesUe = [...new Set([...uesDuDiplome.map((u) => u.code), ...[...groupe.values()].flatMap((lignes) => lignes.map((r) => r.codeUe))])];
         const colonnes = codesUe.map((code) => ({
             code,
             libelle: ues.value.find((u) => u.code === code)?.libelle ?? groupe.values().next().value?.find((r) => r.codeUe === code)?.libelleUe ?? '',
@@ -111,6 +116,51 @@ const groupesResultats = computed(() => {
         return [{ diplome, colonnes, candidats }];
     });
 });
+
+const statistiquesGroupes = computed(() => groupesResultats.value.map((groupe) => {
+    const compteParUe = groupe.colonnes.map((colonne) => ({
+        ...colonne,
+        nombre: groupe.candidats.reduce((total, candidat) => total + (candidat.parUe.get(colonne.code)?.length ?? 0), 0),
+    })).filter((colonne) => colonne.nombre > 0);
+    const maximumUe = Math.max(0, ...compteParUe.map((colonne) => colonne.nombre));
+    const uesPlusEvaluees = compteParUe.filter((colonne) => colonne.nombre === maximumUe);
+    const comptesCandidats = groupe.candidats.map((candidat) => ({
+        nom: candidat.nom,
+        nombre: groupe.colonnes.filter((colonne) => (candidat.parUe.get(colonne.code)?.length ?? 0) > 0).length,
+    }));
+    const maximumCandidat = Math.max(0, ...comptesCandidats.map((candidat) => candidat.nombre));
+    return {
+        diplome: groupe.diplome,
+        nombreCandidats: groupe.candidats.length,
+        totalResultats: compteParUe.reduce((total, colonne) => total + colonne.nombre, 0),
+        uesPlusEvaluees,
+        nombreMaximumUe: maximumUe,
+        candidatsLesPlusEvalues: comptesCandidats.filter((candidat) => candidat.nombre === maximumCandidat && maximumCandidat > 0),
+        nombreMaximumCandidat: maximumCandidat,
+    };
+}));
+
+async function telechargerClasseurResultats() {
+    telechargementResultats.value = true;
+    erreurResultats.value = '';
+    try {
+        const classeur = await appeler<{ nom: string; mimeType: string; contenu: string }>('telechargerClasseurResultatsHistoriques');
+        const octets = Uint8Array.from(atob(classeur.contenu), (caractere) => caractere.charCodeAt(0));
+        const fichier = new Blob([octets.buffer as ArrayBuffer], { type: classeur.mimeType });
+        const url = URL.createObjectURL(fichier);
+        const lien = document.createElement('a');
+        lien.href = url;
+        lien.download = classeur.nom;
+        document.body.appendChild(lien);
+        lien.click();
+        lien.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+        erreurResultats.value = messageErreur(e);
+    } finally {
+        telechargementResultats.value = false;
+    }
+}
 
 async function lireFichierResultats(event: Event) {
     fichierResultats.value = (event.target as HTMLInputElement).files?.[0] ?? null;
@@ -176,9 +226,22 @@ async function importerClasseurConfirme() {
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Résultats · {{ annee(anneeId)?.libelle ?? anneeId }}</p>
                 <h2 id="resultats-historiques" class="mt-1 text-lg font-bold text-insec">Notes par élève et par UE</h2>
-                <p class="mt-1 max-w-3xl text-sm text-gray-600">Le classeur Excel « Resultat DCG-INSEC 2024-2025.xlsx » fait foi sur les PDF d’engagement. À partir de 10/20, l’UE est validée ; de 6 à moins de 10, elle est capitalisable et n’est pas à repasser ; sous 6, elle est à repasser. « ABS » indique une absence ; « — » signifie qu’aucun résultat n’est renseigné. Les écarts sont conservés et signalés.</p>
             </div>
-            <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-900">{{ resultats.length }} résultat(s) historique(s)</span>
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-900">{{ resultats.length }} résultat(s) historique(s)</span>
+                <button v-if="anneeId === '2024-2025'" class="bouton-secondaire whitespace-nowrap" :disabled="telechargementResultats" @click="telechargerClasseurResultats">{{ telechargementResultats ? 'Préparation du fichier…' : 'Télécharger le classeur Excel' }}</button>
+            </div>
+        </div>
+        <div v-if="statistiquesGroupes.length" class="mt-4 space-y-3">
+            <section v-for="stat in statistiquesGroupes" :key="stat.diplome" class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <h3 class="mb-3 text-sm font-semibold text-insec">{{ stat.diplome }} · récapitulatif des résultats</h3>
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <article class="rounded-lg bg-white p-3 shadow-sm"><p class="text-xs text-gray-500">Candidats avec résultats</p><p class="mt-1 text-xl font-bold text-insec">{{ stat.nombreCandidats }}</p></article>
+                    <article class="rounded-lg bg-white p-3 shadow-sm"><p class="text-xs text-gray-500">Résultats enregistrés</p><p class="mt-1 text-xl font-bold text-insec">{{ stat.totalResultats }}</p></article>
+                    <article class="rounded-lg bg-white p-3 shadow-sm"><p class="text-xs text-gray-500">UE la plus évaluée</p><p class="mt-1 font-semibold text-insec">{{ stat.uesPlusEvaluees.map((ue) => ue.code).join(', ') || '—' }}</p><p v-if="stat.nombreMaximumUe" class="text-xs text-gray-500">{{ stat.nombreMaximumUe }} résultat(s) pour chaque UE</p></article>
+                    <article class="rounded-lg bg-white p-3 shadow-sm"><p class="text-xs text-gray-500">Candidat(s) avec le plus d’UE notées</p><p class="mt-1 font-semibold text-insec">{{ stat.candidatsLesPlusEvalues.map((candidat) => candidat.nom).join(', ') || '—' }}</p><p v-if="stat.nombreMaximumCandidat" class="text-xs text-gray-500">{{ stat.nombreMaximumCandidat }} UE renseignée(s)</p></article>
+                </div>
+            </section>
         </div>
         <div v-if="anneeId === '2024-2025'" class="mt-4 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
             <label class="etiquette">Classeur Excel de référence
@@ -216,12 +279,13 @@ async function importerClasseurConfirme() {
                     <h3 class="font-semibold text-insec">{{ groupe.diplome }} · résultats par UE</h3>
                     <span class="text-sm text-gray-500">{{ groupe.candidats.length }} candidat(s) · {{ groupe.colonnes.length }} UE</span>
                 </header>
+                <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">Faites défiler horizontalement pour consulter toutes les unités d’enseignement.</p>
                 <div class="overflow-x-auto">
-                    <table class="tableau min-w-full">
-                        <thead><tr><th class="sticky left-0 bg-white">Élève</th><th v-for="colonne in groupe.colonnes" :key="colonne.code" class="min-w-40"><span class="block">{{ colonne.code }}</span><span class="text-xs font-normal text-gray-500">{{ colonne.libelle }}</span></th><th class="min-w-56">Écarts à vérifier</th></tr></thead>
+                    <table class="tableau min-w-max">
+                        <thead><tr><th class="sticky left-0 top-0 z-20 min-w-52 bg-white">Élève</th><th v-for="colonne in groupe.colonnes" :key="colonne.code" class="min-w-44"><span class="block">{{ colonne.code }}</span><span class="text-xs font-normal text-gray-500">{{ colonne.libelle }}</span></th><th class="min-w-56">Écarts à vérifier</th></tr></thead>
                         <tbody>
                             <tr v-for="candidat in groupe.candidats" :key="candidat.cle" :class="candidat.ecarts.length ? 'bg-amber-50' : ''">
-                                <th scope="row" class="sticky left-0 bg-inherit font-medium">{{ candidat.nom }}</th>
+                                <th scope="row" :class="['sticky left-0 z-10 min-w-52 font-medium', candidat.ecarts.length ? 'bg-amber-50' : 'bg-white']">{{ candidat.nom }}</th>
                                 <td v-for="colonne in groupe.colonnes" :key="colonne.code" class="align-top">
                                     <template v-if="candidat.parUe.get(colonne.code)?.length">
                                         <div v-for="(r, index) in candidat.parUe.get(colonne.code)" :key="r.id" :class="index ? 'mt-2 border-t border-gray-200 pt-2' : ''">
@@ -229,7 +293,7 @@ async function importerClasseurConfirme() {
                                             <span class="mt-1 block text-xs text-gray-600">{{ appreciationResultat(r) }}</span>
                                         </div>
                                     </template>
-                                    <span v-else class="text-gray-400" title="Aucun résultat renseigné dans le classeur">—</span>
+                                    <span v-else class="text-gray-300" title="Aucun résultat renseigné">—</span>
                                 </td>
                                 <td>
                                     <span v-if="!candidat.ecarts.length" class="text-sm text-green-700">Aucun écart signalé</span>

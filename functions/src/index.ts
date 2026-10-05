@@ -11,7 +11,7 @@ export { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription,
 export { exporterExcel, importerEtudiants } from './handlers/excel.js';
 export { creerExamen, enregistrerPresencesExamen, enregistrerResultat, mettreAJourPreparationExamen } from './handlers/examens.js';
 export { ajouterEcheance, ajouterVersement, confirmerReglementBumex2024, lireTauxEuroMru, modifierSituationFinanciere, modifierTauxEuroMru } from './handlers/finances.js';
-export { analyserResultatsHistoriques, importerResultatsHistoriques } from './handlers/resultatsHistoriques.js';
+export { analyserResultatsHistoriques, importerResultatsHistoriques, telechargerClasseurResultatsHistoriques } from './handlers/resultatsHistoriques.js';
 export { envoyerConvocationsExamen, envoyerDocumentParEmail, genererPdf } from './handlers/pdf.js';
 export { sante } from './handlers/sante.js';
 export { creerSauvegarde, restaurerSauvegarde, sauvegardeQuotidienne, verifierSauvegarde } from './handlers/sauvegardes.js';
