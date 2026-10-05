@@ -5,6 +5,30 @@ import { bucket, db } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
 import { MIME_PIECES, ROLES_ADMIN, STATUTS_PIECE, TAILLE_MAX_PIECE, TYPES_PIECE } from '../shared/domaine.js';
 
+/** Télécharge le PDF original de la convention, conservé dans le stockage privé. */
+export const telechargerConventionIntec = operation('telechargerConventionIntec', ROLES_ADMIN, async (_donnees, acteur) => {
+    const fichier = bucket().file('documents/convention-intec-2024.pdf');
+    const [existe] = await fichier.exists();
+    if (!existe) introuvable('Le PDF de la convention n’est pas encore disponible.');
+    const [meta] = await fichier.getMetadata();
+    if (meta.contentType !== 'application/pdf' || Number(meta.size ?? 0) > 5 * 1024 * 1024) {
+        throw new Error('Le fichier de convention stocké est invalide.');
+    }
+    const [contenu] = await fichier.download();
+    await auditerDirect(acteur, {
+        action: 'download',
+        modele: 'ConventionINTEC',
+        modeleId: 'convention-intec-2024',
+        description: 'Téléchargement du PDF original de la convention INSEC–CNAM INTEC',
+        apres: { nom: 'Convention INSEC- Mauritanie-Oct2024.pdf', taille: Number(meta.size ?? 0) },
+    });
+    return {
+        nom: 'Convention INSEC - Mauritanie - octobre 2024.pdf',
+        mimeType: 'application/pdf',
+        contenu: contenu.toString('base64'),
+    };
+});
+
 /** Enregistre une pièce déjà téléversée par le navigateur dans dossiers/{etudiantId}/. */
 export const enregistrerPiece = operation('enregistrerPiece', ROLES_ADMIN, async (donnees, acteur) => {
     const v = valider(
