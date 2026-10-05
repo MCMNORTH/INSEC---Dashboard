@@ -170,7 +170,7 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                         type="button"
                         class="mt-2 w-full rounded-lg border border-white/30 px-3 py-2 text-sm text-blue-50 hover:bg-white/10"
                         :disabled="envoi || !emailEtudiantValide"
-                        @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email)"
+                        @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email ?? '')"
                     >Envoyer la facture par e-mail</button>
                     <p v-if="emailEtudiantValide" role="status" class="mt-2 text-xs text-blue-100">Destinataire : {{ selectionne.email }}</p>
                     <p v-else class="mt-2 rounded bg-amber-400/15 p-2 text-xs text-amber-100">
@@ -226,7 +226,7 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                                         class="ml-2 cursor-pointer underline"
                                         :disabled="envoi || v.statut !== 'Validée' || !emailEtudiantValide"
                                         title="Envoyer le reçu par e-mail (versement validé)"
-                                        @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email)"
+                                        @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')"
                                     >Envoyer</button>
                                 </p>
                             </div>
