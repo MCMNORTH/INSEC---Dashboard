@@ -8,7 +8,7 @@ import { ROLES_ADMIN, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/do
 
 const emailOptionnel = z.preprocess(
     (valeur) => (typeof valeur === 'string' && valeur.trim() === '' ? null : valeur),
-    z.string().trim().toLowerCase().pipe(z.email('adresse e-mail invalide.')).max(255).nullish(),
+    z.string().trim().toLowerCase().max(255).pipe(z.email('adresse e-mail invalide.')).nullish(),
 ).transform((valeur) => valeur ?? null);
 
 const identite = z.object({
