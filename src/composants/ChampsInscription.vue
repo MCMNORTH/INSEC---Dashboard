@@ -14,7 +14,7 @@ export interface ValeursInscription {
 
 defineProps<{ erreurs: Record<string, string>; avecStatut?: boolean }>();
 const valeurs = defineModel<ValeursInscription>({ required: true });
-const { formationsActives, annees, ues, formation } = useReferentiel();
+const { formationsActives, annees, anneeCourante, ues, formation } = useReferentiel();
 
 const duree = computed(() => formation(valeurs.value.formationId)?.dureeAnnees ?? 3);
 const uesProposees = computed(() =>
@@ -25,8 +25,8 @@ watch(uesProposees, (liste) => {
     const permises = new Set(liste.map((u) => u.id));
     valeurs.value.ueIds = valeurs.value.ueIds.filter((id) => permises.has(id));
 });
-watch(annees, (liste) => {
-    if (!valeurs.value.anneeId && liste[0]) valeurs.value.anneeId = liste[0].id;
+watch([annees, anneeCourante], () => {
+    if (!valeurs.value.anneeId && anneeCourante.value) valeurs.value.anneeId = anneeCourante.value.id;
 }, { immediate: true });
 
 const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue', 'Suspendue'], ['annulée', 'Annulée']];
