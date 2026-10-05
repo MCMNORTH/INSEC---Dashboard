@@ -259,6 +259,22 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
             <label class="mb-4 flex items-center gap-3 text-sm text-gray-600">Année académique :
                 <select v-model="anneeSynthese" class="champ w-auto"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
             </label>
+            <section class="mb-4 rounded-xl border border-blue-100 bg-blue-50/70 p-4 sm:p-5" aria-labelledby="tarification-ue">
+                <div class="mb-3">
+                    <h2 id="tarification-ue" class="font-semibold text-insec">Tarification par UE</h2>
+                    <p class="mt-1 text-sm text-gray-600">Les deux montants de référence appliqués par l’INSEC pour chaque unité d’enseignement.</p>
+                </div>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div class="rounded-lg border border-white bg-white p-4">
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Coût payé par l’INSEC à l’INTEC</p>
+                        <p class="mt-1 text-xl font-bold text-insec">160 € <span class="text-sm font-medium text-gray-500">par UE</span></p>
+                    </div>
+                    <div class="rounded-lg border border-white bg-white p-4">
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Tarif facturé à l’étudiant par l’INSEC</p>
+                        <p class="mt-1 text-xl font-bold text-insec">16 000 MRU <span class="text-sm font-medium text-gray-500">par UE</span></p>
+                    </div>
+                </div>
+            </section>
             <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div class="carte p-4"><p class="text-xs text-gray-500">Inscriptions concernées</p><p class="text-xl font-bold text-insec">{{ carte?.nb ?? 0 }}</p></div>
                 <div class="carte p-4"><p class="text-xs text-gray-500">Frais nets facturés</p><p class="text-xl font-bold text-insec">{{ millions(carte?.du) }} M MRU</p></div>
