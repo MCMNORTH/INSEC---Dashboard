@@ -18,13 +18,13 @@ const idEtudiant = computed(() => props.etudiantId ?? inscription.value?.etudian
 const { donnee: etudiant, chargement: chargementEtudiant } = useDocument<Etudiant>(() => (idEtudiant.value ? `etudiants/${idEtudiant.value}` : null));
 
 const valeurs = ref<ValeursInscription | null>(props.inscriptionId ? null : {
-    formationId: '', anneeId: '', anneeParcours: '', dateInscription: aujourdhui(), numeroIntec: '', ueIds: [],
+    formationId: '', anneeId: '', anneeParcours: '', dateInscription: aujourdhui(), numeroIntec: '', financeur: 'etudiant', ueIds: [],
 });
 watch(inscription, (i) => {
     if (i && !valeurs.value) {
         valeurs.value = {
             formationId: i.formationId, anneeId: i.anneeId, anneeParcours: i.anneeParcours, dateInscription: i.dateInscription,
-            numeroIntec: i.numeroIntec ?? '', statut: i.statut, ueIds: [...i.ueIds],
+            numeroIntec: i.numeroIntec ?? '', statut: i.statut, financeur: i.financeur ?? 'etudiant', ueIds: [...i.ueIds],
         };
     }
 }, { immediate: true });

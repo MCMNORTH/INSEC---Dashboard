@@ -25,6 +25,7 @@ service cloud.firestore {
     // Le calendrier des examens n'est pas confidentiel pour les membres connectés de l'établissement.
     match /examens/{id} { allow read: if admin() || role() in ['enseignant', 'etudiant']; }
     match /resultats/{id} { allow read: if admin() || etudiant(resource.data.etudiantId); }
+    match /resultatsHistoriques/{id} { allow read: if admin(); }
 
     match /pieces/{id} { allow read: if admin(); }
     match /candidatures/{id} { allow read: if admin(); }

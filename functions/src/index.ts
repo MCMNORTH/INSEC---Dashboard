@@ -10,7 +10,8 @@ export { affecterUe, creerEnseignant, modifierEnseignant, retirerAffectation, su
 export { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription, supprimerEtudiant } from './handlers/etudiants.js';
 export { exporterExcel, importerEtudiants } from './handlers/excel.js';
 export { creerExamen, enregistrerPresencesExamen, enregistrerResultat, mettreAJourPreparationExamen } from './handlers/examens.js';
-export { ajouterEcheance, ajouterVersement, modifierSituationFinanciere } from './handlers/finances.js';
+export { ajouterEcheance, ajouterVersement, confirmerReglementBumex2024, modifierSituationFinanciere } from './handlers/finances.js';
+export { analyserResultatsHistoriques, importerResultatsHistoriques } from './handlers/resultatsHistoriques.js';
 export { envoyerConvocationsExamen, envoyerDocumentParEmail, genererPdf } from './handlers/pdf.js';
 export { sante } from './handlers/sante.js';
 export { creerSauvegarde, restaurerSauvegarde, sauvegardeQuotidienne, verifierSauvegarde } from './handlers/sauvegardes.js';

@@ -27,6 +27,7 @@ const champsInscription = z.object({
     dateInscription: s.dateOptionnelle(),
     numeroIntec: s.texteOptionnel(100),
     ueIds: z.array(s.id()).min(1, 'sélectionnez au moins une UE.').max(50),
+    financeur: s.choix(['etudiant', 'bumex'] as const).optional(),
 });
 type ChampsInscription = z.output<typeof champsInscription>;
 
@@ -62,6 +63,7 @@ export function attributsInscription(v: ChampsInscription, statut: string) {
         numeroIntec: v.numeroIntec,
         statut,
         ueIds: v.ueIds,
+        financeur: v.financeur ?? 'etudiant',
     };
 }
 
