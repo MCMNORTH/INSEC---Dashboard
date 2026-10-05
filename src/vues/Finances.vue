@@ -113,7 +113,7 @@ const synthese = computed(() =>
         const resteEtudiants = payeesEtudiants.reduce((t, i) => t + soldeRestant(i), 0);
         const montantBumex = bumex.reduce((t, i) => t + (i.montantBumex ?? montantNet(i)), 0);
         const bumexRegle = bumex.filter((i) => i.statutBumex === 'reglee').reduce((t, i) => t + (i.montantBumex ?? montantNet(i)), 0);
-        return { id: a.id, libelle: a.libelle, nb: liste.length, etudiants: new Set(liste.map((i) => i.etudiantId)).size, nbEtudiants: payeesEtudiants.length, nbBumex: bumex.length, du: duEtudiants, encaisse: encaisseEtudiants, resteEtudiants, montantBumex, bumexRegle, statut: duEtudiants > 0 && encaisseEtudiants >= duEtudiants ? 'Soldé' : encaisseEtudiants > 0 ? 'Partiel' : 'Impayé' };
+        return { id: a.id, libelle: a.libelle, nb: liste.length, etudiants: new Set(liste.map((i) => i.etudiantId)).size, nbEtudiants: payeesEtudiants.length, nbBumex: bumex.length, du: duEtudiants, encaisse: encaisseEtudiants, resteEtudiants, montantBumex, bumexRegle, statut: duEtudiants === 0 ? (montantBumex > 0 ? (bumexRegle >= montantBumex ? 'BUMEX réglé' : 'À régler par BUMEX') : 'Aucun montant dû') : encaisseEtudiants >= duEtudiants ? 'Soldé' : encaisseEtudiants > 0 ? 'Partiel' : 'Impayé' };
     }),
 );
 const carte = computed(() => synthese.value.find((s) => s.id === anneeSynthese.value));
