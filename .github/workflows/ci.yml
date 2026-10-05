@@ -54,6 +54,11 @@ jobs:
       - name: Compiler les Cloud Functions
         run: npm run build
 
+      - name: Rendre le tsconfig Vue racine disponible aux tests
+        run: |
+          mkdir -p ../node_modules/@vue
+          cp -R node_modules/@vue/tsconfig ../node_modules/@vue/tsconfig
+
       - name: Tester les fonctions et les règles de sécurité (émulateurs)
         run: npm test
 
