@@ -57,7 +57,7 @@ const prochainesEpreuvesOfficielles = computed(() => {
     return calendrier.examens.filter((e) => e.date >= aujourdHui).slice(0, 4);
 });
 
-function lienPreparationIntec(e: (typeof CALENDRIER_INTEC_2026_2027)[number]) {
+function lienSuiviIntec(e: (typeof CALENDRIER_INTEC_2026_2027)[number]) {
     return {
         path: '/examens/nouveau',
         query: { source: 'intec', ue: e.codeUE, annee: anneeSelectionnee.value, dateHeure: `${e.date}T${e.heure}`, session: 'Normale' },
@@ -110,9 +110,9 @@ const cartes = (t: Tableau) => [
         lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'dossiers-annee' } },
     },
     {
-        libelle: 'Examens à préparer',
+        libelle: 'Suivis locaux',
         valeur: t.examensProchains.length,
-        detail: 'Dans les 30 prochains jours',
+        detail: 'Épreuves suivies localement dans les 30 prochains jours',
         icone: 'fa-calendar-days',
         fond: 'bg-amber-50',
         accent: 'text-amber-700',
@@ -186,7 +186,7 @@ const cartes = (t: Tableau) => [
                             <strong class="block text-sm text-gray-900">{{ e.diplôme }} · UE {{ e.codeUE }}</strong>
                             <span class="text-xs text-gray-500">{{ e.intitule }}</span>
                         </span>
-                        <RouterLink :to="lienPreparationIntec(e)" class="bouton-secondaire whitespace-nowrap">Préparer</RouterLink>
+                        <RouterLink :to="lienSuiviIntec(e)" class="bouton-secondaire whitespace-nowrap">Ouvrir le suivi</RouterLink>
                     </div>
                 </div>
                 <p v-else class="px-5 py-4 text-sm text-gray-600">Les épreuves de ce calendrier sont passées. Consultez le document INTEC pour les prochaines dates publiées.</p>
