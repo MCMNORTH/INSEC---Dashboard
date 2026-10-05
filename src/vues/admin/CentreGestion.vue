@@ -8,12 +8,6 @@ const nonLues = useAlertesNonLues();
 const modules = computed(() => {
     const espaces = [
         {
-            vers: '/convention-intec',
-            titre: 'Convention INTEC',
-            description: 'Retrouvez les clauses essentielles, les responsabilités et les échéances de renouvellement.',
-            icone: 'fa-file-contract',
-        },
-        {
             vers: '/alertes',
             titre: 'Alertes',
             description: 'Repérez les échéances, notifications et actions qui demandent votre attention.',
