@@ -28,6 +28,8 @@ const base64Resultats = ref('');
 const apercuResultats = ref<{ total: number; ecarts: number; lignes: Omit<ResultatHistorique, 'id' | 'anneeId' | 'dateExamen' | 'source'>[] } | null>(null);
 const chargementResultats = ref(false);
 const erreurResultats = ref('');
+const confirmationImportResultats = ref(false);
+const messageImportResultats = ref('');
 const calendriersImportes = ref<CalendrierImporte[]>([]);
 const erreurCalendrier = ref('');
 const { donnees: examens, chargement, erreur } = useRequete<Examen>(() =>
@@ -103,13 +105,13 @@ async function analyserClasseur() {
     finally { chargementResultats.value = false; }
 }
 
-async function importerClasseur() {
+async function importerClasseurConfirme() {
     if (!apercuResultats.value || !base64Resultats.value || !fichierResultats.value) return;
-    if (!window.confirm(`Importer ${apercuResultats.value.total} lignes de résultats depuis le classeur Excel de référence ? Les écarts seront conservés comme alertes ; aucune inscription ne sera créée. Une même importation remplace les lignes historiques correspondantes.`)) return;
-    chargementResultats.value = true; erreurResultats.value = '';
+    confirmationImportResultats.value = false;
+    chargementResultats.value = true; erreurResultats.value = ''; messageImportResultats.value = '';
     try {
         const resultat = await appeler<{ message: string }>('importerResultatsHistoriques', { fichierBase64: base64Resultats.value, nomFichier: fichierResultats.value.name });
-        window.alert(resultat.message);
+        messageImportResultats.value = resultat.message;
         apercuResultats.value = null;
     } catch (e) { erreurResultats.value = messageErreur(e); }
     finally { chargementResultats.value = false; }
@@ -148,8 +150,17 @@ async function importerClasseur() {
                 <input type="file" accept=".xlsx" class="champ mt-1" @change="lireFichierResultats" />
             </label>
             <button class="bouton-secondaire" :disabled="!base64Resultats || chargementResultats" @click="analyserClasseur">{{ chargementResultats ? 'Analyse…' : 'Analyser le classeur' }}</button>
-            <button class="bouton-action" :disabled="!apercuResultats || chargementResultats" @click="importerClasseur">Importer les résultats</button>
+            <button class="bouton-action" :disabled="!apercuResultats || chargementResultats" @click="confirmationImportResultats = true">Importer les résultats</button>
         </div>
+        <div v-if="confirmationImportResultats" role="alertdialog" aria-labelledby="confirmation-import-resultats" class="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-4">
+            <p id="confirmation-import-resultats" class="font-semibold text-amber-950">Confirmer l’import de {{ apercuResultats?.total }} résultats historiques ?</p>
+            <p class="mt-1 text-sm text-amber-900">{{ apercuResultats?.ecarts }} écart(s) seront conservés comme alertes. Aucune inscription ne sera créée ; les lignes historiques correspondantes seront remplacées.</p>
+            <div class="mt-3 flex flex-wrap justify-end gap-2">
+                <button class="bouton-secondaire" :disabled="chargementResultats" @click="confirmationImportResultats = false">Annuler</button>
+                <button class="bouton-action" :disabled="chargementResultats" @click="importerClasseurConfirme">{{ chargementResultats ? 'Importation…' : 'Confirmer l’importation' }}</button>
+            </div>
+        </div>
+        <p v-if="messageImportResultats" role="status" class="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">{{ messageImportResultats }}</p>
         <p v-if="erreurResultats" role="alert" class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{{ erreurResultats }}</p>
         <div v-if="apercuResultats" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
             <p class="font-semibold text-amber-950">Aperçu : {{ apercuResultats.total }} résultat(s), {{ apercuResultats.ecarts }} écart(s) à vérifier.</p>
