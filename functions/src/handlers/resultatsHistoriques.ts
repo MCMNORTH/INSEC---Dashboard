@@ -47,7 +47,7 @@ async function lireClasseur(base64: string, nom: string): Promise<LigneSource[]>
         const ue = parCode.get(codeUe);
         const libelleUe = ue?.libelle ?? sheet.name;
         sheet.eachRow((row, rowNumber) => {
-            if (rowNumber < 2) return;
+            if (rowNumber < 3) return;
             const nomFamille = cellule(row.getCell(3).value);
             const prenom = cellule(row.getCell(4).value);
             if (!nomFamille || !prenom) return;
