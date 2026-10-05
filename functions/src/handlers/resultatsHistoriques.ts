@@ -46,7 +46,7 @@ async function lireClasseur(base64: string, nom: string): Promise<LigneSource[]>
     const lignes: LigneSource[] = [];
     wb.eachSheet((sheet) => {
         const nomFeuille = normaliser(sheet.name);
-        const codeUe = FEUILLES[nomFeuille];
+        const codeUe = FEUILLES[nomFeuille] ?? Object.entries(FEUILLES).find(([nom]) => nomFeuille.length >= 24 && nom.startsWith(nomFeuille))?.[1];
         if (!codeUe) return;
         const ue = parCode.get(codeUe);
         const libelleUe = ue?.libelle ?? sheet.name;
