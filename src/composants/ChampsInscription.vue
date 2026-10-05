@@ -6,8 +6,7 @@ export interface ValeursInscription {
     formationId: string;
     anneeId: string;
     anneeParcours: number | '';
-    dateInscription: string;
-    noteFinanciere: string;
+    dateInscription: string | null;
     numeroIntec: string;
     statut?: string;
     ueIds: string[];
@@ -65,10 +64,6 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
             </select>
         </label>
     </div>
-    <label class="etiquette mt-4 block">Note financière <span class="text-gray-400">(facultative)</span>
-        <textarea v-model="valeurs.noteFinanciere" class="champ mt-1 min-h-20" maxlength="2000" />
-        <span v-if="erreurs.noteFinanciere" class="text-xs text-red-600">{{ erreurs.noteFinanciere }}</span>
-    </label>
     <div class="mt-4">
         <p class="mb-2 text-sm font-medium text-gray-700">UE suivies</p>
         <div class="grid gap-2 rounded-lg border border-gray-200 p-3 md:grid-cols-2">

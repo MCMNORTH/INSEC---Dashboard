@@ -25,7 +25,6 @@ const champsInscription = z.object({
     anneeId: s.id(),
     anneeParcours: s.entier(1, 10),
     dateInscription: s.dateOptionnelle(),
-    noteFinanciere: s.texteOptionnel(2000),
     numeroIntec: s.texteOptionnel(100),
     ueIds: z.array(s.id()).min(1, 'sélectionnez au moins une UE.').max(50),
 });
@@ -81,7 +80,7 @@ export function resumeInscriptions(inscriptions: (Doc & { id: string })[]) {
 }
 
 export const creerEtudiant = operation('creerEtudiant', ROLES_ADMIN, async (donnees, acteur) => {
-    const v = valider(identite.extend(champsInscription.shape), donnees);
+    const v = valider(identite.extend(champsInscription.shape).extend({ noteFinanciere: s.texteOptionnel(2000) }), donnees);
     const etudiantRef = col.etudiants().doc();
     const inscriptionRef = col.inscriptions().doc();
     await db.runTransaction(async (tx) => {
