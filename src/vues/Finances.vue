@@ -18,7 +18,7 @@ import type { Etudiant, Inscription, Versement } from '../types';
 
 const route = useRoute();
 const router = useRouter();
-const { formation, annee, annees } = useReferentiel();
+const { formation, annee, annees, anneeCourante } = useReferentiel();
 const onglet = ref<'etudiants' | 'synthese'>(route.query.onglet === 'synthese' ? 'synthese' : 'etudiants');
 const { donnees: etudiants, chargement, erreur } = useRequete<Etudiant>(() => query(collection(db, 'etudiants'), orderBy('nom')));
 const { donnees: inscriptions } = useRequete<Inscription>(() => collection(db, 'inscriptions'));
@@ -92,7 +92,7 @@ async function envoyerDocument(type: 'facture' | 'recu', id: string, libelle: st
 // Synthèse annuelle des frais facturés et encaissés.
 const anneeSynthese = ref('');
 watchEffect(() => {
-    if (!anneeSynthese.value && annees.value[0]) anneeSynthese.value = annees.value[0].id;
+    if (!anneeSynthese.value && anneeCourante.value) anneeSynthese.value = anneeCourante.value.id;
 });
 const synthese = computed(() =>
     annees.value.map((a) => {

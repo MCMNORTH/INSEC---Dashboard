@@ -16,8 +16,9 @@ interface ExamenOfficiel { codeUE: string; intitule: string; date: string; heure
 interface CalendrierImporte { annee: string; source: string; examens: ExamenOfficiel[]; }
 
 const router = useRouter();
-const { annees, annee, ue, ues, formation } = useReferentiel();
+const { annees, annee, anneeCourante, ue, ues, formation } = useReferentiel();
 const anneeId = ref('');
+watch(anneeCourante, (a) => { if (!anneeId.value && a) anneeId.value = a.id; }, { immediate: true });
 const page = ref(1);
 const PAR_PAGE = 15;
 const calendriersImportes = ref<CalendrierImporte[]>([]);

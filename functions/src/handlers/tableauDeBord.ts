@@ -3,21 +3,19 @@ import { operation } from '../lib/contexte.js';
 import { col, nomComplet, type Doc } from '../lib/donnees.js';
 import { db, Timestamp } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
-import { montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, STATUTS_ETUDIANT } from '../shared/domaine.js';
+import { ANNEE_ACADEMIQUE_PAR_DEFAUT, ANNEES_ACADEMIQUES_VISIBLES, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, STATUTS_ETUDIANT } from '../shared/domaine.js';
 
 const arrondi = (v: number, d = 1) => Math.round(v * 10 ** d) / 10 ** d;
 const taux = (valides: number, total: number) => (total ? arrondi((valides / total) * 100) : 0);
 
 export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, async (donnees) => {
     const v = valider(z.object({ anneeId: s.texteOptionnel(50) }), donnees);
-    const annees = (await col.annees().get()).docs.map((d) => ({ id: d.id, libelle: d.get('libelle') as string }))
-        .sort((a, b) => b.libelle.localeCompare(a.libelle));
-    const maintenant = new Date();
-    const debutAnneeAcademique = maintenant.getUTCMonth() >= 8
-        ? maintenant.getUTCFullYear()
-        : maintenant.getUTCFullYear() - 1;
-    const libelleAnneeCourante = `${debutAnneeAcademique}-${debutAnneeAcademique + 1}`;
-    const anneeParDefaut = annees.find((a) => a.libelle === libelleAnneeCourante) ?? annees[0];
+    const anneesVisibles = new Set<string>(ANNEES_ACADEMIQUES_VISIBLES);
+    const annees = (await col.annees().get()).docs
+        .map((d) => ({ id: d.id, libelle: d.get('libelle') as string }))
+        .filter((a) => anneesVisibles.has(a.libelle))
+        .sort((a, b) => a.libelle.localeCompare(b.libelle));
+    const anneeParDefaut = annees.find((a) => a.libelle === ANNEE_ACADEMIQUE_PAR_DEFAUT);
     const anneeId = v.anneeId ?? anneeParDefaut?.id ?? null;
     if (anneeId && !annees.some((a) => a.id === anneeId)) throw new HttpsError('invalid-argument', 'Année académique invalide.');
 

@@ -2,6 +2,10 @@
 // Ce fichier ne doit dépendre d'aucun SDK : il est importé des deux côtés.
 
 export const ROLES = ['super_admin', 'admin', 'finance', 'enseignant', 'etudiant'] as const;
+
+// Années scolaires gérées par l'INSEC dans le tableau de bord.
+export const ANNEE_ACADEMIQUE_PAR_DEFAUT = '2026-2027';
+export const ANNEES_ACADEMIQUES_VISIBLES = ['2024-2025', '2025-2026', '2026-2027', '2027-2028'] as const;
 export type Role = (typeof ROLES)[number];
 export const ROLES_ADMIN: readonly Role[] = ['admin', 'super_admin'];
 export const ROLES_FINANCE: readonly Role[] = ['admin', 'super_admin', 'finance'];

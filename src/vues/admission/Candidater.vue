@@ -6,13 +6,13 @@ import { useFormulaire } from '../../formulaire';
 import { useReferentiel } from '../../referentiel';
 
 const router = useRouter();
-const { formationsActives, annees } = useReferentiel();
+const { formationsActives, annees, anneeCourante } = useReferentiel();
 const { envoi, erreurs, erreur, soumettre } = useFormulaire();
 const formulaire = reactive({
     prenom: '', nom: '', email: '', telephone: '', dateNaissance: '', dernierDiplome: '', formationId: '', anneeId: '', motivation: '',
 });
 watchEffect(() => {
-    if (!formulaire.anneeId && annees.value[0]) formulaire.anneeId = annees.value[0].id;
+    if (!formulaire.anneeId && anneeCourante.value) formulaire.anneeId = anneeCourante.value.id;
 });
 
 const champs = [
