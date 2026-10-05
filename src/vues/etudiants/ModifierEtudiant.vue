@@ -14,7 +14,7 @@ const router = useRouter();
 const { donnee: etudiant, chargement } = useDocument<Etudiant>(() => `etudiants/${props.id}`);
 const identite = ref<Identite | null>(null);
 watch(etudiant, (e) => {
-    if (e && !identite.value) identite.value = { nom: e.nom, prenom: e.prenom, email: e.email, telephone: e.telephone ?? '', statut: e.statut };
+    if (e && !identite.value) identite.value = { nom: e.nom, prenom: e.prenom, email: e.email ?? '', dateNaissance: e.dateNaissance ?? '', telephone: e.telephone ?? '', statut: e.statut };
 }, { immediate: true });
 const { envoi, erreurs, soumettre } = useFormulaire();
 

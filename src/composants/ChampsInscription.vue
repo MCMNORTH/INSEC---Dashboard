@@ -7,6 +7,7 @@ export interface ValeursInscription {
     anneeId: string;
     anneeParcours: number | '';
     dateInscription: string;
+    noteFinanciere: string;
     numeroIntec: string;
     statut?: string;
     ueIds: string[];
@@ -52,8 +53,8 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
                 <option v-for="i in duree" :key="i" :value="i">Année {{ i }}</option>
             </select>
         </label>
-        <label class="etiquette">Date d’inscription
-            <input v-model="valeurs.dateInscription" type="date" class="champ mt-1" required />
+        <label class="etiquette">Date d’inscription <span class="text-gray-400">(facultative)</span>
+            <input v-model="valeurs.dateInscription" type="date" class="champ mt-1" />
         </label>
         <label class="etiquette">N° d’inscription INTEC <span class="text-gray-400">(facultatif)</span>
             <input v-model="valeurs.numeroIntec" class="champ mt-1" maxlength="100" />
@@ -64,6 +65,10 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
             </select>
         </label>
     </div>
+    <label class="etiquette mt-4 block">Note financière <span class="text-gray-400">(facultative)</span>
+        <textarea v-model="valeurs.noteFinanciere" class="champ mt-1 min-h-20" maxlength="2000" />
+        <span v-if="erreurs.noteFinanciere" class="text-xs text-red-600">{{ erreurs.noteFinanciere }}</span>
+    </label>
     <div class="mt-4">
         <p class="mb-2 text-sm font-medium text-gray-700">UE suivies</p>
         <div class="grid gap-2 rounded-lg border border-gray-200 p-3 md:grid-cols-2">

@@ -6,10 +6,16 @@ import { bucket, db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
 import { ROLES_ADMIN, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
 
+const emailOptionnel = z.preprocess(
+    (valeur) => (typeof valeur === 'string' && valeur.trim() === '' ? null : valeur),
+    z.string().trim().toLowerCase().pipe(z.email('adresse e-mail invalide.')).max(255).nullish(),
+).transform((valeur) => valeur ?? null);
+
 const identite = z.object({
     nom: s.texte(255),
     prenom: s.texte(255),
-    email: s.email(),
+    email: emailOptionnel,
+    dateNaissance: s.dateOptionnelle(),
     telephone: s.texteOptionnel(30),
     statut: s.choix(STATUTS_ETUDIANT),
 });
@@ -18,7 +24,8 @@ const champsInscription = z.object({
     formationId: s.id(),
     anneeId: s.id(),
     anneeParcours: s.entier(1, 10),
-    dateInscription: s.date(),
+    dateInscription: s.dateOptionnelle(),
+    noteFinanciere: s.texteOptionnel(2000),
     numeroIntec: s.texteOptionnel(100),
     ueIds: z.array(s.id()).min(1, 'sélectionnez au moins une UE.').max(50),
 });
@@ -78,15 +85,17 @@ export const creerEtudiant = operation('creerEtudiant', ROLES_ADMIN, async (donn
     const etudiantRef = col.etudiants().doc();
     const inscriptionRef = col.inscriptions().doc();
     await db.runTransaction(async (tx) => {
-        const reserver = await verifierUnique(tx, cleEmailEtudiant(v.email), etudiantRef.id, 'Cet e-mail est déjà utilisé par un autre étudiant.', 'email');
+        const reserver = v.email
+            ? await verifierUnique(tx, cleEmailEtudiant(v.email), etudiantRef.id, 'Cet e-mail est déjà utilisé par un autre étudiant.', 'email')
+            : () => {};
         await controlerInscription(tx, v);
         const inscription = {
             etudiantId: etudiantRef.id,
             ...attributsInscription(v, 'active'),
-            montantDu: 0, montantRemise: 0, noteFinanciere: null, totalVerse: 0, echeances: [], ordre: 1,
+            montantDu: 0, montantRemise: 0, noteFinanciere: v.noteFinanciere, totalVerse: 0, echeances: [], ordre: 1,
         };
         const etudiant = {
-            nom: v.nom, prenom: v.prenom, email: v.email, telephone: v.telephone, statut: v.statut,
+            nom: v.nom, prenom: v.prenom, email: v.email, dateNaissance: v.dateNaissance, telephone: v.telephone, statut: v.statut,
             ...resumeInscriptions([{ id: inscriptionRef.id, ...inscription }]),
         };
         reserver();
@@ -103,9 +112,11 @@ export const modifierEtudiant = operation('modifierEtudiant', ROLES_ADMIN, async
     await db.runTransaction(async (tx) => {
         const ref = col.etudiants().doc(v.id);
         const avant = await exiger(tx, ref, 'Étudiant introuvable.');
-        const reserver = await verifierUnique(tx, cleEmailEtudiant(v.email), v.id, 'Cet e-mail est déjà utilisé par un autre étudiant.', 'email');
-        const apres = { nom: v.nom, prenom: v.prenom, email: v.email, telephone: v.telephone, statut: v.statut };
-        if (avant.email !== v.email) libererUnique(tx, cleEmailEtudiant(avant.email));
+        const reserver = v.email
+            ? await verifierUnique(tx, cleEmailEtudiant(v.email), v.id, 'Cet e-mail est déjà utilisé par un autre étudiant.', 'email')
+            : () => {};
+        const apres = { nom: v.nom, prenom: v.prenom, email: v.email, dateNaissance: v.dateNaissance, telephone: v.telephone, statut: v.statut };
+        if (avant.email && avant.email !== v.email) libererUnique(tx, cleEmailEtudiant(avant.email));
         reserver();
         tx.update(ref, { ...apres, ...trace(acteur) });
         auditerModele(tx, acteur, 'Etudiant', v.id, 'updated', avant, apres);
@@ -142,7 +153,7 @@ export const supprimerEtudiant = operation('supprimerEtudiant', ROLES_ADMIN, asy
         });
         candidatures.docs.forEach((c) => tx.update(c.ref, { etudiantId: null }));
         comptes.docs.forEach((c) => tx.update(c.ref, { etudiantId: null }));
-        libererUnique(tx, cleEmailEtudiant(etudiant.email));
+        if (etudiant.email) libererUnique(tx, cleEmailEtudiant(etudiant.email));
         tx.delete(ref);
         auditerModele(tx, acteur, 'Etudiant', id, 'deleted', etudiant, null);
     });

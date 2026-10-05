@@ -4,14 +4,13 @@ import { useRouter } from 'vue-router';
 import { appeler } from '../../api';
 import ChampsIdentite, { type Identite } from '../../composants/ChampsIdentite.vue';
 import ChampsInscription, { type ValeursInscription } from '../../composants/ChampsInscription.vue';
-import { aujourdhui } from '../../format';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 
 const router = useRouter();
 const { envoi, erreurs, soumettre } = useFormulaire();
-const identite = ref<Identite>({ nom: '', prenom: '', email: '', telephone: '', statut: 'Actif' });
-const inscription = ref<ValeursInscription>({ formationId: '', anneeId: '', anneeParcours: '', dateInscription: aujourdhui(), numeroIntec: '', ueIds: [] });
+const identite = ref<Identite>({ nom: '', prenom: '', email: '', dateNaissance: '', telephone: '', statut: 'Actif' });
+const inscription = ref<ValeursInscription>({ formationId: '', anneeId: '', anneeParcours: '', dateInscription: '', noteFinanciere: '', numeroIntec: '', ueIds: [] });
 
 async function enregistrer() {
     const resultat = await soumettre(() => appeler<{ id: string; message: string }>('creerEtudiant', { ...identite.value, ...inscription.value }));

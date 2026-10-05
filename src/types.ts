@@ -34,7 +34,8 @@ export interface Etudiant {
     id: string;
     nom: string;
     prenom: string;
-    email: string;
+    email: string | null;
+    dateNaissance?: string | null;
     telephone: string | null;
     statut: string;
     derniere: { inscriptionId: string; formationId: string; anneeId: string; statut: string } | null;
@@ -48,7 +49,7 @@ export interface Inscription {
     formationId: string;
     anneeId: string;
     anneeParcours: number;
-    dateInscription: string;
+    dateInscription: string | null;
     numeroIntec: string | null;
     statut: string;
     ueIds: string[];
