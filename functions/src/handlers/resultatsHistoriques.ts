@@ -33,7 +33,10 @@ async function lireClasseur(base64: string, nom: string): Promise<LigneSource[]>
     if (base64.length > 8_000_000) refuser('Le classeur est trop volumineux (limite 6 Mo).');
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(base64, 'base64') as any);
-    const parCode = new Map((await col.ues().where('formationId', '==', 'DGC').get()).docs.map((d) => [String(d.get('code')).toUpperCase(), { ...d.data(), id: d.id }] as const));
+    const parCode = new Map<string, { id: string; libelle: string }>();
+    (await col.ues().where('formationId', '==', 'DGC').get()).docs.forEach((d) => {
+        parCode.set(String(d.get('code')).toUpperCase(), { id: d.id, libelle: String(d.get('libelle') ?? '') });
+    });
     const [etudiants, inscriptions] = await Promise.all([col.etudiants().get(), col.inscriptions().where('anneeId', '==', '2024-2025').get()]);
     const identites = new Map<string, { id: string }>();
     etudiants.docs.forEach((d) => identites.set(normaliserIdentite(`${d.get('nom') ?? ''} ${d.get('prenom') ?? ''}`), { id: d.id }));
