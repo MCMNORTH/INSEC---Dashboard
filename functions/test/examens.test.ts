@@ -20,7 +20,7 @@ describe('Examens et résultats', () => {
         admin = await acteur('admin');
     });
 
-    it('convoque automatiquement les seuls étudiants éligibles', async () => {
+    it('ouvre le suivi pour les seuls étudiants éligibles sans envoyer de convocation', async () => {
         const { id: eligible } = await appeler(creerEtudiant, etudiant('eligible@example.com', ['TEC111']), admin);
         await appeler(creerEtudiant, etudiant('autre-ue@example.com', ['TEC119']), admin);
         await appeler(creerEtudiant, etudiant('autre-annee@example.com', ['TEC111'], '2025-2026'), admin);
@@ -30,8 +30,7 @@ describe('Examens et résultats', () => {
         expect(resultats[0]).toMatchObject({ examenId: id, etudiantId: eligible, presence: 'Convoqué', numeroConvocation: 1 });
         expect((await doc(`examens/${id}`))?.nbConvoques).toBe(1);
         const emails = await liste('journalEmails');
-        expect(emails).toHaveLength(1);
-        expect(emails[0]).toMatchObject({ destinataire: 'eligible@example.com', type: 'Convocation' });
+        expect(emails).toHaveLength(0);
     });
 
     it('valide l’UE lorsque la note atteint le seuil et génère les documents', async () => {

@@ -17,6 +17,11 @@
         "vue": "^3.5.43",
         "vue-router": "^5.3.1"
     },
+    "overrides": {
+        "@firebase/firestore": {
+            "@grpc/grpc-js": "^1.13.6"
+        }
+    },
     "devDependencies": {
         "@tailwindcss/forms": "^0.5.11",
         "@tailwindcss/vite": "^4.3.3",
@@ -29,3 +34,4 @@
         "vue-tsc": "^3.3.11"
     }
 }
+

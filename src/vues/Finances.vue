@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { appeler } from '../api';
 import BadgeStatut from '../composants/BadgeStatut.vue';
 import Chargement from '../composants/Chargement.vue';
-import { indexer, useRequete } from '../donnees';
+import { useRequete } from '../donnees';
 import { telecharger } from '../fichiers';
 import { db } from '../firebase';
 import { aujourdhui, date, montant } from '../format';
@@ -22,17 +22,23 @@ const { formation, annee, annees, anneeCourante } = useReferentiel();
 const onglet = ref<'etudiants' | 'synthese'>(route.query.onglet === 'synthese' ? 'synthese' : 'etudiants');
 const { donnees: etudiants, chargement, erreur } = useRequete<Etudiant>(() => query(collection(db, 'etudiants'), orderBy('nom')));
 const { donnees: inscriptions } = useRequete<Inscription>(() => collection(db, 'inscriptions'));
-const parInscription = computed(() => indexer(inscriptions.value));
 const recherche = ref('');
-const etudiantsFiltres = computed(() => {
+const anneeEtudiants = ref(typeof route.query.annee === 'string' ? route.query.annee : anneeCourante.value?.id ?? '2026-2027');
+watch(anneeCourante, (a) => { if (!anneeEtudiants.value && a) anneeEtudiants.value = a.id; }, { immediate: true });
+const inscriptionsAnnee = computed(() => inscriptions.value.filter((i) => i.anneeId === anneeEtudiants.value));
+const lignesEtudiants = computed(() => {
     const t = recherche.value.trim().toLowerCase();
-    return etudiants.value.filter((e) => !t || `${e.nom} ${e.prenom} ${e.email}`.toLowerCase().includes(t));
+    const parId = new Map(etudiants.value.map((e) => [e.id, e]));
+    return inscriptionsAnnee.value.flatMap((dossier) => {
+        const etudiant = parId.get(dossier.etudiantId);
+        return etudiant && (!t || `${etudiant.nom} ${etudiant.prenom} ${etudiant.email}`.toLowerCase().includes(t)) ? [{ dossier, etudiant }] : [];
+    });
 });
 
 const etudiantId = computed(() => (typeof route.query.etudiant === 'string' ? route.query.etudiant : null));
 const selectionne = computed(() => etudiants.value.find((e) => e.id === etudiantId.value) ?? null);
 const emailEtudiantValide = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(selectionne.value?.email?.trim() ?? ''));
-const dossiers = computed(() => inscriptions.value.filter((i) => i.etudiantId === etudiantId.value).sort((a, b) => b.ordre - a.ordre));
+const dossiers = computed(() => inscriptionsAnnee.value.filter((i) => i.etudiantId === etudiantId.value).sort((a, b) => b.ordre - a.ordre));
 const inscription = computed(() => {
     const demandee = typeof route.query.inscription === 'string' ? route.query.inscription : null;
     return dossiers.value.find((i) => i.id === demandee) ?? dossiers.value[0] ?? null;
@@ -42,7 +48,10 @@ const { donnees: versementsBruts } = useRequete<Versement>(() =>
 );
 const versements = computed(() => [...versementsBruts.value].sort((a, b) => b.dateVersement.localeCompare(a.dateVersement)));
 
-const ouvrir = (etudiant: string, dossier?: string) => router.replace({ query: { etudiant, ...(dossier ? { inscription: dossier } : {}) } });
+const ouvrir = (etudiant: string, dossier?: string) => router.replace({ query: { onglet: 'etudiants', annee: anneeEtudiants.value, etudiant, ...(dossier ? { inscription: dossier } : {}) } });
+watch(anneeEtudiants, (value) => {
+    void router.replace({ query: { onglet: 'etudiants', annee: value } });
+});
 
 // Formulaires du dossier sélectionné.
 const { envoi, erreurs, soumettre } = useFormulaire();
@@ -97,13 +106,22 @@ watchEffect(() => {
 const synthese = computed(() =>
     annees.value.map((a) => {
         const liste = inscriptions.value.filter((i) => i.anneeId === a.id);
-        const du = liste.reduce((t, i) => t + montantNet(i), 0);
-        const encaisse = liste.reduce((t, i) => t + (i.totalVerse ?? 0), 0);
-        return { id: a.id, libelle: a.libelle, nb: liste.length, du, encaisse, statut: du > 0 && encaisse >= du ? 'Soldé' : encaisse > 0 ? 'Partiel' : 'Impayé' };
+        const bumex = liste.filter((i) => i.financeur === 'bumex');
+        const payeesEtudiants = liste.filter((i) => i.financeur !== 'bumex');
+        const duEtudiants = payeesEtudiants.reduce((t, i) => t + montantNet(i), 0);
+        const encaisseEtudiants = payeesEtudiants.reduce((t, i) => t + (i.totalVerse ?? 0), 0);
+        const resteEtudiants = payeesEtudiants.reduce((t, i) => t + soldeRestant(i), 0);
+        const montantBumex = bumex.reduce((t, i) => t + (i.montantBumex ?? montantNet(i)), 0);
+        const bumexRegle = bumex.filter((i) => i.statutBumex === 'reglee').reduce((t, i) => t + (i.montantBumex ?? montantNet(i)), 0);
+        return { id: a.id, libelle: a.libelle, nb: liste.length, etudiants: new Set(liste.map((i) => i.etudiantId)).size, nbEtudiants: payeesEtudiants.length, nbBumex: bumex.length, du: duEtudiants, encaisse: encaisseEtudiants, resteEtudiants, montantBumex, bumexRegle, statut: duEtudiants > 0 && encaisseEtudiants >= duEtudiants ? 'Soldé' : encaisseEtudiants > 0 ? 'Partiel' : 'Impayé' };
     }),
 );
 const carte = computed(() => synthese.value.find((s) => s.id === anneeSynthese.value));
 const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+async function confirmerBumex() {
+    const confirmation = window.confirm('Confirmer la prise en charge et le règlement intégral par BUMEX des 11 inscriptions DGC 2024–2025 (41 UE, 656 000 MRU) ? Cette action annotera les dossiers vérifiés sans créer de versements individuels ni de reçus.');
+    if (confirmation) await executer('confirmerReglementBumex2024', {});
+}
 </script>
 
 <template>
@@ -116,24 +134,32 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
     <Chargement :chargement="chargement" :erreur="erreur">
         <div v-if="onglet === 'etudiants'" class="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div class="overflow-hidden rounded-xl bg-white shadow lg:col-span-2">
-                <div class="p-3"><input v-model="recherche" type="search" placeholder="Rechercher un étudiant…" class="champ" aria-label="Rechercher" /></div>
+                <div class="grid gap-3 p-3 sm:grid-cols-2">
+                    <label class="etiquette">Année académique
+                        <select v-model="anneeEtudiants" class="champ mt-1"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
+                    </label>
+                    <label class="etiquette">Rechercher un étudiant
+                        <input v-model="recherche" type="search" placeholder="Nom ou prénom…" class="champ mt-1" aria-label="Rechercher" />
+                    </label>
+                </div>
                 <div class="max-h-[70vh] overflow-y-auto">
                     <table class="tableau">
-                        <thead class="sticky top-0"><tr><th>Étudiant</th><th>Restant</th><th>Statut</th></tr></thead>
+                        <thead class="sticky top-0"><tr><th>Étudiant</th><th>Financeur</th><th>Restant étudiant</th><th>Statut</th></tr></thead>
                         <tbody>
                             <tr
-                                v-for="e in etudiantsFiltres"
-                                :key="e.id"
-                                :class="['cursor-pointer hover:bg-gray-50', e.id === etudiantId ? 'bg-blue-50' : '']"
-                                @click="ouvrir(e.id)"
+                                v-for="ligne in lignesEtudiants"
+                                :key="ligne.dossier.id"
+                                :class="['cursor-pointer hover:bg-gray-50', ligne.dossier.id === inscription?.id ? 'bg-blue-50' : '']"
+                                @click="ouvrir(ligne.etudiant.id, ligne.dossier.id)"
                             >
-                                <td class="text-gray-900">{{ e.nom }} {{ e.prenom }}</td>
-                                <td class="text-gray-700">{{ montant(e.derniere && parInscription.get(e.derniere.inscriptionId) ? soldeRestant(parInscription.get(e.derniere.inscriptionId)!) : 0) }}</td>
+                                <td class="text-gray-900">{{ ligne.etudiant.nom }} {{ ligne.etudiant.prenom }}<span class="block text-xs text-gray-500">{{ formation(ligne.dossier.formationId)?.code }} · {{ ligne.dossier.ueIds.length }} UE</span></td>
+                                <td><BadgeStatut :statut="ligne.dossier.financeur === 'bumex' ? 'Pris en charge par BUMEX' : 'À la charge de l’étudiant'" /></td>
+                                <td class="text-gray-700">{{ ligne.dossier.financeur === 'bumex' ? '—' : montant(soldeRestant(ligne.dossier)) }}</td>
                                 <td>
-                                    <BadgeStatut :statut="e.derniere && parInscription.get(e.derniere.inscriptionId) ? statutPaiement(parInscription.get(e.derniere.inscriptionId)!) : 'Non inscrit'" />
+                                    <BadgeStatut :statut="ligne.dossier.financeur === 'bumex' ? (ligne.dossier.statutBumex === 'reglee' ? 'BUMEX a réglé' : 'À régler par BUMEX') : statutPaiement(ligne.dossier)" />
                                 </td>
                             </tr>
-                            <tr v-if="!etudiantsFiltres.length"><td colspan="3" class="p-6 text-center text-gray-400">Aucun étudiant.</td></tr>
+                            <tr v-if="!lignesEtudiants.length"><td colspan="4" class="p-6 text-center text-gray-400">Aucune inscription pour {{ annee(anneeEtudiants)?.libelle ?? anneeEtudiants }}.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -152,6 +178,11 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                 </div>
 
                 <template v-if="inscription">
+                    <p class="mt-4 rounded-lg border border-white/20 bg-white/10 p-3 text-sm" :class="inscription.financeur === 'bumex' ? 'text-green-100' : 'text-blue-100'">
+                        <template v-if="inscription.financeur === 'bumex'">Cette inscription est prise en charge par BUMEX. Montant couvert : {{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU · {{ inscription.statutBumex === 'reglee' ? 'intégralement réglé par BUMEX' : 'paiement de BUMEX à confirmer' }}.</template>
+                        <template v-else>Les frais de cette inscription sont à la charge de l’étudiant.</template>
+                    </p>
+                    <template v-if="inscription.financeur !== 'bumex'">
                     <p class="mt-4 text-xs text-blue-200">Montant brut</p>
                     <p class="text-2xl font-bold">{{ montant(inscription.montantDu) }} MRU</p>
                     <p class="mt-3 text-xs text-blue-200">Remise · Montant net</p>
@@ -247,6 +278,10 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                             <button class="bouton w-full bg-amber-500 py-2 text-xs text-white hover:bg-amber-600" :disabled="envoi">+ Ajouter le versement</button>
                         </form>
                     </div>
+                    </template>
+                    <div v-else class="mt-4 rounded-lg bg-green-900/30 p-3 text-sm text-green-100">
+                        Aucun versement étudiant ni reçu étudiant ne doit être saisi pour cette inscription. Le règlement est suivi séparément au titre de BUMEX.
+                    </div>
                 </template>
                 <p v-else class="mt-4 text-sm text-blue-200">
                     Cet étudiant n’a pas encore d’inscription.
@@ -281,19 +316,24 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
                     </article>
                 </div>
             </section>
+            <section v-if="anneeSynthese === '2024-2025' && aRole('admin', 'super_admin')" class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <h2 class="font-semibold text-emerald-900">Règlement BUMEX — 2024–2025</h2>
+                <p class="mt-1 text-sm text-emerald-800">Vous avez confirmé que BUMEX a réglé l’intégralité des 11 inscriptions historiques. La confirmation vérifie les 11 dossiers et leurs 41 UE avant d’enregistrer le règlement (656 000 MRU). Aucun paiement étudiant ni reçu fictif n’est créé.</p>
+                <button class="bouton mt-3 bg-emerald-700 text-white" :disabled="envoi" @click="confirmerBumex">Confirmer le règlement intégral de BUMEX</button>
+            </section>
             <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div class="carte p-4"><p class="text-xs text-gray-500">Inscriptions concernées</p><p class="text-xl font-bold text-insec">{{ carte?.nb ?? 0 }}</p></div>
-                <div class="carte p-4"><p class="text-xs text-gray-500">Frais nets facturés</p><p class="text-xl font-bold text-insec">{{ millions(carte?.du) }} M MRU</p></div>
-                <div class="carte p-4"><p class="text-xs text-gray-500">Encaissé auprès des étudiants</p><p class="text-xl font-bold text-green-600">{{ millions(carte?.encaisse) }} M MRU</p></div>
+                <div class="carte p-4"><p class="text-xs text-gray-500">Étudiants inscrits · {{ carte?.libelle }}</p><p class="text-xl font-bold text-insec">{{ carte?.etudiants ?? 0 }}</p><p class="mt-1 text-xs text-gray-500">{{ carte?.nbEtudiants ?? 0 }} à leur charge · {{ carte?.nbBumex ?? 0 }} pris en charge par BUMEX</p></div>
+                <div class="carte p-4"><p class="text-xs text-gray-500">Part des étudiants · dû / encaissé / restant</p><p class="text-sm font-bold text-insec">{{ millions(carte?.du) }} / {{ millions(carte?.encaisse) }} / {{ millions(carte?.resteEtudiants) }} M MRU</p></div>
+                <div class="carte p-4"><p class="text-xs text-gray-500">Part BUMEX · couvert / réglé</p><p class="text-sm font-bold text-green-700">{{ millions(carte?.montantBumex) }} / {{ millions(carte?.bumexRegle) }} M MRU</p></div>
             </div>
             <div class="overflow-x-auto rounded-xl bg-white shadow">
                 <table class="tableau">
-                    <thead><tr><th>Année académique</th><th>Inscriptions</th><th>Montant dû</th><th>Encaissé</th><th>Statut</th></tr></thead>
+                    <thead><tr><th>Année académique</th><th>Étudiants</th><th>À leur charge · dû</th><th>Encaissé</th><th>Restant</th><th>BUMEX couvert</th><th>BUMEX réglé</th><th>Statut étudiants</th></tr></thead>
                     <tbody>
                         <tr v-for="s in synthese.filter((x) => x.nb > 0)" :key="s.id">
-                            <td>{{ s.libelle }}</td><td>{{ s.nb }}</td><td>{{ montant(s.du) }}</td><td>{{ montant(s.encaisse) }}</td><td><BadgeStatut :statut="s.statut" /></td>
+                            <td>{{ s.libelle }}<span class="block text-xs text-gray-500">{{ s.nbEtudiants }} étudiant(s) · {{ s.nbBumex }} BUMEX</span></td><td>{{ s.etudiants }}</td><td>{{ montant(s.du) }}</td><td>{{ montant(s.encaisse) }}</td><td>{{ montant(s.resteEtudiants) }}</td><td>{{ montant(s.montantBumex) }}</td><td>{{ montant(s.bumexRegle) }}</td><td><BadgeStatut :statut="s.statut" /></td>
                         </tr>
-                        <tr v-if="!synthese.some((x) => x.nb > 0)"><td colspan="5" class="p-6 text-center text-gray-400">Aucune donnée.</td></tr>
+                        <tr v-if="!synthese.some((x) => x.nb > 0)"><td colspan="8" class="p-6 text-center text-gray-400">Aucune donnée.</td></tr>
                     </tbody>
                 </table>
             </div>

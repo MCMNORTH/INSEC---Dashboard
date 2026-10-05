@@ -1,13 +1,34 @@
 import { randomUUID } from 'node:crypto';
 import { auditerModele, trace } from '../lib/audit.js';
-import { operation } from '../lib/contexte.js';
+import { operation, refuser } from '../lib/contexte.js';
 import { col, exiger, nomComplet, prochainNumero } from '../lib/donnees.js';
 import { mettreEnFileEmail } from '../lib/email.js';
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
-import { formaterMontant, MODES_PAIEMENT, numeroFormate, ROLES_FINANCE, STATUTS_VERSEMENT } from '../shared/domaine.js';
+import { formaterMontant, MODES_PAIEMENT, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, STATUTS_VERSEMENT } from '../shared/domaine.js';
 
 const formaterDate = (iso: string) => iso.split('-').reverse().join('/');
+
+/** Enregistre la prise en charge BUMEX sans fabriquer de versement ou reçu étudiant. */
+export const confirmerReglementBumex2024 = operation('confirmerReglementBumex2024', ROLES_ADMIN, async (_donnees, acteur) => {
+    const refs = await col.inscriptions().where('anneeId', '==', '2024-2025').where('formationId', '==', 'DGC').get();
+    if (refs.size !== 11 || refs.docs.reduce((n, d) => n + ((d.get('ueIds') as string[] | undefined)?.length ?? 0), 0) !== 41) {
+        refuser('Vérification interrompue : l’année 2024-2025 ne contient pas exactement les 11 dossiers DGC et 41 UE attendus.');
+    }
+    await db.runTransaction(async (tx) => {
+        for (const doc of refs.docs) {
+            const inscription = doc.data();
+            const montantBumex = ((inscription.ueIds as string[] | undefined)?.length ?? 0) * 16_000;
+            const noteBumex = 'Prise en charge BUMEX intégralement réglée pour 2024-2025, selon confirmation de la direction. Aucune date, référence bancaire ou quittance individuelle fournie.';
+            const noteFinanciere = String(inscription.noteFinanciere ?? '').includes(noteBumex) ? inscription.noteFinanciere : [inscription.noteFinanciere, noteBumex].filter(Boolean).join('\n');
+            const avant = { financeur: inscription.financeur ?? null, montantDu: inscription.montantDu ?? null, montantRemise: inscription.montantRemise ?? null, montantBumex: inscription.montantBumex ?? null, statutBumex: inscription.statutBumex ?? null, noteFinanciere: inscription.noteFinanciere ?? null };
+            const apres = { financeur: 'bumex', montantDu: montantBumex, montantRemise: 0, montantBumex, statutBumex: 'reglee', noteFinanciere };
+            tx.update(doc.ref, { ...apres, ...trace(acteur) });
+            auditerModele(tx, acteur, 'Inscription', doc.id, 'updated', avant, apres);
+        }
+    });
+    return { message: 'Prise en charge BUMEX appliquée aux 11 inscriptions 2024-2025 (41 UE), sans créer de versements individuels.' };
+});
 
 export const modifierSituationFinanciere = operation('modifierSituationFinanciere', ROLES_FINANCE, async (donnees, acteur) => {
     const v = valider(
@@ -44,6 +65,7 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
     await db.runTransaction(async (tx) => {
         const inscriptionRef = col.inscriptions().doc(v.inscriptionId);
         const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
+        if (inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : aucun versement étudiant ne peut y être enregistré.');
         const etudiant = await exiger(tx, col.etudiants().doc(inscription.etudiantId), 'Étudiant introuvable.');
         const [numero, incrementer] = await prochainNumero(tx, 'recus');
         numeroRecu = numeroFormate('REC', numero, new Date());
@@ -94,6 +116,7 @@ export const ajouterEcheance = operation('ajouterEcheance', ROLES_FINANCE, async
     await db.runTransaction(async (tx) => {
         const ref = col.inscriptions().doc(v.inscriptionId);
         const inscription = await exiger(tx, ref, 'Inscription introuvable.');
+        if (inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : aucun échéancier étudiant ne peut y être enregistré.');
         const echeance = { id: randomUUID(), libelle: v.libelle, montant: v.montant, dateEcheance: v.dateEcheance };
         const echeances = [...(inscription.echeances ?? []), echeance].sort((a, b) => a.dateEcheance.localeCompare(b.dateEcheance));
         tx.update(ref, { echeances, ...trace(acteur) });

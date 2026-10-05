@@ -91,16 +91,16 @@ describe('Administration', () => {
             const wb = new ExcelJS.Workbook();
             await wb.xlsx.load(Buffer.from(fichier.contenu, 'base64') as never);
             const feuille = wb.worksheets[0];
-            expect(feuille.getRow(1).getCell(2).text).toBe('Prénom');
-            expect(feuille.getRow(2).getCell(4).text).toBe('awa@example.com');
-            expect(feuille.getRow(2).getCell(7).text).toBe('DGC');
+            expect(feuille.getRow(1).getCell(1).text).toBe('Prénom');
+            expect(feuille.getRow(2).getCell(3).text).toBe('awa@example.com');
+            expect(feuille.getRow(2).getCell(6).text).toBe('DGC');
             expect((await liste('journalAudit')).some((a) => a.action === 'export')).toBe(true);
             for (const type of ['modele', 'finances', 'resultats']) await appeler(exporterExcel, { type }, admin);
         });
 
         it('importe les lignes valides, ignore ou met à jour les doublons et signale les erreurs', async () => {
             const contenu = await classeurBase64([
-                ['Prénom', 'Nom', 'E-mail', 'Téléphone', 'Statut'],
+                ['Prénom', 'Nom', 'E-mail', 'Téléphone', 'Statut étudiant', 'Code diplôme', 'Année académique', 'Année parcours', 'Codes UE', 'Date inscription (AAAA-MM-JJ)', 'N° INTEC', 'Statut inscription'],
                 ['Moussa', 'Diallo', 'moussa@example.com', 22000000, 'Actif'],
                 ['Awa', 'Ba-Modifiée', 'AWA@example.com', '', 'Actif'],
                 ['', '', 'invalide', '', 'Inconnu'],

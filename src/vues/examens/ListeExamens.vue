@@ -10,7 +10,7 @@ import { db } from '../../firebase';
 import { dateHeureParis } from '../../format';
 import { CALENDRIERS_INTEC } from '../../calendrierIntec';
 import { useReferentiel } from '../../referentiel';
-import type { Examen } from '../../types';
+import type { Examen, ResultatHistorique } from '../../types';
 
 interface ExamenOfficiel { codeUE: string; intitule: string; date: string; heure: string; diplome?: 'DGC' | 'DSGC'; diplôme?: 'DGC' | 'DSGC'; dateFr?: string; }
 interface CalendrierImporte { annee: string; source: string; examens: ExamenOfficiel[]; }
@@ -21,6 +21,13 @@ const anneeId = ref('');
 watch(anneeCourante, (a) => { if (!anneeId.value && a) anneeId.value = a.id; }, { immediate: true });
 const page = ref(1);
 const PAR_PAGE = 15;
+const { donnees: resultatsBruts } = useRequete<ResultatHistorique>(() => collection(db, 'resultatsHistoriques'));
+const resultats = computed(() => resultatsBruts.value.filter((r) => r.anneeId === (anneeId.value || '2024-2025')).sort((a, b) => a.codeUe.localeCompare(b.codeUe) || a.nomSource.localeCompare(b.nomSource)));
+const fichierResultats = ref<File | null>(null);
+const base64Resultats = ref('');
+const apercuResultats = ref<{ total: number; ecarts: number; lignes: Omit<ResultatHistorique, 'id' | 'anneeId' | 'dateExamen' | 'source'>[] } | null>(null);
+const chargementResultats = ref(false);
+const erreurResultats = ref('');
 const calendriersImportes = ref<CalendrierImporte[]>([]);
 const erreurCalendrier = ref('');
 const { donnees: examens, chargement, erreur } = useRequete<Examen>(() =>
@@ -60,6 +67,53 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
         dateHeure: `${date}T${e.heure}`,
     };
 }));
+const appreciationResultat = (r: Pick<ResultatHistorique, 'presence' | 'note'>) => {
+    if (r.presence === 'Absent' || r.note === null) return 'Absent à l’épreuve';
+    if (r.note >= 10) return 'UE validée';
+    if (r.note >= 6) return 'UE capitalisable · non éliminatoire';
+    return 'UE non validée · à repasser';
+};
+
+async function lireFichierResultats(event: Event) {
+    fichierResultats.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+    apercuResultats.value = null;
+    erreurResultats.value = '';
+    if (!fichierResultats.value) { base64Resultats.value = ''; return; }
+    if (!fichierResultats.value.name.toLocaleLowerCase().startsWith('resultat dcg-insec 2024-2025') || !fichierResultats.value.name.toLocaleLowerCase().endsWith('.xlsx')) {
+        erreurResultats.value = 'Choisissez le classeur Excel « Resultat DCG-INSEC 2024-2025.xlsx » ; il fait foi pour les résultats.';
+        base64Resultats.value = '';
+        return;
+    }
+    if (fichierResultats.value.size > 6_000_000) { erreurResultats.value = 'Le classeur ne doit pas dépasser 6 Mo.'; base64Resultats.value = ''; return; }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ''));
+        reader.onerror = () => reject(new Error('Lecture du classeur impossible.'));
+        reader.readAsDataURL(fichierResultats.value!);
+    }).catch((e: Error) => { erreurResultats.value = e.message; return ''; });
+    base64Resultats.value = dataUrl.split(',')[1] ?? '';
+}
+
+async function analyserClasseur() {
+    if (!base64Resultats.value || !fichierResultats.value) return;
+    chargementResultats.value = true; erreurResultats.value = '';
+    try {
+        apercuResultats.value = await appeler<typeof apercuResultats.value>('analyserResultatsHistoriques', { fichierBase64: base64Resultats.value, nomFichier: fichierResultats.value.name });
+    } catch (e) { erreurResultats.value = messageErreur(e); }
+    finally { chargementResultats.value = false; }
+}
+
+async function importerClasseur() {
+    if (!apercuResultats.value || !base64Resultats.value || !fichierResultats.value) return;
+    if (!window.confirm(`Importer ${apercuResultats.value.total} lignes de résultats depuis le classeur Excel de référence ? Les écarts seront conservés comme alertes ; aucune inscription ne sera créée. Une même importation remplace les lignes historiques correspondantes.`)) return;
+    chargementResultats.value = true; erreurResultats.value = '';
+    try {
+        const resultat = await appeler<{ message: string }>('importerResultatsHistoriques', { fichierBase64: base64Resultats.value, nomFichier: fichierResultats.value.name });
+        window.alert(resultat.message);
+        apercuResultats.value = null;
+    } catch (e) { erreurResultats.value = messageErreur(e); }
+    finally { chargementResultats.value = false; }
+}
 </script>
 
 <template>
@@ -80,6 +134,46 @@ const calendrierIntec = computed(() => (calendrierOfficiel.value?.examens ?? [])
             <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
         </select>
     </div>
+    <section class="carte mb-5 p-5" aria-labelledby="resultats-historiques">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Historique · 2024–2025</p>
+                <h2 id="resultats-historiques" class="mt-1 text-lg font-bold text-insec">Résultats du classeur INTEC</h2>
+                <p class="mt-1 max-w-3xl text-sm text-gray-600">Le classeur Excel « Resultat DCG-INSEC 2024-2025.xlsx » est la source de référence, prioritaire sur les PDF d’engagement. Les notes et mentions ABS sont reproduites telles quelles ; les écarts d’identité ou d’UE sont signalés sans créer ni corriger d’inscription.</p>
+            </div>
+            <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-900">{{ resultats.length }} résultat(s) historique(s)</span>
+        </div>
+        <div class="mt-4 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+            <label class="etiquette">Classeur Excel de référence
+                <input type="file" accept=".xlsx" class="champ mt-1" @change="lireFichierResultats" />
+            </label>
+            <button class="bouton-secondaire" :disabled="!base64Resultats || chargementResultats" @click="analyserClasseur">{{ chargementResultats ? 'Analyse…' : 'Analyser le classeur' }}</button>
+            <button class="bouton-action" :disabled="!apercuResultats || chargementResultats" @click="importerClasseur">Importer les résultats</button>
+        </div>
+        <p v-if="erreurResultats" role="alert" class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{{ erreurResultats }}</p>
+        <div v-if="apercuResultats" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p class="font-semibold text-amber-950">Aperçu : {{ apercuResultats.total }} résultat(s), {{ apercuResultats.ecarts }} écart(s) à vérifier.</p>
+            <p class="mt-1 text-sm text-amber-900">Les lignes sont copiées du classeur. L’importation ne crée aucune inscription.</p>
+            <div class="mt-3 max-h-80 overflow-auto rounded-lg bg-white">
+                <table class="tableau">
+                    <thead><tr><th>Candidat Excel</th><th>UE</th><th>Note source</th><th>Appréciation</th><th>Écart</th></tr></thead>
+                    <tbody><tr v-for="(r, index) in apercuResultats.lignes" :key="`${r.nomSource}-${r.codeUe}-${index}`">
+                        <td>{{ r.nomSource }}</td><td>{{ r.codeUe }} · {{ r.libelleUe }}</td><td>{{ r.noteSource }}</td><td>{{ appreciationResultat(r) }}</td>
+                        <td><ul v-if="r.ecarts.length" class="list-disc pl-4 text-sm text-amber-900"><li v-for="e in r.ecarts" :key="e">{{ e }}</li></ul><span v-else class="text-green-700">Concordant</span></td>
+                    </tr></tbody>
+                </table>
+            </div>
+        </div>
+        <div v-if="resultats.length" class="mt-4 overflow-x-auto">
+            <table class="tableau">
+                <thead><tr><th>Candidat (nom du classeur)</th><th>UE</th><th>Note source</th><th>Appréciation</th><th>Vérification annuaire / inscription</th></tr></thead>
+                <tbody><tr v-for="r in resultats" :key="r.id" :class="r.ecarts.length ? 'bg-amber-50' : ''">
+                    <td>{{ r.nomSource }}</td><td>{{ r.codeUe }} · {{ r.libelleUe }}</td><td>{{ r.noteSource }}</td><td>{{ appreciationResultat(r) }}</td>
+                    <td><span v-if="!r.ecarts.length" class="text-green-700">Concordant</span><ul v-else class="list-disc pl-4 text-sm text-amber-900"><li v-for="e in r.ecarts" :key="e">{{ e }}</li></ul></td>
+                </tr></tbody>
+            </table>
+        </div>
+    </section>
     <section class="carte mb-5 overflow-hidden">
         <header class="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
             <div>

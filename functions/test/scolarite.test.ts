@@ -40,8 +40,8 @@ describe('Étudiants et inscriptions', () => {
         await attendreErreur(appeler(creerEtudiant, { ...etudiantValide, email: 'awa@example.com' }, admin), 'already-exists', 'email');
     });
 
-    it('conserve la première inscription lors d’une réinscription', async () => {
-        const { id } = await appeler(creerEtudiant, etudiantValide, admin);
+    it('conserve la première inscription et ajoute celle d’une nouvelle année scolaire', async () => {
+        const { id } = await appeler(creerEtudiant, { ...etudiantValide, anneeId: '2025-2026' }, admin);
         const [premiere] = await liste('inscriptions');
         await appeler(creerInscription, { ...etudiantValide, etudiantId: id, anneeParcours: 2, ueIds: ['TEC112'] }, admin);
         const inscriptions = await liste('inscriptions');

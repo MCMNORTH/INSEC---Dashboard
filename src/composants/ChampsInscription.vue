@@ -8,6 +8,7 @@ export interface ValeursInscription {
     anneeParcours: number | '';
     dateInscription: string | null;
     numeroIntec: string;
+    financeur?: 'etudiant' | 'bumex';
     statut?: string;
     ueIds: string[];
 }
@@ -57,6 +58,12 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
         </label>
         <label class="etiquette">N° d’inscription INTEC <span class="text-gray-400">(facultatif)</span>
             <input v-model="valeurs.numeroIntec" class="champ mt-1" maxlength="100" />
+        </label>
+        <label class="etiquette">Prise en charge financière
+            <select v-model="valeurs.financeur" class="champ mt-1">
+                <option value="etudiant">À la charge de l’étudiant</option>
+                <option value="bumex">Pris en charge par BUMEX</option>
+            </select>
         </label>
         <label v-if="avecStatut" class="etiquette">Statut de l’inscription
             <select v-model="valeurs.statut" class="champ mt-1">

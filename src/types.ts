@@ -57,9 +57,28 @@ export interface Inscription {
     montantRemise: number;
     noteFinanciere: string | null;
     totalVerse: number;
+    financeur?: 'etudiant' | 'bumex';
+    montantBumex?: number;
+    statutBumex?: 'a_regler' | 'reglee';
     echeances: Echeance[];
     ordre: number;
     creeLe?: Timestamp;
+}
+
+export interface ResultatHistorique {
+    id: string;
+    anneeId: string;
+    codeUe: string;
+    libelleUe: string;
+    dateExamen: string;
+    source: string;
+    nomSource: string;
+    etudiantId: string | null;
+    inscriptionId: string | null;
+    note: number | null;
+    noteSource: string;
+    presence: 'Présent' | 'Absent';
+    ecarts: string[];
 }
 
 export interface Versement {

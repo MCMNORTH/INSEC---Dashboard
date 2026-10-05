@@ -456,6 +456,9 @@ export const importerEtudiants = operation(
 
                     if (cree) tx.set(etudiantRef, { ...apres, ...trace(acteur, true) });
                     else tx.update(etudiantRef, { ...apres, ...trace(acteur) });
+                    if (cree && d.email) {
+                        tx.set(refUnique(cleEmailEtudiant(d.email)), { proprietaire: etudiantId });
+                    }
 
                     if (inscriptionRef && inscriptionDonnees) {
                         tx.set(inscriptionRef, { ...inscriptionDonnees, ...trace(acteur, true) });
