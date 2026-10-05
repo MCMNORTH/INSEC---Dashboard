@@ -11,12 +11,12 @@ async function telechargerConvention() {
     erreurTelechargement.value = '';
     telechargementEnCours.value = true;
     try {
-        const document = await appeler<{ nom: string; mimeType: string; contenu: string }>('telechargerConventionIntec');
-        const octets = Uint8Array.from(atob(document.contenu), (caractere) => caractere.charCodeAt(0));
-        const url = URL.createObjectURL(new Blob([octets], { type: document.mimeType || 'application/pdf' }));
-        const lien = document.createElement('a');
+        const pdf = await appeler<{ nom: string; mimeType: string; contenu: string }>('telechargerConventionIntec');
+        const octets = Uint8Array.from(atob(pdf.contenu), (caractere) => caractere.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([octets], { type: pdf.mimeType || 'application/pdf' }));
+        const lien = window.document.createElement('a');
         lien.href = url;
-        lien.download = document.nom;
+        lien.download = pdf.nom;
         lien.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (erreur) {
