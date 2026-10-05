@@ -35,11 +35,13 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
     const ues = new Map(uesSnap.docs.map((d) => [d.id, d.data() as Doc]));
     const resultats = resultatsSnap.docs.map((d) => d.data()).filter((r) => idsInscriptions.has(r.inscriptionId));
 
-    const somme = (f: (i: Doc) => number) => inscriptions.reduce((t, i) => t + f(i), 0);
-    const montantFacture = somme((i) => montantNet(i as never));
-    const encaisses = somme((i) => i.totalVerse ?? 0);
-    const resteARecouvrer = somme((i) => soldeRestant(i as never));
-    const retard = somme((i) => montantEnRetard(i as never));
+    // BUMEX est un financement interne, suivi séparément de l’argent à recouvrer auprès des élèves.
+    const inscriptionsChargeEtudiants = inscriptions.filter((i) => i.financeur !== 'bumex');
+    const sommeEtudiants = (f: (i: Doc) => number) => inscriptionsChargeEtudiants.reduce((t, i) => t + f(i), 0);
+    const montantFacture = sommeEtudiants((i) => montantNet(i as never));
+    const encaisses = sommeEtudiants((i) => i.totalVerse ?? 0);
+    const resteARecouvrer = sommeEtudiants((i) => soldeRestant(i as never));
+    const retard = sommeEtudiants((i) => montantEnRetard(i as never));
 
     const parDiplome = new Map<string, Doc[]>();
     inscriptions.forEach((i) => {
@@ -66,7 +68,7 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
         .sort((a, b) => b.taux - a.taux)
         .slice(0, 8);
 
-    const aSuivre = inscriptions.filter((i) => soldeRestant(i as never) > 0)
+    const aSuivre = inscriptionsChargeEtudiants.filter((i) => soldeRestant(i as never) > 0)
         .sort((a, b) => montantEnRetard(b as never) - montantEnRetard(a as never)).slice(0, 8);
     const etudiantsImpayes = aSuivre.length ? await db.getAll(...aSuivre.map((i) => col.etudiants().doc(i.etudiantId))) : [];
     const impayes = aSuivre.map((i, n) => ({
