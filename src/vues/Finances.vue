@@ -261,18 +261,24 @@ const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFra
             </label>
             <section class="mb-4 rounded-xl border border-blue-100 bg-blue-50/70 p-4 sm:p-5" aria-labelledby="tarification-ue">
                 <div class="mb-3">
-                    <h2 id="tarification-ue" class="font-semibold text-insec">Tarification par UE</h2>
-                    <p class="mt-1 text-sm text-gray-600">Les deux montants de référence appliqués par l’INSEC pour chaque unité d’enseignement.</p>
+                    <h2 id="tarification-ue" class="font-semibold text-insec">Tarifs par UE et par diplôme</h2>
+                    <p class="mt-1 text-sm text-gray-600">Coût payé par l’INSEC à l’INTEC et tarif facturé à l’étudiant.</p>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div class="rounded-lg border border-white bg-white p-4">
-                        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Coût payé par l’INSEC à l’INTEC</p>
-                        <p class="mt-1 text-xl font-bold text-insec">160 € <span class="text-sm font-medium text-gray-500">par UE</span></p>
-                    </div>
-                    <div class="rounded-lg border border-white bg-white p-4">
-                        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Tarif facturé à l’étudiant par l’INSEC</p>
-                        <p class="mt-1 text-xl font-bold text-insec">16 000 MRU <span class="text-sm font-medium text-gray-500">par UE</span></p>
-                    </div>
+                    <article class="rounded-lg border border-white bg-white p-4">
+                        <h3 class="font-semibold text-insec">DGC</h3>
+                        <dl class="mt-3 space-y-2 text-sm">
+                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Coût INTEC</dt><dd class="font-semibold text-gray-900">160 € / UE</dd></div>
+                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Tarif étudiant</dt><dd class="font-semibold text-gray-900">16 000 MRU / UE</dd></div>
+                        </dl>
+                    </article>
+                    <article class="rounded-lg border border-white bg-white p-4">
+                        <h3 class="font-semibold text-insec">DSGC</h3>
+                        <dl class="mt-3 space-y-2 text-sm">
+                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Coût INTEC</dt><dd class="font-semibold text-gray-900">180 € / UE</dd></div>
+                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Tarif étudiant</dt><dd class="font-semibold text-gray-900">18 000 MRU / UE</dd></div>
+                        </dl>
+                    </article>
                 </div>
             </section>
             <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
