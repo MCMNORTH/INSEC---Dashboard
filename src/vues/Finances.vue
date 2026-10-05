@@ -193,11 +193,6 @@ const totauxFinanciers = computed(() => ({
     margeEtudiantsMru: detailsFinanciers.value.some((ligne) => !ligne.financeurBumex && ligne.margeTheorique === null) ? null : detailsFinanciers.value.filter((ligne) => !ligne.financeurBumex).reduce((total, ligne) => total + (ligne.margeTheorique ?? 0), 0),
     diplomesAControler: detailsFinanciers.value.filter((ligne) => ligne.coutIntecEuro === null).length,
 }));
-const millions = (v = 0) => (v / 1_000_000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-async function confirmerBumex() {
-    const confirmation = window.confirm('Confirmer la prise en charge et le règlement intégral par BUMEX des 11 inscriptions DGC 2024–2025 (41 UE, 656 000 MRU) ? Cette action annotera les dossiers vérifiés sans créer de versements individuels ni de reçus.');
-    if (confirmation) await executer('confirmerReglementBumex2024', {});
-}
 </script>
 
 <template>
