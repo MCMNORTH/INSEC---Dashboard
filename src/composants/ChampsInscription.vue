@@ -42,7 +42,7 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
             </select>
             <span v-if="erreurs.formationId" class="text-xs text-red-600">{{ erreurs.formationId }}</span>
         </label>
-        <label class="etiquette">Année académique
+        <label class="etiquette">Année scolaire
             <select v-model="valeurs.anneeId" class="champ mt-1" required>
                 <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
             </select>

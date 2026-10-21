@@ -22,7 +22,7 @@ const modules = computed(() => {
         {
             vers: '/communications',
             titre: 'Communications',
-            description: 'Préparez et retrouvez les courriers adressés aux étudiants.',
+            description: 'Retrouvez les e-mails envoyés aux étudiants et leur statut d’envoi.',
             icone: 'fa-envelope',
         },
         {

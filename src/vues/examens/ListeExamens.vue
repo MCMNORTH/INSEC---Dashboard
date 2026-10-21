@@ -217,7 +217,7 @@ async function importerClasseurConfirme() {
     </div>
     <div v-if="erreurCalendrier" role="status" class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Le calendrier enregistré n’a pas pu être chargé : {{ erreurCalendrier }}</div>
     <div class="carte mb-4 p-3">
-        <select v-model="anneeId" class="champ w-auto" aria-label="Année académique">
+        <select v-model="anneeId" class="champ w-auto" aria-label="Année scolaire">
             <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
         </select>
     </div>
@@ -225,7 +225,7 @@ async function importerClasseurConfirme() {
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Résultats · {{ annee(anneeId)?.libelle ?? anneeId }}</p>
-                <h2 id="resultats-historiques" class="mt-1 text-lg font-bold text-insec">Notes par élève et par UE</h2>
+                <h2 id="resultats-historiques" class="mt-1 text-lg font-bold text-insec">Notes par étudiant et par UE</h2>
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-900">{{ resultats.length }} résultat(s) historique(s)</span>
@@ -282,7 +282,7 @@ async function importerClasseurConfirme() {
                 <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">Faites défiler horizontalement pour consulter toutes les unités d’enseignement.</p>
                 <div class="overflow-x-auto">
                     <table class="tableau min-w-max">
-                        <thead><tr><th class="sticky left-0 top-0 z-20 min-w-52 bg-white">Élève</th><th v-for="colonne in groupe.colonnes" :key="colonne.code" class="min-w-44"><span class="block">{{ colonne.code }}</span><span class="text-xs font-normal text-gray-500">{{ colonne.libelle }}</span></th><th class="min-w-56">Écarts à vérifier</th></tr></thead>
+                        <thead><tr><th class="sticky left-0 top-0 z-20 min-w-52 bg-white">Étudiant</th><th v-for="colonne in groupe.colonnes" :key="colonne.code" class="min-w-44"><span class="block">{{ colonne.code }}</span><span class="text-xs font-normal text-gray-500">{{ colonne.libelle }}</span></th><th class="min-w-56">Écarts à vérifier</th></tr></thead>
                         <tbody>
                             <tr v-for="candidat in groupe.candidats" :key="candidat.cle" :class="candidat.ecarts.length ? 'bg-amber-50' : ''">
                                 <th scope="row" :class="['sticky left-0 z-10 min-w-52 font-medium', candidat.ecarts.length ? 'bg-amber-50' : 'bg-white']">{{ candidat.nom }}</th>
@@ -305,7 +305,7 @@ async function importerClasseurConfirme() {
                 </div>
             </section>
         </div>
-        <p v-else-if="anneeId === '2024-2025'" class="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Aucun résultat n’est encore chargé pour cette année. Sélectionnez le classeur Excel de référence ci-dessus pour afficher les notes par élève.</p>
+        <p v-else-if="anneeId === '2024-2025'" class="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Aucun résultat n’est encore chargé pour cette année. Sélectionnez le classeur Excel de référence ci-dessus pour afficher les notes par étudiant.</p>
         <p v-else class="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">Aucun résultat historique n’est enregistré pour {{ annee(anneeId)?.libelle ?? anneeId }}. Les résultats du classeur concernent uniquement 2024–2025.</p>
     </section>
     <section class="carte mb-5 overflow-hidden">
