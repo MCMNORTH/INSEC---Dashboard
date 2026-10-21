@@ -1,6 +1,7 @@
 import { operation, type Acteur } from '../lib/contexte.js';
-import { col, nomComplet, type Doc } from '../lib/donnees.js';
+import { alertesDe, col, nomComplet, type Doc } from '../lib/donnees.js';
 import { db, FieldValue, Timestamp } from '../lib/firebase.js';
+import type { WriteBatch } from 'firebase-admin/firestore';
 import { formaterMontant, montantEnRetard, ROLES_ADMIN, ROLES_FINANCE } from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
 
@@ -103,11 +104,11 @@ export async function calculerAlertes(acteur: Pick<Acteur, 'role' | 'etudiantId'
 }
 
 export const synchroniserAlertes = operation('synchroniserAlertes', 'connecte', async (_donnees, acteur) => {
-    const collection = col.utilisateurs().doc(acteur.uid!).collection('alertes');
+    const collection = alertesDe(acteur.uid!);
     const [calculees, existantes] = await Promise.all([calculerAlertes(acteur), collection.get()]);
     const connues = new Map(existantes.docs.map((d) => [d.id, d]));
     const actives = new Set<string>();
-    const lot = db.batch();
+    const ecritures: ((lot: WriteBatch) => void)[] = [];
     for (const alerte of calculees) {
         const id = alerte.cle.replace(/\//g, '-');
         actives.add(id);
@@ -115,18 +116,22 @@ export const synchroniserAlertes = operation('synchroniserAlertes', 'connecte', 
         const inchangee = existante?.get('active') === true
             && (['titre', 'message', 'niveau', 'lien', 'type'] as const).every((c) => existante.get(c) === alerte[c]);
         if (inchangee) continue;
-        lot.set(
-            collection.doc(id),
-            {
+        const donnees = {
                 ...alerte, active: true, modifieLe: FieldValue.serverTimestamp(),
                 ...(existante ? {} : { lueLe: null, archiveeLe: null, creeLe: FieldValue.serverTimestamp() }),
-            },
-            { merge: true },
-        );
+            };
+        ecritures.push((lot) => lot.set(collection.doc(id), donnees, { merge: true }));
     }
     for (const [id, doc] of connues) {
-        if (!actives.has(id) && doc.get('active') && !doc.get('archiveeLe')) lot.update(doc.ref, { active: false });
+        if (!actives.has(id) && doc.get('active') && !doc.get('archiveeLe')) {
+            ecritures.push((lot) => lot.update(doc.ref, { active: false }));
+        }
     }
-    await lot.commit();
+    // Firestore limite chaque écriture atomique à 500 documents ; on reste avec une marge.
+    for (let debut = 0; debut < ecritures.length; debut += 450) {
+        const lot = db.batch();
+        ecritures.slice(debut, debut + 450).forEach((ecrire) => ecrire(lot));
+        await lot.commit();
+    }
     return { total: calculees.length };
 });

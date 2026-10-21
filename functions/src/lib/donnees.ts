@@ -13,14 +13,21 @@ export const col = {
     calendriersIntec: () => db.collection('calendriersIntec'),
     resultats: () => db.collection('resultats'),
     pieces: () => db.collection('pieces'),
+    documentsFinanciers: () => db.collection('documentsFinanciers'),
     candidatures: () => db.collection('candidatures'),
     enseignants: () => db.collection('enseignants'),
     affectations: () => db.collection('affectations'),
     utilisateurs: () => db.collection('utilisateurs'),
     sauvegardes: () => db.collection('sauvegardes'),
+    journalAudit: () => db.collection('journalAudit'),
+    journalEmails: () => db.collection('journalEmails'),
+    resultatsHistoriques: () => db.collection('resultatsHistoriques'),
     uniques: () => db.collection('uniques'),
     compteurs: () => db.collection('compteurs'),
+    parametres: () => db.collection('parametres'),
 };
+
+export const alertesDe = (uid: string) => col.utilisateurs().doc(uid).collection('alertes');
 
 export type Doc = Record<string, any>;
 

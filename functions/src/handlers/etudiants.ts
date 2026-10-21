@@ -23,7 +23,6 @@ const identite = z.object({
 const champsInscription = z.object({
     formationId: s.id(),
     anneeId: s.id(),
-    anneeParcours: s.entier(1, 10),
     dateInscription: s.dateOptionnelle(),
     numeroIntec: s.texteOptionnel(100),
     ueIds: z.array(s.id()).min(1, 'sélectionnez au moins une UE.').max(50),
@@ -35,9 +34,9 @@ export const cleEmailEtudiant = (email: string) => `etudiant-email:${email}`;
 
 /**
  * Vérifie que l'année académique existe et que les UE choisies appartiennent au diplôme
- * et à l'année de parcours sélectionnés (lectures uniquement).
+ * et aux années de parcours définies sur chacune des UE (lectures uniquement).
  */
-export async function controlerInscription(tx: Transaction, v: ChampsInscription): Promise<void> {
+export async function controlerInscription(tx: Transaction, v: ChampsInscription): Promise<number | null> {
     if (new Set(v.ueIds).size !== v.ueIds.length) erreurChamp('ueIds', 'Une UE est sélectionnée plusieurs fois.');
     const [formation, annee, ...ues] = await tx.getAll(
         col.formations().doc(v.formationId),
@@ -46,19 +45,23 @@ export async function controlerInscription(tx: Transaction, v: ChampsInscription
     );
     if (!formation.exists) erreurChamp('formationId', 'Diplôme inconnu.');
     if (!annee.exists) erreurChamp('anneeId', 'Année académique inconnue.');
-    const conformes = ues.filter(
-        (ue) => ue.exists && ue.get('formationId') === v.formationId && ue.get('anneeParcours') === v.anneeParcours,
-    );
-    if (v.anneeParcours > (formation.get('dureeAnnees') ?? 1) || conformes.length !== v.ueIds.length) {
-        erreurChamp('ueIds', 'Les UE choisies doivent appartenir au diplôme et à l’année de parcours sélectionnés.');
+    const conformes = ues.filter((ue) => ue.exists && ue.get('formationId') === v.formationId);
+    const parcoursValides = conformes.filter((ue) => {
+        const parcours = ue.get('anneeParcours');
+        return Number.isInteger(parcours) && parcours >= 1 && parcours <= (formation.get('dureeAnnees') ?? 1);
+    });
+    if (conformes.length !== v.ueIds.length || parcoursValides.length !== v.ueIds.length) {
+        erreurChamp('ueIds', 'Chaque UE choisie doit appartenir au diplôme et avoir une année de parcours valide.');
     }
+    const parcours = [...new Set(parcoursValides.map((ue) => ue.get('anneeParcours') as number))];
+    return parcours.length === 1 ? parcours[0] : null;
 }
 
-export function attributsInscription(v: ChampsInscription, statut: string) {
+export function attributsInscription(v: ChampsInscription, statut: string, anneeParcours: number | null) {
     return {
         formationId: v.formationId,
         anneeId: v.anneeId,
-        anneeParcours: v.anneeParcours,
+        anneeParcours,
         dateInscription: v.dateInscription,
         numeroIntec: v.numeroIntec,
         statut,
@@ -89,10 +92,10 @@ export const creerEtudiant = operation('creerEtudiant', ROLES_ADMIN, async (donn
         const reserver = v.email
             ? await verifierUnique(tx, cleEmailEtudiant(v.email), etudiantRef.id, 'Cet e-mail est déjà utilisé par un autre étudiant.', 'email')
             : () => {};
-        await controlerInscription(tx, v);
+        const anneeParcours = await controlerInscription(tx, v);
         const inscription = {
             etudiantId: etudiantRef.id,
-            ...attributsInscription(v, 'active'),
+            ...attributsInscription(v, 'active', anneeParcours),
             montantDu: 0, montantRemise: 0, noteFinanciere: v.noteFinanciere, totalVerse: 0, echeances: [], ordre: 1,
         };
         const etudiant = {
@@ -168,7 +171,7 @@ export const creerInscription = operation('creerInscription', ROLES_ADMIN, async
     await db.runTransaction(async (tx) => {
         const etudiantRef = col.etudiants().doc(v.etudiantId);
         await exiger(tx, etudiantRef, 'Étudiant introuvable.');
-        await controlerInscription(tx, v);
+        const anneeParcours = await controlerInscription(tx, v);
         const existantes = await tx.get(col.inscriptions().where('etudiantId', '==', v.etudiantId));
         const doublonActif = existantes.docs.some((inscription) =>
             inscription.get('statut') === 'active'
@@ -180,7 +183,7 @@ export const creerInscription = operation('creerInscription', ROLES_ADMIN, async
         }
         const inscription = {
             etudiantId: v.etudiantId,
-            ...attributsInscription(v, 'active'),
+            ...attributsInscription(v, 'active', anneeParcours),
             montantDu: 0, montantRemise: 0, noteFinanciere: null, totalVerse: 0, echeances: [],
             ordre: existantes.size + 1,
         };
@@ -199,7 +202,7 @@ export const modifierInscription = operation('modifierInscription', ROLES_ADMIN,
         const ref = col.inscriptions().doc(v.id);
         const avant = await exiger(tx, ref, 'Inscription introuvable.');
         etudiantId = avant.etudiantId;
-        await controlerInscription(tx, v);
+        const anneeParcours = await controlerInscription(tx, v);
         const autres = await tx.get(col.inscriptions().where('etudiantId', '==', etudiantId));
         const doublonActif = v.statut === 'active' && autres.docs.some((inscription) =>
             inscription.id !== v.id
@@ -210,7 +213,7 @@ export const modifierInscription = operation('modifierInscription', ROLES_ADMIN,
         if (doublonActif) {
             erreurChamp('formationId', 'Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
         }
-        const apres = attributsInscription(v, v.statut);
+        const apres = attributsInscription(v, v.statut, anneeParcours);
         const toutes = autres.docs.map((d) => (d.id === v.id ? { ...avant, ...apres } : { id: d.id, ...d.data() }));
         tx.update(ref, { ...apres, ...trace(acteur) });
         tx.update(col.etudiants().doc(etudiantId), { ...resumeInscriptions(toutes), ...trace(acteur) });

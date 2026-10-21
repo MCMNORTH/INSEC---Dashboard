@@ -22,7 +22,7 @@ export const TYPES_PIECE = ['Pièce d’identité', 'Photo', 'Diplôme', 'Relev�
 export const STATUTS_PIECE = ['À vérifier', 'Validé', 'Rejeté'] as const;
 export const STATUTS_CANDIDATURE = ['Nouvelle', 'En étude', 'Admissible', 'Rejetée', 'Inscrite'] as const;
 export const DECISIONS_CANDIDATURE = ['Nouvelle', 'En étude', 'Admissible', 'Rejetée'] as const;
-export const STATUTS_EMAIL = ['Envoyé', 'Échec', 'En attente'] as const;
+export const STATUTS_EMAIL = ['Envoyé', 'Échec', 'En attente', 'En cours'] as const;
 export const MIME_PIECES = ['application/pdf', 'image/jpeg', 'image/png'] as const;
 export const TAILLE_MAX_PIECE = 5 * 1024 * 1024;
 

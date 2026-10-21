@@ -1,6 +1,7 @@
 import type { Transaction, WriteBatch } from 'firebase-admin/firestore';
 import type { Acteur } from './contexte.js';
-import { db, FieldValue, Timestamp } from './firebase.js';
+import { col } from './donnees.js';
+import { FieldValue, Timestamp } from './firebase.js';
 
 export type Ecrivain = Transaction | WriteBatch;
 type Donnees = Record<string, unknown>;
@@ -47,11 +48,11 @@ function donneesAudit(acteur: Acteur, entree: Entree) {
 
 /** Ajoute une entrée d'audit dans la même transaction que la modification auditée. */
 export function auditer(ecrivain: Ecrivain, acteur: Acteur, entree: Entree): void {
-    (ecrivain as WriteBatch).set(db.collection('journalAudit').doc(), donneesAudit(acteur, entree));
+    (ecrivain as WriteBatch).set(col.journalAudit().doc(), donneesAudit(acteur, entree));
 }
 
 export async function auditerDirect(acteur: Acteur, entree: Entree): Promise<void> {
-    await db.collection('journalAudit').add(donneesAudit(acteur, entree));
+    await col.journalAudit().add(donneesAudit(acteur, entree));
 }
 
 /** Audit d'une création, modification ou suppression de document, avec le détail des champs modifiés. */

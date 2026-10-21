@@ -6,6 +6,7 @@
  *   Après création, le super-administrateur définit son mot de passe via « Mot de passe oublié ».
  */
 import { FieldValue } from 'firebase-admin/firestore';
+import { col } from '../lib/donnees.js';
 import { auth, db } from '../lib/firebase.js';
 import { provisionnerCompte, type ProfilCompte } from '../handlers/comptes.js';
 
@@ -41,13 +42,13 @@ const ANNEES = ['2022-2023', '2023-2024', '2024-2025', '2025-2026', '2026-2027',
 
 async function referentiel() {
     const lot = db.batch();
-    FORMATIONS.forEach((f) => lot.set(db.collection('formations').doc(f.code), f, { merge: true }));
+    FORMATIONS.forEach((f) => lot.set(col.formations().doc(f.code), f, { merge: true }));
     Object.entries(CATALOGUE).forEach(([formationId, ues]) =>
         ues.forEach(([code, libelle, credits, anneeParcours], index) =>
-            lot.set(db.collection('ues').doc(code), { formationId, code, libelle, credits, anneeParcours, ordre: index + 1, active: true }, { merge: true }),
+            lot.set(col.ues().doc(code), { formationId, code, libelle, credits, anneeParcours, ordre: index + 1, active: true }, { merge: true }),
         ),
     );
-    ANNEES.forEach((libelle) => lot.set(db.collection('annees').doc(libelle), { libelle }, { merge: true }));
+    ANNEES.forEach((libelle) => lot.set(col.annees().doc(libelle), { libelle }, { merge: true }));
     await lot.commit();
     console.log(`Référentiel : ${FORMATIONS.length} diplômes, ${Object.values(CATALOGUE).flat().length} UE, ${ANNEES.length} années.`);
 }
@@ -62,7 +63,7 @@ async function compte(profil: ProfilCompte, motDePasse?: string) {
             ...(profil.enseignantId ? { enseignantId: profil.enseignantId } : {}),
         });
     }
-    await db.collection('utilisateurs').doc(uid).set(
+    await col.utilisateurs().doc(uid).set(
         { ...profil, actif: true, creeLe: FieldValue.serverTimestamp(), modifieLe: FieldValue.serverTimestamp() },
         { merge: true },
     );
@@ -78,7 +79,7 @@ async function demo() {
     for (const [n, e] of etudiants.entries()) {
         const inscriptionId = `${e.id}-2026`;
         const ueIds = CATALOGUE.DGC.filter((u) => u[3] === 1).map((u) => u[0]);
-        lot.set(db.collection('inscriptions').doc(inscriptionId), {
+        lot.set(col.inscriptions().doc(inscriptionId), {
             etudiantId: e.id, formationId: 'DGC', anneeId: '2026-2027', anneeParcours: 1, dateInscription: '2026-09-15',
             numeroIntec: `INTEC-${1000 + n}`, statut: 'active', ueIds, montantDu: 150000, montantRemise: n ? 10000 : 0,
             noteFinanciere: null, totalVerse: 0, ordre: 1,
@@ -86,19 +87,19 @@ async function demo() {
             creeLe: FieldValue.serverTimestamp(), modifieLe: FieldValue.serverTimestamp(),
         });
         const { id, ...fiche } = e;
-        lot.set(db.collection('etudiants').doc(id), {
+        lot.set(col.etudiants().doc(id), {
             ...fiche, statut: 'Actif', derniere: { inscriptionId, formationId: 'DGC', anneeId: '2026-2027', statut: 'active' },
             formationIds: ['DGC'], anneeIds: ['2026-2027'], nbInscriptions: 1,
             creeLe: FieldValue.serverTimestamp(), modifieLe: FieldValue.serverTimestamp(),
         });
-        lot.set(db.collection('uniques').doc(`etudiant-email:${e.email}`), { proprietaire: id });
+        lot.set(col.uniques().doc(`etudiant-email:${e.email}`), { proprietaire: id });
     }
-    lot.set(db.collection('enseignants').doc('demo-fatimetou'), {
+    lot.set(col.enseignants().doc('demo-fatimetou'), {
         nom: 'Sidi', prenom: 'Fatimetou', specialite: 'Comptabilité', email: 'fatimetou.sidi@example.com', telephone: null,
         nbUe: 1, nbEtudiants: 2, creeLe: FieldValue.serverTimestamp(), modifieLe: FieldValue.serverTimestamp(),
     });
-    lot.set(db.collection('uniques').doc('enseignant-email:fatimetou.sidi@example.com'), { proprietaire: 'demo-fatimetou' });
-    lot.set(db.collection('affectations').doc('demo-fatimetou_TEC119'), {
+    lot.set(col.uniques().doc('enseignant-email:fatimetou.sidi@example.com'), { proprietaire: 'demo-fatimetou' });
+    lot.set(col.affectations().doc('demo-fatimetou_TEC119'), {
         enseignantId: 'demo-fatimetou', ueId: 'TEC119', nombreEtudiants: 2, creeLe: FieldValue.serverTimestamp(),
     });
     await lot.commit();

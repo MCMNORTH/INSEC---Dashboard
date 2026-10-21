@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import firestoreAdmin from '@google-cloud/firestore';
 import { logger } from 'firebase-functions';
 import { defineString } from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { auditerDirect } from '../lib/audit.js';
 import { operation, refuser, type Acteur } from '../lib/contexte.js';
 import { col, exiger } from '../lib/donnees.js';
@@ -15,11 +15,17 @@ export const BACKUP_BUCKET = defineString('BACKUP_BUCKET', {
     description: 'Bucket Cloud Storage dédié aux sauvegardes (défaut : <projet>-sauvegardes)',
 });
 export const RETENTION_JOURS = 30;
+const VERSION_FORMAT_STOCKAGE = 2;
+const PREFIXES_STOCKAGE = ['dossiers/', 'finances/', 'documents/'] as const;
 const SUPER_ADMIN = ['super_admin'] as const;
 
 const projet = () => process.env.GCLOUD_PROJECT ?? process.env.GCP_PROJECT ?? '';
 const nomBucket = () => BACKUP_BUCKET.value() || `${projet()}-sauvegardes`;
 const cheminBase = () => `projects/${projet()}/databases/(default)`;
+const clientAdminFirestore = async () => {
+    const firestoreAdmin = (await import('@google-cloud/firestore')).default;
+    return new firestoreAdmin.v1.FirestoreAdminClient();
+};
 
 function exigerProduction(): void {
     if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.FIRESTORE_EMULATOR_HOST) {
@@ -33,28 +39,38 @@ async function collectionsAExporter(): Promise<string[]> {
     return [...racines, 'alertes'];
 }
 
-async function copierDocuments(source: string, destination: string) {
-    const [fichiers] = await bucket().getFiles({ prefix: source });
+async function copierDocuments(destination: string) {
     const cible = storage.bucket(nomBucket());
     const manifeste: { chemin: string; md5: string; taille: number }[] = [];
-    for (const fichier of fichiers) {
-        const relatif = fichier.name.slice(source.length);
-        await fichier.copy(cible.file(`${destination}${relatif}`));
-        manifeste.push({ chemin: relatif, md5: String(fichier.metadata.md5Hash ?? ''), taille: Number(fichier.metadata.size ?? 0) });
+    for (const prefix of PREFIXES_STOCKAGE) {
+        const [fichiers] = await bucket().getFiles({ prefix });
+        for (const fichier of fichiers) {
+            const chemin = fichier.name;
+            await fichier.copy(cible.file(`${destination}${chemin}`));
+            manifeste.push({ chemin, md5: String(fichier.metadata.md5Hash ?? ''), taille: Number(fichier.metadata.size ?? 0) });
+        }
     }
     return manifeste;
 }
 
-export async function verifier(id: string): Promise<{ integrite: boolean; erreur: string | null }> {
+export async function verifier(id: string): Promise<{ integrite: boolean; erreur: string | null; formatStockage: number }> {
     const sauvegarde = await exiger(null, col.sauvegardes().doc(id), 'Sauvegarde introuvable.');
     const cible = storage.bucket(nomBucket());
+    const format = Number(sauvegarde.formatStockage ?? 1);
     const [metadonnees] = await cible.file(`${id}/firestore/firestore.overall_export_metadata`).exists();
-    if (!metadonnees) return { integrite: false, erreur: 'Export Firestore absent ou incomplet.' };
-    for (const d of (sauvegarde.documents ?? []) as { chemin: string; md5: string }[]) {
-        const [meta] = await cible.file(`${id}/documents/${d.chemin}`).getMetadata().catch(() => [null]);
-        if (!meta || meta.md5Hash !== d.md5) return { integrite: false, erreur: `Document altéré ou manquant : ${d.chemin}` };
+    if (!metadonnees) return { integrite: false, erreur: 'Export Firestore absent ou incomplet.', formatStockage: format };
+    if (![1, VERSION_FORMAT_STOCKAGE].includes(format)) return { integrite: false, erreur: 'Format de sauvegarde Storage inconnu.', formatStockage: format };
+    for (const d of (sauvegarde.documents ?? []) as { chemin: string; md5: string; taille?: number }[]) {
+        const chemin = format === VERSION_FORMAT_STOCKAGE ? d.chemin : `dossiers/${d.chemin}`;
+        if (!PREFIXES_STOCKAGE.some((prefix) => chemin.startsWith(prefix)) || chemin.split('/').includes('..')) {
+            return { integrite: false, erreur: 'Chemin de document invalide dans la sauvegarde.', formatStockage: format };
+        }
+        const [meta] = await cible.file(`${id}/documents/${chemin}`).getMetadata().catch(() => [null]);
+        if (!meta || meta.md5Hash !== d.md5 || (d.taille !== undefined && Number(meta.size) !== Number(d.taille))) {
+            return { integrite: false, erreur: `Document altéré ou manquant : ${chemin}`, formatStockage: format };
+        }
     }
-    return { integrite: true, erreur: null };
+    return { integrite: true, erreur: null, formatStockage: format };
 }
 
 export async function executerSauvegarde(motif: string): Promise<string> {
@@ -62,16 +78,16 @@ export async function executerSauvegarde(motif: string): Promise<string> {
     const horodatage = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
     const id = `insec-${horodatage}-${randomBytes(3).toString('hex')}`;
     const ref = col.sauvegardes().doc(id);
-    await ref.set({ nom: id, motif, statut: 'En cours', integrite: false, erreur: null, bucket: nomBucket(), creeLe: FieldValue.serverTimestamp() });
+    await ref.set({ nom: id, motif, statut: 'En cours', integrite: false, erreur: null, bucket: nomBucket(), formatStockage: VERSION_FORMAT_STOCKAGE, creeLe: FieldValue.serverTimestamp() });
     try {
-        const client = new firestoreAdmin.v1.FirestoreAdminClient();
+        const client = await clientAdminFirestore();
         const [operationExport] = await client.exportDocuments({
             name: cheminBase(),
             outputUriPrefix: `gs://${nomBucket()}/${id}/firestore`,
             collectionIds: await collectionsAExporter(),
         });
         await operationExport.promise();
-        const documents = await copierDocuments('dossiers/', `${id}/documents/`);
+        const documents = await copierDocuments(`${id}/documents/`);
         await ref.update({ documents, nbDocuments: documents.length });
         const controle = await verifier(id);
         await ref.update({ statut: controle.integrite ? 'Terminée' : 'Échec', ...controle, termineeLe: FieldValue.serverTimestamp() });
@@ -85,12 +101,21 @@ export async function executerSauvegarde(motif: string): Promise<string> {
 
 export async function purgerAnciennes(jours = RETENTION_JOURS): Promise<number> {
     const limite = Timestamp.fromMillis(Date.now() - jours * 24 * 3600 * 1000);
-    const anciennes = await col.sauvegardes().where('creeLe', '<', limite).get();
-    for (const d of anciennes.docs) {
-        await storage.bucket(nomBucket()).deleteFiles({ prefix: `${d.id}/` });
-        await d.ref.delete();
+    let dernier: QueryDocumentSnapshot | undefined;
+    let total = 0;
+    while (true) {
+        let requete = col.sauvegardes().where('creeLe', '<', limite).orderBy('creeLe').limit(50);
+        if (dernier) requete = requete.startAfter(dernier);
+        const page = await requete.get();
+        if (page.empty) break;
+        for (const d of page.docs) {
+            await storage.bucket(nomBucket()).deleteFiles({ prefix: `${d.id}/` });
+            await d.ref.delete();
+            total++;
+        }
+        dernier = page.docs[page.docs.length - 1];
     }
-    return anciennes.size;
+    return total;
 }
 
 const OPTIONS_LONGUES = { timeoutSeconds: 540, memory: '1GiB' as const };
@@ -105,9 +130,14 @@ export const verifierSauvegarde = operation('verifierSauvegarde', SUPER_ADMIN, a
     const { id } = valider(z.object({ id: s.id() }), donnees);
     exigerProduction();
     const controle = await verifier(id);
-    await col.sauvegardes().doc(id).update({ ...controle, verifieeLe: FieldValue.serverTimestamp() });
+    await col.sauvegardes().doc(id).update({ integrite: controle.integrite, erreur: controle.erreur, verifieeLe: FieldValue.serverTimestamp() });
     await auditerDirect(acteur, { action: 'backup_verify', description: `Contrôle de la sauvegarde ${id}`, apres: { intégrité: controle.integrite } });
-    return { ...controle, message: controle.integrite ? 'Intégrité confirmée.' : 'La sauvegarde est corrompue.' };
+    const message = !controle.integrite
+        ? 'La sauvegarde est corrompue.'
+        : controle.formatStockage === VERSION_FORMAT_STOCKAGE
+          ? 'Intégrité confirmée pour Firestore et les fichiers Storage archivés.'
+          : 'Intégrité confirmée pour Firestore et les anciens fichiers archivés. Les factures et documents institutionnels ne sont pas inclus dans ce format.';
+    return { ...controle, message };
 }, OPTIONS_LONGUES);
 
 /** Réservé au super-administrateur, qui doit s'être ré-authentifié il y a moins de 5 minutes. */
@@ -120,12 +150,16 @@ export const restaurerSauvegarde = operation('restaurerSauvegarde', SUPER_ADMIN,
     const sauvegarde = await exiger(null, col.sauvegardes().doc(v.id), 'Sauvegarde introuvable.');
     if (!(await verifier(v.id)).integrite) refuser('Archive invalide ou corrompue.');
     await executerSauvegarde('Sauvegarde automatique avant restauration');
-    const client = new firestoreAdmin.v1.FirestoreAdminClient();
+    const client = await clientAdminFirestore();
     const [operationImport] = await client.importDocuments({ name: cheminBase(), inputUriPrefix: `gs://${nomBucket()}/${v.id}/firestore` });
     await operationImport.promise();
+    const format = Number(sauvegarde.formatStockage ?? 1);
     for (const d of (sauvegarde.documents ?? []) as { chemin: string }[]) {
-        if (d.chemin.includes('..')) continue;
-        await storage.bucket(nomBucket()).file(`${v.id}/documents/${d.chemin}`).copy(bucket().file(`dossiers/${d.chemin}`));
+        const chemin = format === VERSION_FORMAT_STOCKAGE ? d.chemin : `dossiers/${d.chemin}`;
+        if (!PREFIXES_STOCKAGE.some((prefix) => chemin.startsWith(prefix)) || chemin.split('/').includes('..')) {
+            refuser('Chemin de document invalide dans la sauvegarde.');
+        }
+        await storage.bucket(nomBucket()).file(`${v.id}/documents/${chemin}`).copy(bucket().file(chemin));
     }
     await auditerDirect(acteur, { action: 'restore', description: `Restauration depuis ${v.id}` });
     return { message: 'Restauration terminée. Une sauvegarde de précaution a été créée.' };

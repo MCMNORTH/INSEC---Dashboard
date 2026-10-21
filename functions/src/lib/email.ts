@@ -1,7 +1,8 @@
 import { defineSecret, defineString } from 'firebase-functions/params';
 import nodemailer, { type Transporter } from 'nodemailer';
 import type { Ecrivain } from './audit.js';
-import { db, FieldValue } from './firebase.js';
+import { col } from './donnees.js';
+import { FieldValue } from './firebase.js';
 
 export const APP_URL = defineString('APP_URL', { default: 'http://localhost:5173', description: 'URL publique du dashboard' });
 export const SMTP_HOST = defineString('SMTP_HOST', { default: '', description: 'Serveur SMTP (vide = envoi désactivé)' });
@@ -22,11 +23,16 @@ export interface Email {
     /** Chemin dans l'application (ex. /portail/etudiant), complété avec APP_URL à l'envoi. */
     lien?: string | null;
     libelleLien?: string | null;
+    /** Identifiant du versement dont le reçu PDF doit accompagner l'e-mail. */
+    versementPdfId?: string | null;
+    /** Clé métier utilisée pour éviter plusieurs rappels du même mois. */
+    cleEnvoi?: string | null;
 }
 
 /** Met un e-mail en file d'attente ; le déclencheur `envoyerEmail` l'expédie et met à jour son statut. */
 export function mettreEnFileEmail(ecrivain: Ecrivain, email: Email): void {
-    (ecrivain as FirebaseFirestore.WriteBatch).set(db.collection('journalEmails').doc(), {
+    const ref = email.cleEnvoi ? col.journalEmails().doc(email.cleEnvoi) : col.journalEmails().doc();
+    (ecrivain as FirebaseFirestore.WriteBatch).set(ref, {
         destinataire: email.destinataire,
         nomDestinataire: email.nomDestinataire,
         type: email.type,
@@ -36,6 +42,33 @@ export function mettreEnFileEmail(ecrivain: Ecrivain, email: Email): void {
         details: email.details ?? {},
         lien: email.lien ?? null,
         libelleLien: email.libelleLien ?? null,
+        versementPdfId: email.versementPdfId ?? null,
+        inscriptionId: null,
+        mois: null,
+        statut: 'En attente',
+        erreur: null,
+        envoyeLe: null,
+        creeLe: FieldValue.serverTimestamp(),
+    });
+}
+
+/** Crée une notification mensuelle à identifiant déterministe pour bloquer les doublons. */
+export function mettreEnFileRappelMensuel(ecrivain: Ecrivain, email: Email & { inscriptionId: string; mois: string }): void {
+    const { inscriptionId, mois, ...contenu } = email;
+    const ref = col.journalEmails().doc(`rappel-${inscriptionId}-${mois}`);
+    (ecrivain as FirebaseFirestore.WriteBatch).create(ref, {
+        destinataire: contenu.destinataire,
+        nomDestinataire: contenu.nomDestinataire,
+        type: contenu.type,
+        sujet: contenu.sujet,
+        titre: contenu.titre,
+        message: contenu.message,
+        details: contenu.details ?? {},
+        lien: contenu.lien ?? null,
+        libelleLien: contenu.libelleLien ?? null,
+        versementPdfId: null,
+        inscriptionId,
+        mois,
         statut: 'En attente',
         erreur: null,
         envoyeLe: null,
@@ -74,6 +107,15 @@ export function transportSmtp(): Transporter | null {
     });
 }
 
+/** Journalise aussi les erreurs survenues avant l'appel au transport (ex. génération PDF). */
+export async function enregistrerEchecPreparationEmail(id: string, erreur: unknown): Promise<void> {
+    await col.journalEmails().doc(id).update({
+        statut: 'Échec',
+        erreur: String((erreur as Error)?.message ?? erreur).slice(0, 2000),
+        echecLe: FieldValue.serverTimestamp(),
+    });
+}
+
 export interface PieceJointeEmail {
     filename: string;
     content: Buffer;
@@ -86,7 +128,7 @@ export async function expedier(
     transport: Transporter | null,
     piecesJointes: PieceJointeEmail[] = [],
 ): Promise<'Envoyé' | 'Échec'> {
-    const ref = db.collection('journalEmails').doc(id);
+    const ref = col.journalEmails().doc(id);
     if (!transport) {
         await ref.update({ statut: 'Échec', erreur: 'Aucun serveur SMTP n’est configuré (SMTP_HOST).' });
         return 'Échec';

@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
-import pdfmake from 'pdfmake';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { operation } from '../lib/contexte.js';
 import { col, exiger, type Doc } from '../lib/donnees.js';
@@ -11,17 +12,34 @@ import { formaterMontant, numeroFormate, resultatValide, ROLES_ADMIN } from '../
 import { formaterDateHeure } from './examens.js';
 
 const require = createRequire(import.meta.url);
-const polices = require('pdfmake/fonts/Roboto.js') as Record<string, Record<string, string>>;
-const dossierPolices = dirname(require.resolve('pdfmake/fonts/Roboto.js'));
-pdfmake.setFonts(polices);
-pdfmake.setUrlAccessPolicy(() => false);
-pdfmake.setLocalAccessPolicy((chemin) => chemin.startsWith(dossierPolices));
+const logoInsec = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../src/assets/logo-insec.png'));
+const signatureCachetInsec = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../src/assets/signature-cachet-insec.png'));
+type PdfModule = typeof import('pdfmake').default;
+let chargementPdf: Promise<PdfModule> | undefined;
+async function moteurPdf(): Promise<PdfModule> {
+    chargementPdf ??= import('pdfmake').then(({ default: pdfmake }) => {
+        const polices = require('pdfmake/fonts/Roboto.js') as Record<string, Record<string, string>>;
+        const dossierPolices = dirname(require.resolve('pdfmake/fonts/Roboto.js'));
+        pdfmake.setFonts(polices);
+        pdfmake.setUrlAccessPolicy(() => false);
+        pdfmake.setLocalAccessPolicy((chemin) => chemin.startsWith(dossierPolices));
+        return pdfmake;
+    });
+    return chargementPdf;
+}
 
 const BLEU = '#1e2761';
 const OR = '#d4af37';
 const jourFr = (d: Date) => new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU, dateStyle: 'short' }).format(d);
 const dateFr = (iso: string) => iso.split('-').reverse().join('/');
 const maj = (v: string) => (v ?? '').toLocaleUpperCase('fr-FR');
+
+function libelleParcours(inscription: Doc, ues: Doc[]): string {
+    const annees = [...new Set(ues.map((ue) => ue.anneeParcours).filter((n) => Number.isInteger(n)))].sort((a, b) => a - b);
+    if (annees.length > 1) return `parcours multi-années (${annees.join(', ')})`;
+    if (annees.length === 1) return `année ${annees[0]}`;
+    return inscription.anneeParcours ? `année ${inscription.anneeParcours}` : 'parcours non précisé';
+}
 
 function entete() {
     return [
@@ -54,11 +72,16 @@ const signature = (texte: string, prefixe?: string) => ({
 });
 
 async function document(contenu: unknown[], piedDePage: string, orientation: 'portrait' | 'landscape' = 'portrait'): Promise<string> {
+    const pdfmake = await moteurPdf();
     const buffer = await pdfmake
         .createPdf({
             pageOrientation: orientation,
             pageMargins: [40, 50, 40, 60],
             defaultStyle: { font: 'Roboto', fontSize: 10, color: '#202020' },
+            images: {
+                logoInsec: `data:image/png;base64,${logoInsec.toString('base64')}`,
+                signatureCachetInsec: `data:image/png;base64,${signatureCachetInsec.toString('base64')}`,
+            },
             content: contenu,
             footer: { text: piedDePage, fontSize: 8, color: '#777777', margin: [40, 20, 40, 0] },
         })
@@ -79,6 +102,7 @@ async function contexteInscription(id: string) {
 async function attestation(id: string) {
     const { inscription, etudiant, formation, annee } = await contexteInscription(id);
     const ues = inscription.ueIds?.length ? await db.getAll(...inscription.ueIds.map((u: string) => col.ues().doc(u))) : [];
+    const libelle = libelleParcours(inscription, ues.map((u) => (u.data() as Doc | undefined) ?? {}));
     const contenu = [
         ...entete(),
         titre('Attestation d’inscription'),
@@ -91,7 +115,7 @@ async function attestation(id: string) {
         {
             text: [
                 'est inscrit(e) au diplôme ', { text: `${formation.libelle} (${formation.code})`, bold: true },
-                `, en année ${inscription.anneeParcours}, pour l’année académique `, { text: annee.libelle, bold: true }, '.',
+                `, en ${libelle}, pour l’année académique `, { text: annee.libelle, bold: true }, '.',
             ],
         },
         { text: `UE suivies : ${ues.map((u) => u.get('code')).join(', ')}.`, margin: [0, 10, 0, 0] },
@@ -108,8 +132,9 @@ async function releve(id: string) {
     const resultats = (await col.resultats().where('inscriptionId', '==', id).get()).docs
         .map((d) => d.data())
         .sort((a, b) => a.dateExamen.toMillis() - b.dateExamen.toMillis());
-    const ueIds = [...new Set(resultats.map((r) => r.ueId as string))];
+    const ueIds = [...new Set([...(inscription.ueIds ?? []), ...resultats.map((r) => r.ueId as string)])];
     const ues = new Map((ueIds.length ? await db.getAll(...ueIds.map((u) => col.ues().doc(u))) : []).map((u) => [u.id, u.data() as Doc]));
+    const libelle = libelleParcours(inscription, [...ues.values()]);
     const valides = new Set(resultats.filter((r) => resultatValide(r as never)).map((r) => r.ueId as string));
     const credits = [...valides].reduce((t, u) => t + (ues.get(u)?.credits ?? 0), 0);
     const lignes = resultats.length
@@ -126,7 +151,7 @@ async function releve(id: string) {
         titre('Relevé de notes'),
         encadre([
             { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, bold: true },
-            `${formation.code} · ${annee.libelle} · Année ${inscription.anneeParcours}`,
+            `${formation.code} · ${annee.libelle} · ${libelle}`,
             `N° INTEC : ${inscription.numeroIntec ?? 'Non renseigné'}`,
         ]),
         grille(lignes, ['UE', 'Session', 'Date', 'Note', 'Résultat']),
@@ -173,6 +198,18 @@ async function recu(id: string) {
         throw new HttpsError('failed-precondition', 'Un reçu officiel ne peut être généré qu’après validation du versement.');
     }
     const { etudiant, formation, annee } = await contexteInscription(versement.inscriptionId);
+    const lignesFinancieres: unknown[][] = [
+        [cle('Montant reçu'), { text: `${formaterMontant(versement.montant)} MRU`, fontSize: 15, bold: true, color: BLEU }],
+    ];
+    if (typeof versement.montantNetAuPaiement === 'number' && typeof versement.soldeApresPaiement === 'number') {
+        lignesFinancieres.push(
+            [cle('Total dû'), `${formaterMontant(versement.montantNetAuPaiement)} MRU`],
+            ...(typeof versement.totalVerseAuPaiement === 'number'
+                ? [[cle('Cumul payé après versement'), `${formaterMontant(versement.totalVerseAuPaiement)} MRU`]]
+                : []),
+            [cle('Solde restant après paiement'), `${formaterMontant(versement.soldeApresPaiement)} MRU`],
+        );
+    }
     const contenu = [
         ...entete(),
         titre('Reçu de paiement'),
@@ -183,7 +220,7 @@ async function recu(id: string) {
         grille([
             [cle('Étudiant'), `${maj(etudiant.nom)} ${etudiant.prenom}`],
             [cle('Formation'), `${formation.code} · ${annee.libelle}`],
-            [cle('Montant reçu'), { text: `${formaterMontant(versement.montant)} MRU`, fontSize: 15, bold: true, color: BLEU }],
+            ...lignesFinancieres,
             [cle('Mode'), versement.modePaiement],
             [cle('Référence'), versement.reference ?? '—'],
         ]),
@@ -195,70 +232,107 @@ async function recu(id: string) {
     };
 }
 
+/** Rend un reçu en mémoire pour l'ajouter à une confirmation de paiement. */
+export async function genererRecuPdfPourEmail(id: string): Promise<{ filename: string; content: Buffer; contentType: string }> {
+    const fichier = await recu(id);
+    return { filename: fichier.nom, content: Buffer.from(fichier.contenu, 'base64'), contentType: 'application/pdf' };
+}
+
 async function facture(id: string) {
     const { inscription, etudiant, formation, annee } = await contexteInscription(id);
+    const ues = inscription.ueIds?.length ? await db.getAll(...inscription.ueIds.map((ueId: string) => col.ues().doc(ueId))) : [];
+    const unites = ues.map((ue) => {
+        const donnees = ue.data() as Doc | undefined;
+        return { code: String(donnees?.code ?? ue.id), libelle: String(donnees?.libelle ?? 'Unité d’enseignement') };
+    });
     const versements = (await col.versements().where('inscriptionId', '==', id).get()).docs
         .map((doc) => doc.data())
         .sort((a, b) => String(a.dateVersement).localeCompare(String(b.dateVersement)));
-    const echeances = [...(inscription.echeances ?? [])].sort((a: Doc, b: Doc) => String(a.dateEcheance).localeCompare(String(b.dateEcheance)));
     const montantNet = Math.max(0, Number(inscription.montantDu ?? 0) - Number(inscription.montantRemise ?? 0));
     const montantEncaisse = versements
         .filter((v) => v.statut === 'Validée')
         .reduce((total, v) => total + Number(v.montant ?? 0), 0);
     const solde = Math.max(0, montantNet - montantEncaisse);
-    const reference = `FACT-${inscription.id.toUpperCase()}`;
-    const lignesVersements = versements.length
-        ? versements.map((v) => [
-              dateFr(String(v.dateVersement)),
-              v.numeroRecu ?? '—',
-              v.statut,
-              `${formaterMontant(v.montant)} MRU`,
-          ])
-        : [[{ text: 'Aucun versement enregistré.', colSpan: 4, alignment: 'center' }, '', '', '']];
+    const montantDu = Number(inscription.montantDu ?? 0);
+    const montantRemise = Number(inscription.montantRemise ?? 0);
+    const anneeNumeroe = inscription.anneeId.replace(/[^0-9]/g, '');
+    const reference = `FACT-${formation.code}-${anneeNumeroe}-${inscription.id.slice(-6).toUpperCase()}`;
+    const nombreUes = unites.length;
+    const prixUnitaire = nombreUes ? Math.floor(montantDu / nombreUes) : montantDu;
+    const lignesUes = unites.length
+        ? unites.map((ue, index) => {
+              const prix = index === unites.length - 1 ? montantDu - prixUnitaire * (unites.length - 1) : prixUnitaire;
+              return [
+                  { text: ue.code, bold: true, color: BLEU, width: 82 },
+                  { text: ue.libelle, color: '#263247' },
+                  { text: `${formaterMontant(prix)} MRU`, alignment: 'right', bold: true },
+              ];
+          })
+        : [[{ text: formation.code, bold: true, color: BLEU }, { text: `Frais de formation · ${formation.libelle}` }, { text: `${formaterMontant(montantDu)} MRU`, alignment: 'right', bold: true }]];
     const contenu = [
-        ...entete(),
-        titre('Facture d’inscription'),
-        encadre([
-            { text: reference, fontSize: 14, bold: true, color: BLEU },
-            `Émise le ${jourFr(new Date())}`,
-            `Année académique : ${annee.libelle}`,
-        ]),
-        grille([
-            [cle('Étudiant'), `${maj(etudiant.nom)} ${etudiant.prenom}`],
-            [cle('E-mail'), etudiant.email ?? 'Non renseigné'],
-            [cle('Formation'), `${formation.code} · ${formation.libelle}`],
-            [cle('Inscription'), inscription.id],
-        ]),
-        grille([
-            ['Frais de formation', `${formaterMontant(inscription.montantDu ?? 0)} MRU`],
-            ['Remise', `− ${formaterMontant(inscription.montantRemise ?? 0)} MRU`],
-            [{ text: 'Montant net dû', bold: true }, { text: `${formaterMontant(montantNet)} MRU`, bold: true }],
-        ], ['Désignation', 'Montant']),
-        { text: 'Échéancier', fontSize: 13, bold: true, color: BLEU, margin: [0, 15, 0, 0] },
-        grille(
-            echeances.length
-                ? echeances.map((e: Doc) => [String(e.libelle ?? 'Échéance'), dateFr(String(e.dateEcheance)), `${formaterMontant(e.montant ?? 0)} MRU`])
-                : [[{ text: 'Aucune échéance définie.', colSpan: 3, alignment: 'center' }, '', '']],
-            ['Échéance', 'Date limite', 'Montant'],
-        ),
-        { text: 'Versements enregistrés', fontSize: 13, bold: true, color: BLEU, margin: [0, 15, 0, 0] },
-        grille(lignesVersements, ['Date', 'Reçu', 'Statut', 'Montant']),
         {
-            text: [
-                { text: 'Total encaissé (versements validés) : ', bold: true },
-                `${formaterMontant(montantEncaisse)} MRU`,
-                '\n',
-                { text: 'Solde restant : ', bold: true, color: BLEU },
-                { text: `${formaterMontant(solde)} MRU`, bold: true, color: BLEU },
-            ],
-            alignment: 'right',
-            margin: [0, 15, 0, 0],
+            columns: [
+                { image: 'logoInsec', width: 125, fit: [125, 72] },
+                { stack: [
+                    { text: "INSTITUT D'EXPERTISE COMPTABLE", fontSize: 10, bold: true, color: BLEU, alignment: 'right' },
+                    { text: 'Centre associé du Cnam Intec Paris', fontSize: 9, color: '#596579', alignment: 'right', margin: [0, 5, 0, 0] },
+                    { text: 'Nouakchott, Mauritanie', fontSize: 9, color: '#596579', alignment: 'right', margin: [0, 3, 0, 0] },
+                    { text: 'mohamed.cheikh@insec.mr', fontSize: 9, color: '#596579', alignment: 'right', margin: [0, 3, 0, 0] },
+                ], width: '*', margin: [0, 4, 0, 0] },
+            ], columnGap: 20, margin: [0, 0, 0, 12],
         },
-        { text: 'Document généré à partir du dossier financier de l’INSEC.', fontSize: 9, color: '#666666', margin: [0, 20, 0, 0] },
+        { canvas: [{ type: 'line', x1: 0, y1: 2, x2: 515, y2: 2, lineWidth: 2, lineColor: OR }], margin: [0, 0, 0, 14] },
+        { text: 'FACTURE DE FORMATION', fontSize: 21, bold: true, color: BLEU, margin: [0, 0, 0, 2] },
+        { text: `Frais de formation ${formation.code} - Année scolaire ${annee.libelle}`, fontSize: 10, color: '#596579' },
+        { columns: [
+            { text: `Référence : ${reference}`, fontSize: 9, color: BLEU },
+            { text: `Émise le ${jourFr(new Date())}`, fontSize: 9, color: BLEU, alignment: 'right' },
+        ], margin: [0, 17, 0, 15] },
+        { table: { widths: ['*', 150], body: [[
+            { stack: [
+                { text: 'FACTURÉ À', fontSize: 8, bold: true, color: '#667085' },
+                { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, fontSize: 13, bold: true, color: BLEU, margin: [0, 5, 0, 0] },
+                { text: etudiant.email ?? 'E-mail non renseigné', fontSize: 9, color: '#596579', margin: [0, 3, 0, 0] },
+            ] },
+            { stack: [
+                { text: 'ANNÉE SCOLAIRE', fontSize: 8, bold: true, color: '#667085', alignment: 'right' },
+                { text: annee.libelle, fontSize: 12, bold: true, color: BLEU, alignment: 'right', margin: [0, 5, 0, 0] },
+                { text: `${formation.code} - ${nombreUes} UE`, fontSize: 9, color: '#596579', alignment: 'right', margin: [0, 3, 0, 0] },
+            ] },
+        ]] }, layout: { fillColor: () => '#f3f5f9', hLineColor: () => '#f3f5f9', vLineColor: () => '#f3f5f9', paddingLeft: () => 14, paddingRight: () => 14, paddingTop: () => 12, paddingBottom: () => 12 }, margin: [0, 0, 0, 18] },
+        { table: { headerRows: 1, widths: [92, '*', 112], body: [
+            ['DÉSIGNATION', '', 'PRIX'].map((text) => ({ text, color: 'white', fillColor: BLEU, bold: true, margin: [2, 2, 2, 2] })),
+            ...lignesUes,
+            ...(montantRemise > 0 ? [[{ text: 'Remise accordée', colSpan: 2 }, '', { text: `- ${formaterMontant(montantRemise)} MRU`, alignment: 'right' }]] : []),
+        ] }, layout: { hLineColor: (index: number) => index === 1 ? '#e1e6ef' : '#d5dbe5', vLineColor: () => '#ffffff', paddingLeft: () => 9, paddingRight: () => 9, paddingTop: () => 9, paddingBottom: () => 9, fillColor: (rowIndex: number) => rowIndex > 0 && rowIndex % 2 === 1 ? '#f5f7fa' : undefined }, margin: [0, 0, 0, 18] },
+        { canvas: [{ type: 'line', x1: 0, y1: 2, x2: 515, y2: 2, lineWidth: 2, lineColor: OR }], margin: [0, 0, 0, 6] },
+        { columns: [
+            { text: `Total des ${nombreUes} UE`, bold: true, color: BLEU, margin: [8, 2, 0, 0] },
+            { text: `${formaterMontant(montantDu)} MRU`, bold: true, color: BLEU, alignment: 'right', margin: [0, 2, 8, 0] },
+        ], margin: [0, 3, 0, 4] },
+        { columns: [
+            { text: `Paiement communiqué pour ${annee.libelle}`, color: '#596579', margin: [8, 0, 0, 0] },
+            { text: `${formaterMontant(montantEncaisse)} MRU`, color: BLEU, alignment: 'right', margin: [0, 0, 8, 0] },
+        ], margin: [0, 3, 0, 15] },
+        {
+            table: { widths: ['*'], body: [[{ columns: [
+                { text: 'RESTE À PAYER', fontSize: 12, bold: true, color: 'white', margin: [2, 4, 0, 0] },
+                { text: `${formaterMontant(solde)} MRU`, fontSize: 20, bold: true, color: 'white', alignment: 'right' },
+            ] }]] }, layout: { fillColor: () => BLEU, hLineColor: () => BLEU, vLineColor: () => BLEU, paddingLeft: () => 12, paddingRight: () => 12, paddingTop: () => 9, paddingBottom: () => 9 }, margin: [0, 0, 0, 9],
+        },
+        { text: `Solde calculé à partir des versements validés pour l’année ${annee.libelle}.`, fontSize: 9, bold: true, color: BLEU, margin: [10, 4, 0, 6] },
+        { text: `Cette facture concerne uniquement l’année scolaire ${annee.libelle}. Elle ne vaut pas acquittement.`, fontSize: 8, color: '#667085', margin: [10, 0, 0, 0] },
+        { columns: [
+            { width: '*', text: '' },
+            { width: 205, stack: [
+                { text: "Cachet et signature de l'INSEC", fontSize: 9, bold: true, color: BLEU, alignment: 'center', margin: [0, 6, 0, 3] },
+                { image: 'signatureCachetInsec', width: 150, fit: [150, 108], alignment: 'center' },
+            ], alignment: 'center' },
+        ], unbreakable: true, margin: [0, 20, 0, 0] },
     ];
     return {
         nom: `facture-inscription-${id}.pdf`,
-        contenu: await document(contenu, `Facture ${reference} · INSEC Dashboard`),
+        contenu: await document(contenu, `INSEC - Institut d'expertise comptable, Nouakchott · ${annee.libelle}`),
     };
 }
 
@@ -474,7 +548,7 @@ async function expedierDocument(
         message: 'Veuillez trouver votre document en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.',
         details: { Document: pdf.nom, 'Année académique': String(contexte.annee.libelle ?? '') },
     };
-    const journal = db.collection('journalEmails').doc();
+    const journal = col.journalEmails().doc();
     await journal.set({
         ...email,
         lien: null,
@@ -502,7 +576,7 @@ async function envoyerConvocationSuivie(id: string, acteurId: string, transport:
     const resultatInitial = await exiger(null, ref, 'Résultat introuvable.');
     if (resultatInitial.convocationEnvoiStatut !== 'Envoyée' && resultatInitial.convocationEnvoiStatut !== 'En cours') {
         const nomPdf = `convocation-examen-${numeroFormate('CONV', Number(resultatInitial.numeroConvocation ?? 0))}.pdf`;
-        const anciensEnvois = await db.collection('journalEmails').where('nomPieceJointe', '==', nomPdf).get();
+        const anciensEnvois = await col.journalEmails().where('nomPieceJointe', '==', nomPdf).get();
         const dejaEnvoyee = anciensEnvois.docs.find((document) => document.get('statut') === 'Envoyé');
         if (dejaEnvoyee) {
             await db.runTransaction(async (tx) => {

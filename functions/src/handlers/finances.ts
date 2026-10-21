@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { logger } from 'firebase-functions';
 import { auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
 import { col, exiger, nomComplet, prochainNumero } from '../lib/donnees.js';
 import { mettreEnFileEmail } from '../lib/email.js';
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
-import { formaterMontant, MODES_PAIEMENT, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, STATUTS_VERSEMENT } from '../shared/domaine.js';
+import { formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, soldeRestant, type SituationFinanciere } from '../shared/domaine.js';
 
 const formaterDate = (iso: string) => iso.split('-').reverse().join('/');
 
@@ -30,6 +31,40 @@ export const confirmerReglementBumex2024 = operation('confirmerReglementBumex202
     return { message: 'Prise en charge BUMEX appliquée aux 11 inscriptions 2024-2025 (41 UE), sans créer de versements individuels.' };
 });
 
+const tauxEuroMruRef = () => col.parametres().doc('tauxEuroMru');
+
+export const lireTauxEuroMru = operation('lireTauxEuroMru', ROLES_FINANCE, async () => {
+    const debutLecture = Date.now();
+    const document = await tauxEuroMruRef().get();
+    const dureeLectureMs = Date.now() - debutLecture;
+    if (dureeLectureMs >= 75) logger.info('performance_lecture_taux_euro_mru', { dureeLectureMs });
+    if (!document.exists) return { taux: null, modifieLe: null };
+    const modifieLe = document.get('modifieLe');
+    return {
+        taux: typeof document.get('taux') === 'number' ? document.get('taux') : null,
+        modifieLe: modifieLe && typeof modifieLe.toDate === 'function' ? modifieLe.toDate().toISOString() : null,
+    };
+});
+
+export const modifierTauxEuroMru = operation('modifierTauxEuroMru', ROLES_ADMIN, async (donnees, acteur) => {
+    const v = valider(z.object({ taux: s.nombre(1, 200) }), donnees);
+    const ref = tauxEuroMruRef();
+    await db.runTransaction(async (tx) => {
+        const document = await tx.get(ref);
+        const avant = document.exists ? { taux: document.get('taux'), source: document.get('source') } : null;
+        const apres = { taux: v.taux, source: 'Saisie manuelle' };
+        tx.set(ref, { ...apres, modifieLe: FieldValue.serverTimestamp(), modifiePar: acteur.uid }, { merge: true });
+        auditerModele(tx, acteur, 'Paramètre financier', ref.id, document.exists ? 'updated' : 'created', avant, apres);
+    });
+    const document = await ref.get();
+    const modifieLe = document.get('modifieLe');
+    return {
+        taux: v.taux,
+        modifieLe: modifieLe && typeof modifieLe.toDate === 'function' ? modifieLe.toDate().toISOString() : new Date().toISOString(),
+        message: 'Taux EUR/MRU enregistré et journalisé.',
+    };
+});
+
 export const modifierSituationFinanciere = operation('modifierSituationFinanciere', ROLES_FINANCE, async (donnees, acteur) => {
     const v = valider(
         z.object({ id: s.id(), montantDu: s.entier(0), montantRemise: s.entier(0), noteFinanciere: s.texteOptionnel(2000) }),
@@ -52,7 +87,7 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
             inscriptionId: s.id(),
             montant: s.entier(1),
             dateVersement: s.date(),
-            statut: s.choix(STATUTS_VERSEMENT),
+            statut: s.choix(['Validée', 'En attente'] as const),
             modePaiement: s.choix(MODES_PAIEMENT),
             reference: s.texteOptionnel(100),
             note: s.texteOptionnel(1000),
@@ -65,6 +100,7 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
     await db.runTransaction(async (tx) => {
         const inscriptionRef = col.inscriptions().doc(v.inscriptionId);
         const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
+        const situation = inscription as unknown as SituationFinanciere;
         if (inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : aucun versement étudiant ne peut y être enregistré.');
         const etudiant = await exiger(tx, col.etudiants().doc(inscription.etudiantId), 'Étudiant introuvable.');
         const [numero, incrementer] = await prochainNumero(tx, 'recus');
@@ -79,6 +115,11 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
             reference: v.reference,
             note: v.note,
             numeroRecu,
+            ...(v.statut === 'Validée' ? {
+                montantNetAuPaiement: montantNet(situation),
+                totalVerseAuPaiement: (inscription.totalVerse ?? 0) + v.montant,
+                soldeApresPaiement: Math.max(soldeRestant(situation) - v.montant, 0),
+            } : {}),
         };
         incrementer();
         tx.set(ref, { ...versement, ...trace(acteur, true) });
@@ -92,8 +133,15 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
                     type: 'Paiement',
                     sujet: 'Confirmation de votre paiement INSEC',
                     titre: 'Paiement validé',
-                    message: 'Votre versement a été validé et enregistré dans votre dossier financier.',
-                    details: { Reçu: numeroRecu, Montant: `${formaterMontant(v.montant)} MRU`, Date: formaterDate(v.dateVersement) },
+                    message: 'Votre versement a été validé. Le reçu PDF ci-joint indique le montant reçu et le solde restant dû après ce paiement.',
+                    details: {
+                        Reçu: numeroRecu,
+                        Montant: `${formaterMontant(v.montant)} MRU`,
+                        Date: formaterDate(v.dateVersement),
+                        'Cumul payé': `${formaterMontant((inscription.totalVerse ?? 0) + v.montant)} MRU`,
+                        'Solde restant après paiement': `${formaterMontant(Math.max(soldeRestant(situation) - v.montant, 0))} MRU`,
+                    },
+                    versementPdfId: ref.id,
                 });
                 confirmationMiseEnFile = true;
             }
@@ -106,6 +154,64 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
           ? 'Versement validé et enregistré. La confirmation de paiement a été mise en file d’envoi.'
           : 'Versement validé et enregistré. Aucune adresse e-mail valide : aucune notification n’a été mise en file d’envoi.';
     return { id: ref.id, numeroRecu, message };
+});
+
+/** Traite une seule fois un versement en attente et met à jour le solde dans la même transaction. */
+export const traiterVersement = operation('traiterVersement', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(
+        z.object({ id: s.id(), statut: s.choix(['Validée', 'Rejetée'] as const), motif: s.texteOptionnel(500) }),
+        donnees,
+    );
+    if (v.statut === 'Rejetée' && !v.motif?.trim()) erreurChamp('motif', 'Un motif est obligatoire pour rejeter un versement.');
+    let confirmationMiseEnFile = false;
+    await db.runTransaction(async (tx) => {
+        const versementRef = col.versements().doc(v.id);
+        const versement = await exiger(tx, versementRef, 'Versement introuvable.');
+        if (versement.statut !== 'En attente') refuser('Seul un versement en attente peut être traité.');
+        const inscriptionRef = col.inscriptions().doc(versement.inscriptionId);
+        const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
+        const etudiant = await exiger(tx, col.etudiants().doc(versement.etudiantId ?? inscription.etudiantId), 'Étudiant introuvable.');
+        if (v.statut === 'Validée' && inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : le versement ne peut pas être validé.');
+        const situation = inscription as unknown as SituationFinanciere;
+        const totalVerseAuPaiement = (inscription.totalVerse ?? 0) + versement.montant;
+        const soldeApresPaiement = v.statut === 'Validée' ? Math.max(soldeRestant(situation) - versement.montant, 0) : null;
+        const avant = { statut: versement.statut, motifRejet: versement.motifRejet ?? null };
+        const apres = {
+            statut: v.statut,
+            motifRejet: v.statut === 'Rejetée' ? v.motif!.trim() : null,
+            ...(v.statut === 'Validée' ? { montantNetAuPaiement: montantNet(situation), totalVerseAuPaiement, soldeApresPaiement } : {}),
+        };
+        tx.update(versementRef, { ...apres, ...trace(acteur) });
+        if (v.statut === 'Validée') {
+            tx.update(inscriptionRef, { totalVerse: FieldValue.increment(versement.montant), ...trace(acteur) });
+            const email = String(etudiant.email ?? '').trim();
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                mettreEnFileEmail(tx, {
+                    destinataire: email,
+                    nomDestinataire: nomComplet(etudiant),
+                    type: 'Paiement',
+                    sujet: 'Confirmation de votre paiement INSEC',
+                    titre: 'Paiement validé',
+                    message: 'Votre versement a été validé. Le reçu PDF ci-joint indique le montant reçu et le solde restant dû après ce paiement.',
+                    details: {
+                        Reçu: String(versement.numeroRecu ?? 'Reçu'),
+                        Montant: `${formaterMontant(versement.montant)} MRU`,
+                        Date: formaterDate(String(versement.dateVersement)),
+                        'Cumul payé': `${formaterMontant(totalVerseAuPaiement)} MRU`,
+                        'Solde restant après paiement': `${formaterMontant(soldeApresPaiement ?? 0)} MRU`,
+                    },
+                    versementPdfId: v.id,
+                });
+                confirmationMiseEnFile = true;
+            }
+        }
+        auditerModele(tx, acteur, 'Versement', v.id, 'updated', avant, apres);
+    });
+    return {
+        message: v.statut === 'Validée'
+            ? confirmationMiseEnFile ? 'Versement validé, solde actualisé et reçu PDF mis en file d’envoi.' : 'Versement validé et solde actualisé. Aucune adresse e-mail valide : aucun e-mail envoyé.'
+            : 'Versement rejeté. Le motif a été enregistré et le solde reste inchangé.',
+    };
 });
 
 export const ajouterEcheance = operation('ajouterEcheance', ROLES_FINANCE, async (donnees, acteur) => {
@@ -123,36 +229,4 @@ export const ajouterEcheance = operation('ajouterEcheance', ROLES_FINANCE, async
         auditerModele(tx, acteur, 'Echeance', echeance.id, 'created', null, { inscriptionId: v.inscriptionId, ...echeance });
     });
     return { message: 'Échéance ajoutée.' };
-});
-
-
-const tauxEuroMruRef = () => db.collection('parametres').doc('tauxEuroMru');
-
-export const lireTauxEuroMru = operation('lireTauxEuroMru', ROLES_FINANCE, async () => {
-    const document = await tauxEuroMruRef().get();
-    if (!document.exists) return { taux: null, modifieLe: null };
-    const modifieLe = document.get('modifieLe');
-    return {
-        taux: typeof document.get('taux') === 'number' ? document.get('taux') as number : null,
-        modifieLe: modifieLe && typeof modifieLe.toDate === 'function' ? modifieLe.toDate().toISOString() : null,
-    };
-});
-
-export const modifierTauxEuroMru = operation('modifierTauxEuroMru', ROLES_ADMIN, async (donnees, acteur) => {
-    const v = valider(z.object({ taux: s.nombre(1, 200) }), donnees);
-    const ref = tauxEuroMruRef();
-    await db.runTransaction(async (tx) => {
-        const document = await tx.get(ref);
-        const avant = document.exists ? { taux: document.get('taux'), source: document.get('source') } : null;
-        const apres = { taux: v.taux, source: 'Saisie manuelle' };
-        tx.set(ref, { ...apres, modifieLe: FieldValue.serverTimestamp(), modifiePar: acteur.uid }, { merge: true });
-        auditerModele(tx, acteur, 'Paramètre financier', ref.id, document.exists ? 'updated' : 'created', avant, apres);
-    });
-    const document = await ref.get();
-    const modifieLe = document.get('modifieLe');
-    return {
-        taux: v.taux,
-        modifieLe: modifieLe && typeof modifieLe.toDate === 'function' ? modifieLe.toDate().toISOString() : new Date().toISOString(),
-        message: 'Taux EUR/MRU enregistré et journalisé.',
-    };
 });

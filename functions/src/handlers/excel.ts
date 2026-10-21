@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import { auditerDirect, auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
 import { col, refUnique, type Doc } from '../lib/donnees.js';
@@ -9,10 +9,17 @@ import { dateDuJour, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, sta
 import { attributsInscription, cleEmailEtudiant, controlerInscription, resumeInscriptions } from './etudiants.js';
 
 type Valeur = string | number | null | undefined;
+type ExcelModule = typeof ExcelJS;
+let excelModule: ExcelModule | undefined;
+let chargementExcel: Promise<ExcelModule> | undefined;
+async function chargerExcel(): Promise<void> {
+    chargementExcel ??= import('exceljs').then((module) => module.default);
+    excelModule ??= await chargementExcel;
+}
 const ENTETES_MODELE = ['Prénom', 'Nom', 'E-mail', 'Téléphone', 'Statut étudiant', 'Code diplôme', 'Année académique', 'Année parcours', 'Codes UE', 'Date inscription (AAAA-MM-JJ)', 'N° INTEC', 'Statut inscription'];
 
 function classeur(titre: string, entetes: string[]) {
-    const wb = new ExcelJS.Workbook();
+    const wb = new excelModule!.Workbook();
     wb.creator = 'INSEC Dashboard';
     const feuille = wb.addWorksheet(titre.slice(0, 31), { views: [{ state: 'frozen', ySplit: 1 }] });
     const ligne = feuille.addRow(entetes);
@@ -157,6 +164,7 @@ export const exporterExcel = operation(
     ROLES_ADMIN,
     async (donnees, acteur) => {
         const { type } = valider(z.object({ type: s.choix(['modele', 'etudiants', 'finances', 'resultats'] as const) }), donnees);
+        await chargerExcel();
         const [generer, description] = EXPORTS[type];
         const fichier = await generer();
         await auditerDirect(acteur, { action: 'export', description });
@@ -166,7 +174,7 @@ export const exporterExcel = operation(
 );
 
 async function lireLignes(nom: string, contenu: Buffer): Promise<string[][]> {
-    const wb = new ExcelJS.Workbook();
+    const wb = new excelModule!.Workbook();
     const feuille = nom.toLowerCase().endsWith('.csv')
         ? await (() => {
             const texte = contenu.toString('utf8').replace(/^\\uFEFF/, '');
@@ -191,7 +199,7 @@ const ligneEtudiant = z.object({
 type InscriptionImport = {
     formationId: string;
     anneeId: string;
-    anneeParcours: number;
+    anneeParcours: number | null;
     dateInscription: string;
     numeroIntec: string | null;
     ueIds: string[];
@@ -202,8 +210,8 @@ function inscriptionImport(ligne: string[], refs: Awaited<ReturnType<typeof refe
     const cellules = ligne.slice(5, ENTETES_MODELE.length);
     if (cellules.every((valeur) => !valeur.trim())) return null;
     const [codeFormation, libelleAnnee, parcoursBrut, codesBruts, dateBrute, numeroIntecBrut, statutBrut] = cellules;
-    if (!codeFormation || !libelleAnnee || !parcoursBrut || !codesBruts) {
-        throw new Error('Pour créer une inscription, renseignez le diplôme, l’année académique, l’année parcours et au moins une UE.');
+    if (!codeFormation || !libelleAnnee || !codesBruts) {
+        throw new Error('Pour créer une inscription, renseignez le diplôme, l’année académique et au moins une UE.');
     }
 
     const formation = [...refs.formations.entries()].find(([, valeur]) =>
@@ -215,9 +223,9 @@ function inscriptionImport(ligne: string[], refs: Awaited<ReturnType<typeof refe
     );
     if (!annee) throw new Error('Année académique « ' + libelleAnnee + ' » inconnue.');
 
-    const anneeParcours = Number(parcoursBrut);
-    if (!Number.isInteger(anneeParcours) || anneeParcours < 1 || anneeParcours > 10) {
-        throw new Error('Année parcours doit être un nombre entier entre 1 et 10.');
+    const anneeParcours = parcoursBrut ? Number(parcoursBrut) : null;
+    if (anneeParcours !== null && (!Number.isInteger(anneeParcours) || anneeParcours < 1 || anneeParcours > 10)) {
+        throw new Error('Année parcours doit être vide ou un nombre entier entre 1 et 10.');
     }
     const codesUE = codesBruts.split(';').map((code) => code.trim().toLocaleUpperCase('fr-FR')).filter(Boolean);
     if (!codesUE.length || new Set(codesUE).size !== codesUE.length) {
@@ -226,11 +234,11 @@ function inscriptionImport(ligne: string[], refs: Awaited<ReturnType<typeof refe
     const ueIds = codesUE.map((code) => {
         const correspondances = [...refs.ues.entries()].filter(([, valeur]) =>
             valeur.formationId === formation[0]
-            && valeur.anneeParcours === anneeParcours
+            && (anneeParcours === null || valeur.anneeParcours === anneeParcours)
             && String(valeur.code ?? '').trim().toLocaleUpperCase('fr-FR') === code,
         );
         if (correspondances.length !== 1) {
-            throw new Error('UE « ' + code + ' » introuvable ou ambiguë pour ' + codeFormation + ', année parcours ' + anneeParcours + '.');
+            throw new Error('UE « ' + code + ' » introuvable ou ambiguë pour ' + codeFormation + (anneeParcours === null ? '' : ', année parcours ' + anneeParcours) + '.');
         }
         return correspondances[0][0];
     });
@@ -252,6 +260,7 @@ export const importerEtudiants = operation(
     'importerEtudiants',
     ROLES_ADMIN,
     async (donnees, acteur) => {
+        await chargerExcel();
         const v = valider(
             z.object({
                 nom: z.string().regex(/\.(xlsx|csv)$/i, 'Seuls les fichiers .xlsx et .csv sont acceptés.'),
@@ -433,11 +442,11 @@ export const importerEtudiants = operation(
                         } else if (inscription.statut !== 'active' && activeExistante) {
                             throw new Error('Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
                         } else {
-                            await controlerInscription(tx, inscription);
+                            const anneeParcours = await controlerInscription(tx, inscription);
                             inscriptionRef = col.inscriptions().doc();
                             inscriptionDonnees = {
                                 etudiantId,
-                                ...attributsInscription(inscription, inscription.statut),
+                                ...attributsInscription(inscription, inscription.statut, anneeParcours),
                                 montantDu: 0, montantRemise: 0, noteFinanciere: null, totalVerse: 0, echeances: [],
                                 ordre: (inscriptionsAvant?.size ?? 0) + 1,
                             };

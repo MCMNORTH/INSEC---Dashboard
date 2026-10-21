@@ -1,4 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
+import { logger } from 'firebase-functions';
 import { operation } from '../lib/contexte.js';
 import { col, nomComplet, type Doc } from '../lib/donnees.js';
 import { db, Timestamp } from '../lib/firebase.js';
@@ -8,10 +9,21 @@ import { ANNEE_ACADEMIQUE_PAR_DEFAUT, ANNEES_ACADEMIQUES_VISIBLES, montantEnReta
 const arrondi = (v: number, d = 1) => Math.round(v * 10 ** d) / 10 ** d;
 const taux = (valides: number, total: number) => (total ? arrondi((valides / total) * 100) : 0);
 
+async function mesurer<T>(nom: string, durees: Record<string, number>, lecture: () => Promise<T>): Promise<T> {
+    const debut = Date.now();
+    try {
+        return await lecture();
+    } finally {
+        durees[nom] = Date.now() - debut;
+    }
+}
+
 export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, async (donnees) => {
+    const debut = Date.now();
+    const dureesLectures: Record<string, number> = {};
     const v = valider(z.object({ anneeId: s.texteOptionnel(50) }), donnees);
     const anneesVisibles = new Set<string>(ANNEES_ACADEMIQUES_VISIBLES);
-    const annees = (await col.annees().get()).docs
+    const annees = (await mesurer('annees', dureesLectures, () => col.annees().get())).docs
         .map((d) => ({ id: d.id, libelle: d.get('libelle') as string }))
         .filter((a) => anneesVisibles.has(a.libelle))
         .sort((a, b) => a.libelle.localeCompare(b.libelle));
@@ -20,14 +32,14 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
     if (anneeId && !annees.some((a) => a.id === anneeId)) throw new HttpsError('invalid-argument', 'Année académique invalide.');
 
     const [inscriptionsSnap, formationsSnap, resultatsSnap, examensSnap, versementsSnap, uesSnap] = await Promise.all([
-        anneeId ? col.inscriptions().where('anneeId', '==', anneeId).get() : col.inscriptions().get(),
-        col.formations().get(),
-        anneeId ? col.resultats().where('anneeId', '==', anneeId).where('note', '!=', null).get() : col.resultats().where('note', '!=', null).get(),
-        col.examens().where('statut', '==', 'Planifié').where('dateExamen', '>=', Timestamp.now())
-            .where('dateExamen', '<=', Timestamp.fromMillis(Date.now() + 30 * 24 * 3600 * 1000)).orderBy('dateExamen').get(),
-        col.versements().where('statut', '==', 'Validée')
-            .where('dateVersement', '>=', `${new Date().getUTCFullYear()}-01-01`).where('dateVersement', '<=', `${new Date().getUTCFullYear()}-12-31`).get(),
-        col.ues().get(),
+        mesurer('inscriptions', dureesLectures, () => anneeId ? col.inscriptions().where('anneeId', '==', anneeId).get() : col.inscriptions().get()),
+        mesurer('formations', dureesLectures, () => col.formations().get()),
+        mesurer('resultats', dureesLectures, () => anneeId ? col.resultats().where('anneeId', '==', anneeId).where('note', '!=', null).get() : col.resultats().where('note', '!=', null).get()),
+        mesurer('examens', dureesLectures, () => col.examens().where('statut', '==', 'Planifié').where('dateExamen', '>=', Timestamp.now())
+            .where('dateExamen', '<=', Timestamp.fromMillis(Date.now() + 30 * 24 * 3600 * 1000)).orderBy('dateExamen').get()),
+        mesurer('versements', dureesLectures, () => col.versements().where('statut', '==', 'Validée')
+            .where('dateVersement', '>=', `${new Date().getUTCFullYear()}-01-01`).where('dateVersement', '<=', `${new Date().getUTCFullYear()}-12-31`).get()),
+        mesurer('ues', dureesLectures, () => col.ues().get()),
     ]);
     const inscriptions = inscriptionsSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as (Doc & { id: string })[];
     const idsInscriptions = new Set(inscriptions.map((i) => i.id));
@@ -35,28 +47,37 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
     const ues = new Map(uesSnap.docs.map((d) => [d.id, d.data() as Doc]));
     const resultats = resultatsSnap.docs.map((d) => d.data()).filter((r) => idsInscriptions.has(r.inscriptionId));
 
-    // BUMEX est un financement interne, suivi séparément de l’argent à recouvrer auprès des élèves.
-    const inscriptionsChargeEtudiants = inscriptions.filter((i) => i.financeur !== 'bumex');
-    const sommeEtudiants = (f: (i: Doc) => number) => inscriptionsChargeEtudiants.reduce((t, i) => t + f(i), 0);
-    const montantFacture = sommeEtudiants((i) => montantNet(i as never));
-    const encaisses = sommeEtudiants((i) => i.totalVerse ?? 0);
-    const resteARecouvrer = sommeEtudiants((i) => soldeRestant(i as never));
-    const retard = sommeEtudiants((i) => montantEnRetard(i as never));
+    const somme = (f: (i: Doc) => number) => inscriptions.reduce((t, i) => t + f(i), 0);
+    const montantFacture = somme((i) => montantNet(i as never));
+    const encaisses = somme((i) => i.totalVerse ?? 0);
+    const resteARecouvrer = somme((i) => soldeRestant(i as never));
+    const retard = somme((i) => montantEnRetard(i as never));
 
     const parDiplome = new Map<string, Doc[]>();
     inscriptions.forEach((i) => {
         const code = formations.get(i.formationId)?.code ?? '—';
-        parDiplome.set(code, [...(parDiplome.get(code) ?? []), i]);
+        const groupe = parDiplome.get(code) ?? [];
+        groupe.push(i);
+        parDiplome.set(code, groupe);
     });
+    const resultatsParInscription = new Map<string, Doc[]>();
+    for (const resultat of resultats) {
+        const groupe = resultatsParInscription.get(resultat.inscriptionId) ?? [];
+        groupe.push(resultat);
+        resultatsParInscription.set(resultat.inscriptionId, groupe);
+    }
     const performanceDiplomes = [...parDiplome].map(([code, groupe]) => {
-        const ids = new Set(groupe.map((i) => i.id));
-        const notes = resultats.filter((r) => ids.has(r.inscriptionId));
+        const notes = groupe.flatMap((i) => resultatsParInscription.get(i.id) ?? []);
         const valides = notes.filter((r) => r.valide).length;
         return { code, inscrits: new Set(groupe.map((i) => i.etudiantId)).size, notes: notes.length, valides, taux: taux(valides, notes.length) };
     });
 
     const parUe = new Map<string, Doc[]>();
-    resultats.forEach((r) => parUe.set(r.ueId, [...(parUe.get(r.ueId) ?? []), r]));
+    resultats.forEach((r) => {
+        const groupe = parUe.get(r.ueId) ?? [];
+        groupe.push(r);
+        parUe.set(r.ueId, groupe);
+    });
     const performanceUes = [...parUe]
         .map(([ueId, notes]) => ({
             code: ues.get(ueId)?.code ?? ueId,
@@ -68,9 +89,11 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
         .sort((a, b) => b.taux - a.taux)
         .slice(0, 8);
 
-    const aSuivre = inscriptionsChargeEtudiants.filter((i) => soldeRestant(i as never) > 0)
+    const aSuivre = inscriptions.filter((i) => soldeRestant(i as never) > 0)
         .sort((a, b) => montantEnRetard(b as never) - montantEnRetard(a as never)).slice(0, 8);
-    const etudiantsImpayes = aSuivre.length ? await db.getAll(...aSuivre.map((i) => col.etudiants().doc(i.etudiantId))) : [];
+    const etudiantsImpayes = aSuivre.length
+        ? await mesurer('profilsImpayes', dureesLectures, () => db.getAll(...aSuivre.map((i) => col.etudiants().doc(i.etudiantId))))
+        : [];
     const impayes = aSuivre.map((i, n) => ({
         inscriptionId: i.id, etudiantId: i.etudiantId, etudiant: nomComplet(etudiantsImpayes[n]?.data()),
         formation: formations.get(i.formationId)?.code ?? '—', solde: soldeRestant(i as never), retard: montantEnRetard(i as never),
@@ -84,26 +107,41 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
     versementsSnap.docs.filter((d) => idsInscriptions.has(d.get('inscriptionId')))
         .forEach((d) => (paiements12[Number(String(d.get('dateVersement')).slice(5, 7)) - 1] += d.get('montant')));
 
-    const comptages = await Promise.all([
+    const comptages = await mesurer('comptages', dureesLectures, () => Promise.all([
         ...STATUTS_ETUDIANT.map((statut) => col.etudiants().where('statut', '==', statut).count().get()),
         col.etudiants().count().get(),
         col.enseignants().count().get(),
-    ]);
+    ]));
     const repartition = Object.fromEntries(STATUTS_ETUDIANT.map((statut, n) => [statut, comptages[n].data().count]));
     const totalEtudiants = comptages[STATUTS_ETUDIANT.length].data().count;
     const etudiantsInscrits = new Set(inscriptions.filter((i) => i.statut === 'active').map((i) => i.etudiantId)).size;
-    const etudiantsAvecDossierAnnee = new Set(inscriptions.map((i) => i.etudiantId)).size;
-    const etudiantsSansInscription = Math.max(0, etudiantsAvecDossierAnnee - etudiantsInscrits);
+    const etudiantsSansInscription = Math.max(0, totalEtudiants - etudiantsInscrits);
 
+    const dureeTotaleMs = Date.now() - debut;
+    if (dureeTotaleMs >= 500) {
+        logger.info('performance_tableau_de_bord_admin', {
+            dureeTotaleMs,
+            dureesLectures,
+            documentsLus: {
+                annees: annees.length,
+                inscriptions: inscriptionsSnap.size,
+                formations: formationsSnap.size,
+                resultats: resultatsSnap.size,
+                examens: examensSnap.size,
+                versements: versementsSnap.size,
+                ues: uesSnap.size,
+                profilsImpayes: etudiantsImpayes.length,
+            },
+        });
+    }
     return {
         annees, anneeId, montantFacture, encaisses, resteARecouvrer, montantEnRetard: retard,
         tauxRecouvrement: montantFacture > 0 ? arrondi((encaisses / montantFacture) * 100) : 0,
         tauxReussite: taux(resultats.filter((r) => r.valide).length, resultats.length),
         performanceDiplomes, performanceUes, impayes, examensProchains, paiements12, repartition,
-        totalEtudiants, etudiantsInscrits, etudiantsSansInscription, etudiantsAvecDossierAnnee,
+        totalEtudiants, etudiantsInscrits, etudiantsSansInscription,
         etudiantsActifs: repartition['Actif'] ?? 0,
         totalEnseignants: comptages[STATUTS_ETUDIANT.length + 1].data().count,
         inscriptionsActives: inscriptions.filter((i) => i.statut === 'active').length,
     };
 });
-

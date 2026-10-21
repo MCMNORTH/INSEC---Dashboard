@@ -1,13 +1,12 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import { auditerDirect, trace } from '../lib/audit.js';
-import { introuvable, operation, refuser } from '../lib/contexte.js';
+import { operation, refuser } from '../lib/contexte.js';
 import { col } from '../lib/donnees.js';
-import { bucket, db } from '../lib/firebase.js';
+import { db } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
 import { ROLES_ADMIN } from '../shared/domaine.js';
 
 const SOURCE = 'Resultat DCG-INSEC 2024-2025.xlsx';
-const MIME_CLASSEUR = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const FEUILLES: Record<string, string> = {
     'fondamentaux du droit': 'TEC111',
     'economie contemporaine': 'TEC115',
@@ -32,12 +31,10 @@ type LigneSource = { cle: string; codeUe: string; libelleUe: string; nomSource: 
 async function lireClasseur(base64: string, nom: string): Promise<LigneSource[]> {
     if (!nom.toLocaleLowerCase().startsWith('resultat dcg-insec 2024-2025') || !nom.toLocaleLowerCase().endsWith('.xlsx')) refuser(`Le fichier doit être le classeur de référence : ${SOURCE}.`);
     if (base64.length > 8_000_000) refuser('Le classeur est trop volumineux (limite 6 Mo).');
+    const ExcelJS = (await import('exceljs')).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(base64, 'base64') as any);
-    const parCode = new Map<string, { id: string; libelle: string }>();
-    (await col.ues().where('formationId', '==', 'DGC').get()).docs.forEach((d) => {
-        parCode.set(String(d.get('code')).toUpperCase(), { id: d.id, libelle: String(d.get('libelle') ?? '') });
-    });
+    const parCode = new Map((await col.ues().where('formationId', '==', 'DGC').get()).docs.map((d) => [String(d.get('code')).toUpperCase(), d.data()]));
     const [etudiants, inscriptions] = await Promise.all([col.etudiants().get(), col.inscriptions().where('anneeId', '==', '2024-2025').get()]);
     const identites = new Map<string, { id: string }>();
     etudiants.docs.forEach((d) => identites.set(normaliserIdentite(`${d.get('nom') ?? ''} ${d.get('prenom') ?? ''}`), { id: d.id }));
@@ -46,12 +43,12 @@ async function lireClasseur(base64: string, nom: string): Promise<LigneSource[]>
     const lignes: LigneSource[] = [];
     wb.eachSheet((sheet) => {
         const nomFeuille = normaliser(sheet.name);
-        const codeUe = FEUILLES[nomFeuille] ?? Object.entries(FEUILLES).find(([nom]) => nomFeuille.length >= 24 && nom.startsWith(nomFeuille))?.[1];
+        const codeUe = FEUILLES[nomFeuille];
         if (!codeUe) return;
         const ue = parCode.get(codeUe);
         const libelleUe = ue?.libelle ?? sheet.name;
         sheet.eachRow((row, rowNumber) => {
-            if (rowNumber < 3) return;
+            if (rowNumber < 2) return;
             const nomFamille = cellule(row.getCell(3).value);
             const prenom = cellule(row.getCell(4).value);
             if (!nomFamille || !prenom) return;
@@ -78,23 +75,6 @@ async function lireClasseur(base64: string, nom: string): Promise<LigneSource[]>
 }
 
 const payload = z.object({ fichierBase64: s.texte(8_000_000), nomFichier: s.texte(150) });
-
-/** Téléchargement contrôlé du classeur historique depuis le stockage privé, réservé aux administrateurs. */
-export const telechargerClasseurResultatsHistoriques = operation('telechargerClasseurResultatsHistoriques', ROLES_ADMIN, async (_donnees, acteur) => {
-    const fichier = bucket().file(`documents/${SOURCE}`);
-    const [existe] = await fichier.exists();
-    if (!existe) introuvable('Le classeur des résultats historiques n’est pas disponible.');
-    const [meta] = await fichier.getMetadata();
-    const taille = Number(meta.size ?? 0);
-    if (meta.contentType !== MIME_CLASSEUR || taille > 6 * 1024 * 1024) refuser('Le classeur stocké ne correspond pas au format attendu.');
-    const [contenu] = await fichier.download();
-    await auditerDirect(acteur, {
-        action: 'download', modele: 'ResultatsHistoriques', modeleId: '2024-2025',
-        description: `Téléchargement du classeur Excel historique ${SOURCE}`,
-        apres: { nom: SOURCE, taille },
-    });
-    return { nom: SOURCE, mimeType: MIME_CLASSEUR, contenu: contenu.toString('base64') };
-});
 export const analyserResultatsHistoriques = operation('analyserResultatsHistoriques', ROLES_ADMIN, async (donnees) => {
     const v = valider(payload, donnees);
     const lignes = await lireClasseur(v.fichierBase64, v.nomFichier);
@@ -106,7 +86,7 @@ export const importerResultatsHistoriques = operation('importerResultatsHistoriq
     const v = valider(payload, donnees);
     const lignes = await lireClasseur(v.fichierBase64, v.nomFichier);
     const batch = db.batch();
-    const collection = db.collection('resultatsHistoriques');
+    const collection = col.resultatsHistoriques();
     lignes.forEach((l) => {
         const ref = collection.doc(l.cle);
         batch.set(ref, { anneeId: '2024-2025', codeUe: l.codeUe, libelleUe: l.libelleUe, dateExamen: '2025-05-05', source: SOURCE, nomSource: l.nomSource, etudiantId: l.etudiantId, inscriptionId: l.inscriptionId, note: l.note, noteSource: l.noteSource, presence: l.presence, ecarts: l.ecarts, ...trace(acteur, true) }, { merge: true });

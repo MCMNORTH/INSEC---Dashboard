@@ -3,7 +3,7 @@ import { introuvable, operation } from '../lib/contexte.js';
 import { col, exiger } from '../lib/donnees.js';
 import { bucket, db } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
-import { MIME_PIECES, ROLES_ADMIN, STATUTS_PIECE, TAILLE_MAX_PIECE, TYPES_PIECE } from '../shared/domaine.js';
+import { MIME_PIECES, ROLES_ADMIN, ROLES_FINANCE, STATUTS_PIECE, TAILLE_MAX_PIECE, TYPES_PIECE } from '../shared/domaine.js';
 
 /** Télécharge le PDF original de la convention, conservé dans le stockage privé. */
 export const telechargerConventionIntec = operation('telechargerConventionIntec', ROLES_ADMIN, async (_donnees, acteur) => {
@@ -89,4 +89,95 @@ export const modifierPiece = operation('modifierPiece', ROLES_ADMIN, async (donn
         auditerModele(tx, acteur, 'PieceAdministrative', v.id, 'updated', avant, apres);
     });
     return { message: 'Statut de la pièce mis à jour.' };
+});
+
+/** Enregistre un PDF financier déjà téléversé dans finances/{année}/{type}/{uid}/. */
+export const enregistrerDocumentFinancier = operation('enregistrerDocumentFinancier', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(z.object({
+        anneeId: s.id(),
+        type: s.choix(['facture-intec', 'justificatif-paiement'] as const),
+        chemin: z.string().max(500),
+        nomOriginal: s.texte(255),
+    }), donnees);
+    const prefixe = `finances/${v.anneeId}/${v.type}/${acteur.uid}/`;
+    if (!acteur.uid || !v.chemin.startsWith(prefixe) || v.chemin.split('/').includes('..')) {
+        erreurChamp('fichier', 'Emplacement de fichier invalide.');
+    }
+    await exiger(null, col.annees().doc(v.anneeId), 'Année académique introuvable.');
+    const fichier = bucket().file(v.chemin);
+    const [existe] = await fichier.exists();
+    if (!existe) erreurChamp('fichier', 'Le fichier n’a pas été reçu.');
+    const [meta] = await fichier.getMetadata();
+    const taille = Number(meta.size ?? 0);
+    if (meta.contentType !== 'application/pdf' || taille < 1 || taille > TAILLE_MAX_PIECE) {
+        await fichier.delete({ ignoreNotFound: true });
+        erreurChamp('fichier', 'Seuls les fichiers PDF de 5 Mo maximum sont acceptés.');
+    }
+
+    const ref = col.documentsFinanciers().doc();
+    const document = {
+        anneeId: v.anneeId, type: v.type, nomOriginal: v.nomOriginal,
+        chemin: v.chemin, mimeType: 'application/pdf', taille,
+    };
+    const lot = db.batch();
+    lot.set(ref, { ...document, ...trace(acteur, true) });
+    auditerModele(lot, acteur, 'DocumentFinancier', ref.id, 'created', null, document);
+    await lot.commit();
+    return { id: ref.id, message: 'Document financier ajouté.' };
+});
+
+export const telechargerDocumentFinancier = operation('telechargerDocumentFinancier', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(z.object({
+        id: s.id(),
+        type: s.choix(['facture-intec', 'justificatif-paiement'] as const).optional(),
+    }), donnees);
+    const { id } = v;
+    const document = await exiger(null, col.documentsFinanciers().doc(id), 'Document financier introuvable.');
+    const types = ['facture-intec', 'justificatif-paiement'] as const;
+    let type: (typeof types)[number];
+    let anneeId: string;
+    let chemin: string;
+    let nomOriginal: string;
+    let tailleAttendue: number | null = null;
+    let legacy = false;
+    if (types.includes(document.type)) {
+        type = document.type;
+        if (v.type && v.type !== type) introuvable('Document financier introuvable.');
+        if (typeof document.anneeId !== 'string' || typeof document.creePar !== 'string') introuvable();
+        anneeId = document.anneeId;
+        chemin = String(document.chemin ?? '').replace(/\\/g, '/');
+        nomOriginal = String(document.nomOriginal ?? 'document.pdf');
+        tailleAttendue = Number.isFinite(Number(document.taille)) ? Number(document.taille) : null;
+        const prefixe = `finances/${anneeId}/${type}/${document.creePar}/`;
+        if (!chemin.startsWith(prefixe) || chemin.split('/').includes('..')) introuvable();
+    } else {
+        type = v.type!;
+        anneeId = id;
+        if (!type || !/^20\\d{2}-20\\d{2}$/.test(anneeId)) introuvable('Document financier introuvable.');
+        const champLegacy = type === 'facture-intec' ? 'factureIntec' : 'justificatifPaiement';
+        const fichierLegacy = document[champLegacy] as Record<string, unknown> | undefined;
+        const cheminAttendu = `finances/${anneeId}/${type}.pdf`;
+        if (!fichierLegacy || fichierLegacy.chemin !== cheminAttendu || fichierLegacy.mimeType !== 'application/pdf') {
+            introuvable('Document financier introuvable.');
+        }
+        chemin = cheminAttendu;
+        nomOriginal = String(fichierLegacy.nomOriginal ?? 'document.pdf');
+        tailleAttendue = Number.isFinite(Number(fichierLegacy.taille)) ? Number(fichierLegacy.taille) : null;
+        legacy = true;
+    }
+    const fichier = bucket().file(chemin);
+    const [existe] = await fichier.exists();
+    if (!existe) introuvable('Le fichier est introuvable dans le stockage.');
+    const [meta] = await fichier.getMetadata();
+    const taille = Number(meta.size ?? 0);
+    if (meta.contentType !== 'application/pdf' || taille < 1 || taille > TAILLE_MAX_PIECE || (tailleAttendue !== null && taille !== tailleAttendue)) {
+        introuvable('Le fichier stocké est invalide.');
+    }
+    const [contenu] = await fichier.download();
+    await auditerDirect(acteur, {
+        action: 'download', modele: 'DocumentFinancier', modeleId: id,
+        description: `Téléchargement du document financier ${nomOriginal}`,
+        apres: { anneeId, type, taille, ...(legacy ? { format: 'historique' } : {}) },
+    });
+    return { nom: nomOriginal, mimeType: 'application/pdf', contenu: contenu.toString('base64') };
 });

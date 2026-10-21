@@ -2,7 +2,8 @@ import { logger } from 'firebase-functions';
 import { HttpsError, onCall, type CallableOptions, type CallableRequest } from 'firebase-functions/v2/https';
 import { ZodError } from 'zod';
 import type { Role } from '../shared/domaine.js';
-import { db, REGION } from './firebase.js';
+import { col } from './donnees.js';
+import { REGION } from './firebase.js';
 
 export interface Acteur {
     uid: string | null;
@@ -42,7 +43,12 @@ export async function autoriser(acteur: Acteur, autorisation: Autorisation): Pro
     if (autorisation === 'public') return;
     if (!acteur.uid) throw new HttpsError('unauthenticated', 'Veuillez vous connecter.');
     // Un compte désactivé perd l'accès immédiatement, même si son jeton est encore valide.
-    const profil = await db.collection('utilisateurs').doc(acteur.uid).get();
+    const debutLectureProfil = Date.now();
+    const profil = await col.utilisateurs().doc(acteur.uid).get();
+    const dureeLectureProfilMs = Date.now() - debutLectureProfil;
+    if (dureeLectureProfilMs >= 75) {
+        logger.info('performance_profil_autorisation', { operation: acteur.operation, dureeLectureProfilMs });
+    }
     if (!profil.exists || profil.get('actif') === false) {
         throw new HttpsError('permission-denied', 'Ce compte est désactivé.');
     }
@@ -60,8 +66,13 @@ export type Gestionnaire<T> = (donnees: unknown, acteur: Acteur) => Promise<T>;
  */
 export function operation<T>(nom: string, autorisation: Autorisation, gestionnaire: Gestionnaire<T>, options: CallableOptions = {}) {
     const executer = async (req: Pick<CallableRequest, 'auth' | 'rawRequest' | 'data'>): Promise<T> => {
+        const debutPreparation = Date.now();
         const acteur = acteurDepuis(req, nom);
         await autoriser(acteur, autorisation);
+        const dureePreparationMs = Date.now() - debutPreparation;
+        if (dureePreparationMs >= 75) {
+            logger.info('performance_preparation_operation', { operation: nom, dureePreparationMs });
+        }
         try {
             return await gestionnaire(req.data, acteur);
         } catch (erreur) {

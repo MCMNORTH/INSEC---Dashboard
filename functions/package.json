@@ -9,7 +9,8 @@
     "scripts": {
         "build": "tsc -p tsconfig.json",
         "typecheck": "tsc -p tsconfig.test.json",
-        "test": "firebase emulators:exec --project demo-insec --only auth,firestore,storage \"vitest run\"",
+        "test": "firebase emulators:exec --project demo-insec --only auth,firestore,storage \"vitest run --no-file-parallelism\"",
+        "audit:firestore": "npm run build && node lib/scripts/auditFirestore.js",
         "amorcer": "npm run build && node lib/scripts/amorcer.js",
         "amorcer:local": "npm run build && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 GCLOUD_PROJECT=demo-insec SUPER_ADMIN_EMAIL=superadmin@insec.test SUPER_ADMIN_NOM='Super Admin' SUPER_ADMIN_MOT_DE_PASSE=insec-super-2026 node lib/scripts/amorcer.js --demo"
     },
@@ -32,4 +33,3 @@
         "vitest": "^5.0.3"
     }
 }
-
