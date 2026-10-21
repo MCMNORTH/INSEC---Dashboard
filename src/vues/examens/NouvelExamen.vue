@@ -2,7 +2,7 @@
 import { computed, reactive, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { appeler } from '../../api';
-import { dateHeureParis, instantDepuisDateHeureParis } from '../../format';
+import { horaireExamen, instantDepuisDateHeureParis } from '../../format';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 import { useReferentiel } from '../../referentiel';
@@ -15,7 +15,7 @@ const f = reactive({ ueId: '', anneeId: '', session: 'Normale', dateExamen: '', 
 const codeUE = computed(() => typeof route.query.ue === 'string' ? route.query.ue : '');
 const libelleAnnee = computed(() => typeof route.query.annee === 'string' ? route.query.annee : '');
 const dateHeureIso = computed(() => instantDepuisDateHeureParis(f.dateExamen));
-const dateHeureOfficielle = computed(() => dateHeureIso.value ? dateHeureParis(dateHeureIso.value) : 'Date officielle invalide');
+const dateHeureOfficielle = computed(() => dateHeureIso.value ? horaireExamen(dateHeureIso.value) : 'Date officielle invalide');
 const suiviValide = computed(() => route.query.source === 'intec' && !!f.ueId && !!f.anneeId && !!dateHeureIso.value);
 
 watchEffect(() => {
@@ -62,7 +62,7 @@ async function enregistrer() {
             <div class="etiquette">Session INTEC
                 <p class="champ mt-1 bg-gray-50">Normale</p>
             </div>
-            <div class="etiquette">Date et heure officielles (Paris)
+            <div class="etiquette">Date et heure officielles
                 <p class="champ mt-1 bg-gray-50">{{ dateHeureOfficielle }}</p>
                 <span class="mt-1 block text-xs text-gray-500">Cette date provient du calendrier INTEC et ne peut pas être modifiée ici.</span>
                 <span v-if="erreurs.dateExamen" class="text-xs text-red-600">{{ erreurs.dateExamen }}</span>

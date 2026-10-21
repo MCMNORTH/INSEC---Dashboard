@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { creerEtudiant } from '../src/handlers/etudiants.js';
+import { creerEtudiant, modifierInscription } from '../src/handlers/etudiants.js';
 import { creerExamen, enregistrerResultat } from '../src/handlers/examens.js';
 import { genererPdf } from '../src/handlers/pdf.js';
+import { horaireExamen } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
 const examen = {
@@ -67,5 +68,65 @@ describe('Examens et résultats', () => {
 
     it('refuse un seuil de validation supérieur à la note maximale', async () => {
         await attendreErreur(appeler(creerExamen, { ...examen, seuilValidation: 25 }, admin), 'invalid-argument', 'seuilValidation');
+    });
+});
+
+describe('Convocations : fuseaux horaires et inscriptions non actives', () => {
+    let admin: ActeurTest;
+    const modifier = async (inscriptionId: string, modifications: Record<string, unknown>) => {
+        const i = (await doc(`inscriptions/${inscriptionId}`))!;
+        return appeler(modifierInscription, {
+            id: inscriptionId, formationId: i.formationId, anneeId: i.anneeId, anneeParcours: i.anneeParcours,
+            dateInscription: i.dateInscription, numeroIntec: i.numeroIntec ?? null, ueIds: i.ueIds, financeur: i.financeur,
+            statut: i.statut, ...modifications,
+        }, admin);
+    };
+    beforeEach(async () => {
+        await reinitialiser();
+        await referentiel();
+        admin = await acteur('admin');
+    });
+
+    it('affiche l’heure de Paris et celle de Nouakchott, en hiver comme en été', () => {
+        expect(horaireExamen(new Date('2027-01-15T08:00:00Z'))).toBe('15/01/2027 à 09:00 (heure de Paris) · 08:00 (heure de Nouakchott)');
+        expect(horaireExamen(new Date('2027-05-03T07:00:00Z'))).toBe('03/05/2027 à 09:00 (heure de Paris) · 07:00 (heure de Nouakchott)');
+        expect(horaireExamen(new Date('2026-12-31T23:30:00Z'))).toBe('01/01/2027 à 00:30 (heure de Paris) · 31/12/2026 à 23:30 (heure de Nouakchott)');
+    });
+
+    it('ne convoque pas une inscription annulée', async () => {
+        const { id: convoque } = await appeler(creerEtudiant, etudiant('awa@example.com', ['TEC111']), admin);
+        const { id: annule } = await appeler(creerEtudiant, etudiant('annule@example.com', ['TEC111']), admin);
+        const inscriptionAnnulee = (await liste('inscriptions')).find((i) => i.etudiantId === annule)!;
+        await modifier(inscriptionAnnulee.id, { statut: 'annulée' });
+
+        const { id } = await appeler(creerExamen, examen, admin);
+        const resultats = await liste('resultats');
+        expect(resultats.map((r) => r.etudiantId)).toEqual([convoque]);
+        expect((await doc(`examens/${id}`))?.nbConvoques).toBe(1);
+        const [resultat] = resultats;
+        const convocation = await appeler(genererPdf, { type: 'convocation', id: resultat.id }, admin);
+        expect(Buffer.from(convocation.contenu, 'base64').subarray(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('retire la convocation en attente quand l’inscription est annulée ou que l’UE est retirée', async () => {
+        await appeler(creerEtudiant, etudiant('awa@example.com', ['TEC111', 'TEC119']), admin);
+        const [inscription] = await liste('inscriptions');
+        const { id: examen111 } = await appeler(creerExamen, examen, admin);
+        const { id: examen119 } = await appeler(creerExamen, { ...examen, ueId: 'TEC119' }, admin);
+        expect(await liste('resultats')).toHaveLength(2);
+
+        await modifier(inscription.id, { ueIds: ['TEC111'] });
+        expect((await liste('resultats')).map((r) => r.examenId)).toEqual([examen111]);
+        expect((await doc(`examens/${examen119}`))?.nbConvoques).toBe(0);
+
+        await modifier(inscription.id, { statut: 'annulée' });
+        expect(await liste('resultats')).toHaveLength(0);
+        expect((await doc(`examens/${examen111}`))?.nbConvoques).toBe(0);
+    });
+
+    it('refuse l’ouverture d’une épreuve aux rôles non administrateurs', async () => {
+        for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
+            await attendreErreur(appeler(creerExamen, examen, await acteur(role)), 'permission-denied');
+        }
     });
 });

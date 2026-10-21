@@ -7,7 +7,7 @@ import { col, exiger, type Doc } from '../lib/donnees.js';
 import { db, FieldValue, FUSEAU } from '../lib/firebase.js';
 import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email.js';
 import { s, valider, z } from '../lib/validation.js';
-import { formaterMontant, montantNet, numeroFormate, resultatValide, ROLES_ADMIN, soldeRestant, statutPaiement } from '../shared/domaine.js';
+import { formaterMontant, horaireExamen, montantNet, numeroFormate, resultatValide, ROLES_ADMIN, soldeRestant, statutPaiement } from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
 
 const require = createRequire(import.meta.url);
@@ -153,7 +153,7 @@ async function convocation(id: string) {
         grille([
             [cle('UE'), `${ue.code} · ${ue.libelle}`],
             [cle('Session'), resultat.session],
-            [cle('Date et heure'), formaterDateHeure(resultat.dateExamen.toDate())],
+            [cle('Date et heure'), horaireExamen(resultat.dateExamen.toDate())],
             [cle('Lieu / salle'), resultat.salle ?? 'À confirmer'],
             [cle('Année académique'), annee.libelle],
         ]),
@@ -317,7 +317,7 @@ async function feuillePresence(id: string) {
         encadre([
             { text: `${ue.code} · ${ue.libelle}`, fontSize: 14, bold: true, color: BLEU },
             `${formation.code} · ${annee.libelle} · Session ${examen.session}`,
-            `Date et heure (Paris) : ${formaterDateHeure(examen.dateExamen.toDate())}`,
+            `Date et heure : ${horaireExamen(examen.dateExamen.toDate())}`,
             `Salle : ${examen.salle || 'À confirmer'} · Effectif convoqué : ${participants.length}`,
         ]),
         {
@@ -371,7 +371,7 @@ async function bordereauCopies(id: string) {
         encadre([
             { text: `${ue.code} · ${ue.libelle}`, fontSize: 14, bold: true, color: BLEU },
             `${formation.code} · ${annee.libelle} · Session ${examen.session}`,
-            `Date et heure de l’épreuve (Paris) : ${formaterDateHeure(examen.dateExamen.toDate())}`,
+            `Date et heure de l’épreuve : ${horaireExamen(examen.dateExamen.toDate())}`,
             `Salle : ${examen.salle || 'À confirmer'}`,
         ]),
         grille([
@@ -429,6 +429,7 @@ export const genererPdf = operation(
 async function destinataireDocument(type: 'facture' | 'recu' | 'convocation', id: string) {
     let inscriptionId = id;
     let etudiantId: string | null = null;
+    let horaire: string | null = null;
 
     if (type === 'recu') {
         const versement = await exiger(null, col.versements().doc(id), 'Versement introuvable.');
@@ -444,9 +445,13 @@ async function destinataireDocument(type: 'facture' | 'recu' | 'convocation', id
         }
         inscriptionId = resultat.inscriptionId;
         etudiantId = resultat.etudiantId;
+        horaire = horaireExamen(resultat.dateExamen.toDate());
     }
 
     const contexte = await contexteInscription(inscriptionId);
+    if (type === 'convocation' && contexte.inscription.statut !== 'active') {
+        throw new HttpsError('failed-precondition', 'Une convocation ne peut pas être envoyée pour une inscription qui n’est pas active.');
+    }
     if (etudiantId && etudiantId !== contexte.inscription.etudiantId) {
         throw new HttpsError('failed-precondition', 'Le document et l’inscription ne correspondent pas au même étudiant.');
     }
@@ -454,7 +459,7 @@ async function destinataireDocument(type: 'facture' | 'recu' | 'convocation', id
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         throw new HttpsError('failed-precondition', 'Aucune adresse e-mail valide n’est enregistrée pour cet étudiant.');
     }
-    return { ...contexte, email };
+    return { ...contexte, email, horaire };
 }
 
 async function expedierDocument(
@@ -479,7 +484,11 @@ async function expedierDocument(
         sujet: `INSEC · ${libelle}`,
         titre: libelle,
         message: 'Veuillez trouver votre document en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.',
-        details: { Document: pdf.nom, 'Année académique': String(contexte.annee.libelle ?? '') },
+        details: {
+            Document: pdf.nom,
+            'Année académique': String(contexte.annee.libelle ?? ''),
+            ...(contexte.horaire ? { 'Date et heure de l’épreuve': contexte.horaire } : {}),
+        },
     };
     const journal = db.collection('journalEmails').doc();
     await journal.set({

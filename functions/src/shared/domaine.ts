@@ -107,6 +107,32 @@ export function resultatValide(r: { presence: string; note: number | null; seuil
     return r.presence === 'Présent' && r.note !== null && r.note !== undefined && r.note >= r.seuilValidation;
 }
 
+/** Les épreuves INTEC sont fixées à l'heure de Paris ; l'INSEC les organise à Nouakchott (UTC+0, sans heure d'été). */
+export const FUSEAU_EXAMENS = 'Europe/Paris';
+export const FUSEAU_LOCAL = 'Africa/Nouakchott';
+
+/** Date (JJ/MM/AAAA) et heure (HH:MM) d'un instant dans un fuseau donné. */
+export function dateHeureDansFuseau(instant: Date, fuseau: string): { date: string; heure: string } {
+    const p = Object.fromEntries(
+        new Intl.DateTimeFormat('en-GB', {
+            timeZone: fuseau, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+        }).formatToParts(instant).map(({ type, value }) => [type, value]),
+    );
+    return { date: `${p.day}/${p.month}/${p.year}`, heure: `${p.hour}:${p.minute}` };
+}
+
+/**
+ * Horaire d'une épreuve avec les deux fuseaux, par ex.
+ * « 03/05/2027 à 09:00 (heure de Paris) · 07:00 (heure de Nouakchott) ».
+ * La date de Nouakchott est ajoutée si elle diffère de celle de Paris.
+ */
+export function horaireExamen(instant: Date): string {
+    const paris = dateHeureDansFuseau(instant, FUSEAU_EXAMENS);
+    const local = dateHeureDansFuseau(instant, FUSEAU_LOCAL);
+    const heureLocale = local.date === paris.date ? local.heure : `${local.date} à ${local.heure}`;
+    return `${paris.date} à ${paris.heure} (heure de Paris) · ${heureLocale} (heure de Nouakchott)`;
+}
+
 /** Date locale au format AAAA-MM-JJ (fuseau de l'établissement : Africa/Nouakchott = UTC). */
 export function dateDuJour(maintenant: Date = new Date()): string {
     return maintenant.toISOString().slice(0, 10);

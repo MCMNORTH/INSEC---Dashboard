@@ -1,8 +1,7 @@
 import { operation, type Acteur } from '../lib/contexte.js';
 import { col, nomComplet, type Doc } from '../lib/donnees.js';
 import { db, FieldValue, Timestamp } from '../lib/firebase.js';
-import { formaterMontant, montantEnRetard, ROLES_ADMIN, ROLES_FINANCE } from '../shared/domaine.js';
-import { formaterDateHeure } from './examens.js';
+import { formaterMontant, horaireExamen, montantEnRetard, ROLES_ADMIN, ROLES_FINANCE } from '../shared/domaine.js';
 
 interface Alerte {
     cle: string;
@@ -25,7 +24,7 @@ async function codesUe(ids: string[]): Promise<Map<string, string>> {
 function alerteExamen(e: Doc, code: string, lien: string): Alerte {
     return {
         cle: `examen-${e.examenId ?? e.id}`, type: 'examen', niveau: 'info', titre: 'Examen à venir',
-        message: `${code} — ${formaterDateHeure(e.dateExamen.toDate())}${e.salle ? ` (${e.salle})` : ''}.`, lien,
+        message: `${code} — ${horaireExamen(e.dateExamen.toDate())}${e.salle ? ` (${e.salle})` : ''}.`, lien,
     };
 }
 
