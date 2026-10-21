@@ -17,15 +17,24 @@ const superAdmin = aRole('super_admin');
 const { envoi, erreurs, soumettre } = useFormulaire();
 const f = reactive({ nom: '', email: '', role: 'finance' });
 
+/** Mot de passe aléatoire que personne ne connaît, exigé par les anciennes versions du serveur (ignoré ensuite). */
+function motDePasseJetable(): string {
+    const octets = crypto.getRandomValues(new Uint8Array(24));
+    return Array.from(octets, (o) => o.toString(16).padStart(2, '0')).join('');
+}
+
 async function creer() {
-    const resultat = await soumettre(() => appeler<{ email: string; message: string }>('creerCompte', { ...f }));
+    const email = f.email.trim();
+    const resultat = await soumettre(() =>
+        appeler<{ email?: string; message: string }>('creerCompte', { ...f, email, motDePasse: motDePasseJetable() }),
+    );
     if (!resultat) return;
     try {
         // E-mail officiel Firebase : le lien n'est jamais visible ni enregistré dans l'application.
-        await envoyerLienReinitialisation(resultat.email);
-        notifier(`${resultat.message} E-mail envoyé à ${resultat.email}.`);
+        await envoyerLienReinitialisation(resultat.email ?? email);
+        notifier(`Compte créé. E-mail envoyé à ${email} pour définir le mot de passe.`);
     } catch {
-        notifier(`Compte créé, mais l’e-mail n’a pas pu être envoyé : demandez à la personne d’utiliser « Mot de passe oublié » avec ${resultat.email}.`);
+        notifier(`Compte créé, mais l’e-mail n’a pas pu être envoyé : demandez à la personne d’utiliser « Mot de passe oublié » avec ${email}.`);
     }
     Object.assign(f, { nom: '', email: '', role: 'finance' });
 }
