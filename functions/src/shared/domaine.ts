@@ -9,7 +9,8 @@ export const ANNEES_ACADEMIQUES_VISIBLES = ['2024-2025', '2025-2026', '2026-2027
 export type Role = (typeof ROLES)[number];
 export const ROLES_ADMIN: readonly Role[] = ['admin', 'super_admin'];
 export const ROLES_FINANCE: readonly Role[] = ['admin', 'super_admin', 'finance'];
-export const ROLES_CREABLES = ['admin', 'finance', 'enseignant', 'etudiant'] as const;
+/** Comptes créables depuis l'application : l'équipe INSEC uniquement (le super-administrateur est créé par script). */
+export const ROLES_CREABLES = ['admin', 'finance'] as const;
 
 export const STATUTS_ETUDIANT = ['Actif', 'Suspendu', 'Diplômé', 'Abandon'] as const;
 export const STATUTS_INSCRIPTION = ['active', 'terminée', 'annulée', 'suspendue'] as const;
