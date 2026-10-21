@@ -26,7 +26,28 @@ export const STATUTS_EMAIL = ['Envoyé', 'Échec', 'En attente'] as const;
 export const MIME_PIECES = ['application/pdf', 'image/jpeg', 'image/png'] as const;
 export const TAILLE_MAX_PIECE = 5 * 1024 * 1024;
 
-export type StatutPaiement = 'Soldé' | 'Partiel' | 'Impayé';
+export type StatutPaiement = 'Soldé' | 'Partiel' | 'Impayé' | 'À chiffrer' | 'Annulée' | 'Pris en charge BUMEX';
+
+/** Tarifs par UE : prix INSEC facturé à l'étudiant (MRU) et coût reversé à l'INTEC (euros). */
+export const TARIFS_UE = {
+    DGC: { mru: 16_000, intecEuro: 160 },
+    DSGC: { mru: 18_000, intecEuro: 180 },
+} as const;
+export type DiplomeTarife = keyof typeof TARIFS_UE;
+
+/** Diplôme tarifé correspondant au code d'une formation (DSGC est testé avant DGC). */
+export function diplomeTarife(codeFormation: string | null | undefined): DiplomeTarife | null {
+    const code = (codeFormation ?? '').toUpperCase();
+    if (code.includes('DSGC')) return 'DSGC';
+    if (code.includes('DGC')) return 'DGC';
+    return null;
+}
+
+/** Montant dû d'une inscription = nombre d'UE × tarif du diplôme ; null si le diplôme n'a pas de tarif connu. */
+export function montantDuSelonTarif(codeFormation: string | null | undefined, nbUe: number): number | null {
+    const diplome = diplomeTarife(codeFormation);
+    return diplome ? TARIFS_UE[diplome].mru * nbUe : null;
+}
 
 export interface Echeance {
     id: string;
@@ -40,17 +61,33 @@ export interface SituationFinanciere {
     montantRemise: number;
     totalVerse: number;
     echeances: Echeance[];
+    statut?: string;
+    financeur?: string;
+}
+
+/**
+ * Une inscription est à recouvrer auprès de l'étudiant si elle n'est pas annulée
+ * et n'est pas prise en charge par BUMEX (financement interne suivi à part).
+ */
+export function estRecouvrable(i: Pick<SituationFinanciere, 'statut' | 'financeur'>): boolean {
+    return i.statut !== 'annulée' && i.financeur !== 'bumex';
 }
 
 export function montantNet(i: Pick<SituationFinanciere, 'montantDu' | 'montantRemise'>): number {
     return Math.max((i.montantDu ?? 0) - (i.montantRemise ?? 0), 0);
 }
 
+/** Reste dû par l'étudiant (0 pour une inscription annulée ou prise en charge par BUMEX). */
 export function soldeRestant(i: SituationFinanciere): number {
+    if (!estRecouvrable(i)) return 0;
     return Math.max(montantNet(i) - (i.totalVerse ?? 0), 0);
 }
 
 export function statutPaiement(i: SituationFinanciere): StatutPaiement {
+    if (i.statut === 'annulée') return 'Annulée';
+    if (i.financeur === 'bumex') return 'Pris en charge BUMEX';
+    // Un montant dû nul signifie que les frais n'ont jamais été fixés : ce n'est pas un dossier soldé.
+    if ((i.montantDu ?? 0) <= 0) return 'À chiffrer';
     const net = montantNet(i);
     if (net <= 0 || (i.totalVerse ?? 0) >= net) return 'Soldé';
     if ((i.totalVerse ?? 0) > 0) return 'Partiel';
@@ -59,6 +96,7 @@ export function statutPaiement(i: SituationFinanciere): StatutPaiement {
 
 /** Montant des échéances échues (strictement avant aujourd'hui) non couvert par les versements validés. */
 export function montantEnRetard(i: SituationFinanciere, aujourdhui: string = dateDuJour()): number {
+    if (!estRecouvrable(i)) return 0;
     const exigible = (i.echeances ?? [])
         .filter((e) => e.dateEcheance < aujourdhui)
         .reduce((total, e) => total + e.montant, 0);

@@ -4,7 +4,7 @@ import { operation, refuser } from '../lib/contexte.js';
 import { col, exiger, libererUnique, verifierUnique, type Doc } from '../lib/donnees.js';
 import { bucket, db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
-import { ROLES_ADMIN, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
+import { montantDuSelonTarif, ROLES_ADMIN, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
 
 const emailOptionnel = z.preprocess(
     (valeur) => (typeof valeur === 'string' && valeur.trim() === '' ? null : valeur),
@@ -36,8 +36,9 @@ export const cleEmailEtudiant = (email: string) => `etudiant-email:${email}`;
 /**
  * Vérifie que l'année académique existe et que les UE choisies appartiennent au diplôme
  * et à l'année de parcours sélectionnés (lectures uniquement).
+ * Renvoie le montant dû au tarif du diplôme (nombre d'UE × tarif), 0 si le diplôme n'a pas de tarif.
  */
-export async function controlerInscription(tx: Transaction, v: ChampsInscription): Promise<void> {
+export async function controlerInscription(tx: Transaction, v: ChampsInscription): Promise<number> {
     if (new Set(v.ueIds).size !== v.ueIds.length) erreurChamp('ueIds', 'Une UE est sélectionnée plusieurs fois.');
     const [formation, annee, ...ues] = await tx.getAll(
         col.formations().doc(v.formationId),
@@ -52,6 +53,7 @@ export async function controlerInscription(tx: Transaction, v: ChampsInscription
     if (v.anneeParcours > (formation.get('dureeAnnees') ?? 1) || conformes.length !== v.ueIds.length) {
         erreurChamp('ueIds', 'Les UE choisies doivent appartenir au diplôme et à l’année de parcours sélectionnés.');
     }
+    return montantDuSelonTarif(formation.get('code') ?? v.formationId, v.ueIds.length) ?? 0;
 }
 
 export function attributsInscription(v: ChampsInscription, statut: string) {
@@ -89,11 +91,11 @@ export const creerEtudiant = operation('creerEtudiant', ROLES_ADMIN, async (donn
         const reserver = v.email
             ? await verifierUnique(tx, cleEmailEtudiant(v.email), etudiantRef.id, 'Cet e-mail est déjà utilisé par un autre étudiant.', 'email')
             : () => {};
-        await controlerInscription(tx, v);
+        const montantDu = await controlerInscription(tx, v);
         const inscription = {
             etudiantId: etudiantRef.id,
             ...attributsInscription(v, 'active'),
-            montantDu: 0, montantRemise: 0, noteFinanciere: v.noteFinanciere, totalVerse: 0, echeances: [], ordre: 1,
+            montantDu, montantRemise: 0, noteFinanciere: v.noteFinanciere, totalVerse: 0, echeances: [], ordre: 1,
         };
         const etudiant = {
             nom: v.nom, prenom: v.prenom, email: v.email, dateNaissance: v.dateNaissance, telephone: v.telephone, statut: v.statut,
@@ -168,7 +170,7 @@ export const creerInscription = operation('creerInscription', ROLES_ADMIN, async
     await db.runTransaction(async (tx) => {
         const etudiantRef = col.etudiants().doc(v.etudiantId);
         await exiger(tx, etudiantRef, 'Étudiant introuvable.');
-        await controlerInscription(tx, v);
+        const montantDu = await controlerInscription(tx, v);
         const existantes = await tx.get(col.inscriptions().where('etudiantId', '==', v.etudiantId));
         const doublonActif = existantes.docs.some((inscription) =>
             inscription.get('statut') === 'active'
@@ -181,7 +183,7 @@ export const creerInscription = operation('creerInscription', ROLES_ADMIN, async
         const inscription = {
             etudiantId: v.etudiantId,
             ...attributsInscription(v, 'active'),
-            montantDu: 0, montantRemise: 0, noteFinanciere: null, totalVerse: 0, echeances: [],
+            montantDu, montantRemise: 0, noteFinanciere: null, totalVerse: 0, echeances: [],
             ordre: existantes.size + 1,
         };
         const toutes = [...existantes.docs.map((d) => ({ id: d.id, ...d.data() })), { id: ref.id, ...inscription }];
@@ -199,7 +201,10 @@ export const modifierInscription = operation('modifierInscription', ROLES_ADMIN,
         const ref = col.inscriptions().doc(v.id);
         const avant = await exiger(tx, ref, 'Inscription introuvable.');
         etudiantId = avant.etudiantId;
-        await controlerInscription(tx, v);
+        const montantTarif = await controlerInscription(tx, v);
+        if ((avant.financeur ?? 'etudiant') !== (v.financeur ?? 'etudiant') && (avant.totalVerse ?? 0) > 0) {
+            erreurChamp('financeur', 'Le financeur ne peut pas être changé : des versements sont déjà enregistrés sur cette inscription.');
+        }
         const autres = await tx.get(col.inscriptions().where('etudiantId', '==', etudiantId));
         const doublonActif = v.statut === 'active' && autres.docs.some((inscription) =>
             inscription.id !== v.id
@@ -210,7 +215,13 @@ export const modifierInscription = operation('modifierInscription', ROLES_ADMIN,
         if (doublonActif) {
             erreurChamp('formationId', 'Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
         }
-        const apres = attributsInscription(v, v.statut);
+        // Le montant suit le tarif quand les UE changent, sauf s'il a été fixé à la main par la finance.
+        const ancienTarif = montantDuSelonTarif(avant.formationId, (avant.ueIds ?? []).length) ?? 0;
+        const montantAuTarif = (avant.montantDu ?? 0) === 0 || avant.montantDu === ancienTarif;
+        const apres = {
+            ...attributsInscription(v, v.statut),
+            ...(montantAuTarif && montantTarif !== (avant.montantDu ?? 0) ? { montantDu: montantTarif } : {}),
+        };
         const toutes = autres.docs.map((d) => (d.id === v.id ? { ...avant, ...apres } : { id: d.id, ...d.data() }));
         tx.update(ref, { ...apres, ...trace(acteur) });
         tx.update(col.etudiants().doc(etudiantId), { ...resumeInscriptions(toutes), ...trace(acteur) });

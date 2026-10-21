@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { montantNet, soldeRestant } from '@shared/domaine';
+import { montantNet, soldeRestant, statutPaiement } from '@shared/domaine';
 import { collection, query, where } from 'firebase/firestore';
 import { computed } from 'vue';
 import BadgeStatut from '../../composants/BadgeStatut.vue';
@@ -117,7 +117,7 @@ const progression = (i: Inscription) => {
                         <span v-if="!i.ueIds.length" class="text-sm text-amber-700">Aucune UE renseignée.</span>
                     </div>
                     <div class="mt-4 border-t pt-3 text-sm">
-                        <strong>Finances :</strong> {{ montant(i.totalVerse) }} / {{ montant(montantNet(i)) }} MRU · Solde {{ montant(soldeRestant(i)) }} MRU
+                        <strong>Finances :</strong> {{ montant(i.totalVerse) }} / {{ montant(montantNet(i)) }} MRU · Solde {{ montant(soldeRestant(i)) }} MRU · {{ statutPaiement(i) }}
                         <RouterLink :to="{ path: '/finances', query: { etudiant: id, inscription: i.id } }" class="ml-2 text-blue-700">Ouvrir le dossier financier</RouterLink>
                     </div>
                 </article>

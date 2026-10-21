@@ -3,7 +3,7 @@ import { operation } from '../lib/contexte.js';
 import { col, nomComplet, type Doc } from '../lib/donnees.js';
 import { db, Timestamp } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
-import { ANNEE_ACADEMIQUE_PAR_DEFAUT, ANNEES_ACADEMIQUES_VISIBLES, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, STATUTS_ETUDIANT } from '../shared/domaine.js';
+import { ANNEE_ACADEMIQUE_PAR_DEFAUT, ANNEES_ACADEMIQUES_VISIBLES, estRecouvrable, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, STATUTS_ETUDIANT } from '../shared/domaine.js';
 
 const arrondi = (v: number, d = 1) => Math.round(v * 10 ** d) / 10 ** d;
 const taux = (valides: number, total: number) => (total ? arrondi((valides / total) * 100) : 0);
@@ -35,8 +35,9 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
     const ues = new Map(uesSnap.docs.map((d) => [d.id, d.data() as Doc]));
     const resultats = resultatsSnap.docs.map((d) => d.data()).filter((r) => idsInscriptions.has(r.inscriptionId));
 
-    // BUMEX est un financement interne, suivi séparément de l’argent à recouvrer auprès des élèves.
-    const inscriptionsChargeEtudiants = inscriptions.filter((i) => i.financeur !== 'bumex');
+    // BUMEX est un financement interne, suivi séparément de l’argent à recouvrer auprès des élèves ;
+    // les inscriptions annulées ne sont plus facturées.
+    const inscriptionsChargeEtudiants = inscriptions.filter((i) => estRecouvrable(i as never));
     const sommeEtudiants = (f: (i: Doc) => number) => inscriptionsChargeEtudiants.reduce((t, i) => t + f(i), 0);
     const montantFacture = sommeEtudiants((i) => montantNet(i as never));
     const encaisses = sommeEtudiants((i) => i.totalVerse ?? 0);

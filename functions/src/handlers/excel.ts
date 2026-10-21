@@ -108,6 +108,7 @@ async function finances() {
     const parEtudiant = parId(liste.docs);
     const { wb, feuille } = classeur('Finances', [
         'Étudiant', 'E-mail', 'Diplôme', 'Année académique', 'Montant dû', 'Remise', 'Montant net', 'Total versé', 'Solde restant', 'Montant en retard', 'Statut paiement',
+        'Statut inscription', 'Financeur',
     ]);
     const triees = inscriptions.docs.map((d) => d.data()).sort((a, b) => b.creeLe?.toMillis() - a.creeLe?.toMillis());
     for (const i of triees) {
@@ -116,6 +117,7 @@ async function finances() {
         ajouter(feuille, [
             `${e?.prenom ?? ''} ${e?.nom ?? ''}`.trim(), e?.email, formations.get(i.formationId)?.code, annees.get(i.anneeId)?.libelle,
             i.montantDu, i.montantRemise, montantNet(f), i.totalVerse, soldeRestant(f), montantEnRetard(f), statutPaiement(f),
+            i.statut, i.financeur === 'bumex' ? 'BUMEX' : 'Étudiant',
         ]);
     }
     feuille.getColumn(5).numFmt = feuille.getColumn(6).numFmt = feuille.getColumn(7).numFmt = '#,##0 "MRU"';
@@ -433,12 +435,12 @@ export const importerEtudiants = operation(
                         } else if (inscription.statut !== 'active' && activeExistante) {
                             throw new Error('Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
                         } else {
-                            await controlerInscription(tx, inscription);
+                            const montantDu = await controlerInscription(tx, inscription);
                             inscriptionRef = col.inscriptions().doc();
                             inscriptionDonnees = {
                                 etudiantId,
                                 ...attributsInscription(inscription, inscription.statut),
-                                montantDu: 0, montantRemise: 0, noteFinanciere: null, totalVerse: 0, echeances: [],
+                                montantDu, montantRemise: 0, noteFinanciere: null, totalVerse: 0, echeances: [],
                                 ordre: (inscriptionsAvant?.size ?? 0) + 1,
                             };
                             inscriptionResultat = 'creee';

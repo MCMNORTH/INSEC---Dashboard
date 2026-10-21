@@ -7,7 +7,7 @@ import { col, exiger, type Doc } from '../lib/donnees.js';
 import { db, FieldValue, FUSEAU } from '../lib/firebase.js';
 import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email.js';
 import { s, valider, z } from '../lib/validation.js';
-import { formaterMontant, numeroFormate, resultatValide, ROLES_ADMIN } from '../shared/domaine.js';
+import { formaterMontant, montantNet, numeroFormate, resultatValide, ROLES_ADMIN, soldeRestant, statutPaiement } from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
 
 const require = createRequire(import.meta.url);
@@ -201,11 +201,17 @@ async function facture(id: string) {
         .map((doc) => doc.data())
         .sort((a, b) => String(a.dateVersement).localeCompare(String(b.dateVersement)));
     const echeances = [...(inscription.echeances ?? [])].sort((a: Doc, b: Doc) => String(a.dateEcheance).localeCompare(String(b.dateEcheance)));
-    const montantNet = Math.max(0, Number(inscription.montantDu ?? 0) - Number(inscription.montantRemise ?? 0));
+    const net = montantNet(inscription as never);
     const montantEncaisse = versements
         .filter((v) => v.statut === 'Validée')
         .reduce((total, v) => total + Number(v.montant ?? 0), 0);
-    const solde = Math.max(0, montantNet - montantEncaisse);
+    const solde = soldeRestant({ ...inscription, totalVerse: montantEncaisse } as never);
+    const statut = statutPaiement({ ...inscription, totalVerse: montantEncaisse } as never);
+    const mentionStatut = statut === 'Pris en charge BUMEX'
+        ? 'Frais pris en charge par BUMEX : aucun montant n’est dû par l’étudiant.'
+        : statut === 'Annulée'
+            ? 'Inscription annulée : aucun montant n’est dû au titre de cette inscription.'
+            : null;
     const reference = `FACT-${inscription.id.toUpperCase()}`;
     const lignesVersements = versements.length
         ? versements.map((v) => [
@@ -232,7 +238,7 @@ async function facture(id: string) {
         grille([
             ['Frais de formation', `${formaterMontant(inscription.montantDu ?? 0)} MRU`],
             ['Remise', `− ${formaterMontant(inscription.montantRemise ?? 0)} MRU`],
-            [{ text: 'Montant net dû', bold: true }, { text: `${formaterMontant(montantNet)} MRU`, bold: true }],
+            [{ text: 'Montant net dû', bold: true }, { text: `${formaterMontant(net)} MRU`, bold: true }],
         ], ['Désignation', 'Montant']),
         { text: 'Échéancier', fontSize: 13, bold: true, color: BLEU, margin: [0, 15, 0, 0] },
         grille(
@@ -254,6 +260,7 @@ async function facture(id: string) {
             alignment: 'right',
             margin: [0, 15, 0, 0],
         },
+        ...(mentionStatut ? [{ text: mentionStatut, bold: true, alignment: 'right', margin: [0, 6, 0, 0] }] : []),
         { text: 'Document généré à partir du dossier financier de l’INSEC.', fontSize: 9, color: '#666666', margin: [0, 20, 0, 0] },
     ];
     return {
