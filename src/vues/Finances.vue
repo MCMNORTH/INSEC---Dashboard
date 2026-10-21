@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MODES_PAIEMENT, montantEnRetard, montantNet, soldeRestant, statutPaiement } from '@shared/domaine';
+import { diplomeTarife, estRecouvrable, MODES_PAIEMENT, montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onMounted, reactive, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -106,14 +106,14 @@ watchEffect(() => {
 const synthese = computed(() =>
     annees.value.map((a) => {
         const liste = inscriptions.value.filter((i) => i.anneeId === a.id);
-        const bumex = liste.filter((i) => i.financeur === 'bumex');
-        const payeesEtudiants = liste.filter((i) => i.financeur !== 'bumex');
+        const bumex = liste.filter((i) => i.financeur === 'bumex' && i.statut !== 'annulée');
+        const payeesEtudiants = liste.filter((i) => estRecouvrable(i));
         const duEtudiants = payeesEtudiants.reduce((t, i) => t + montantNet(i), 0);
         const encaisseEtudiants = payeesEtudiants.reduce((t, i) => t + (i.totalVerse ?? 0), 0);
         const resteEtudiants = payeesEtudiants.reduce((t, i) => t + soldeRestant(i), 0);
         const montantBumex = bumex.reduce((t, i) => t + (i.montantBumex ?? montantNet(i)), 0);
         const bumexRegle = bumex.filter((i) => i.statutBumex === 'reglee').reduce((t, i) => t + (i.montantBumex ?? montantNet(i)), 0);
-        return { id: a.id, libelle: a.libelle, nb: liste.length, etudiants: new Set(liste.map((i) => i.etudiantId)).size, nbEtudiants: payeesEtudiants.length, nbBumex: bumex.length, du: duEtudiants, encaisse: encaisseEtudiants, resteEtudiants, montantBumex, bumexRegle, statut: duEtudiants === 0 ? (montantBumex > 0 ? (bumexRegle >= montantBumex ? 'BUMEX réglé' : 'À régler par BUMEX') : 'Aucun montant dû') : encaisseEtudiants >= duEtudiants ? 'Soldé' : encaisseEtudiants > 0 ? 'Partiel' : 'Impayé' };
+        return { id: a.id, libelle: a.libelle, nb: liste.length, etudiants: new Set(liste.map((i) => i.etudiantId)).size, nbEtudiants: payeesEtudiants.length, nbBumex: bumex.length, du: duEtudiants, encaisse: encaisseEtudiants, resteEtudiants, montantBumex, bumexRegle, statut: duEtudiants === 0 ? (montantBumex > 0 ? (bumexRegle >= montantBumex ? 'BUMEX réglé' : 'À régler par BUMEX') : 'Aucun montant dû') : resteEtudiants === 0 ? 'Soldé' : encaisseEtudiants > 0 ? 'Partiel' : 'Impayé' };
     }),
 );
 const carte = computed(() => synthese.value.find((s) => s.id === anneeSynthese.value));
@@ -159,7 +159,8 @@ const detailsFinanciers = computed(() => {
     return inscriptionsSynthese.value.map((dossier) => {
         const etudiant = parId.get(dossier.etudiantId);
         const code = formation(dossier.formationId)?.code?.toUpperCase() ?? '';
-        const tarif = code.includes('DSGC') ? { diplome: 'DSGC', intec: 180, mru: 18_000 } : code.includes('DGC') ? { diplome: 'DGC', intec: 160, mru: 16_000 } : null;
+        const diplome = diplomeTarife(code);
+        const tarif = diplome ? { diplome, intec: TARIFS_UE[diplome].intecEuro, mru: TARIFS_UE[diplome].mru } : null;
         const unites = dossier.ueIds?.length ?? 0;
         const coutIntecEuro = tarif ? tarif.intec * unites : null;
         const tarifMru = tarif ? tarif.mru * unites : null;
@@ -398,15 +399,15 @@ const totauxFinanciers = computed(() => ({
                     <article class="rounded-lg border border-white bg-white p-4">
                         <h3 class="font-semibold text-insec">DGC</h3>
                         <dl class="mt-3 space-y-2 text-sm">
-                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900">160 € / UE</dd></div>
-                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Tarif en MRU</dt><dd class="font-semibold text-gray-900">16 000 MRU / UE</dd></div>
+                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900">{{ TARIFS_UE.DGC.intecEuro }} € / UE</dd></div>
+                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Tarif en MRU</dt><dd class="font-semibold text-gray-900">{{ montant(TARIFS_UE.DGC.mru) }} MRU / UE</dd></div>
                         </dl>
                     </article>
                     <article class="rounded-lg border border-white bg-white p-4">
                         <h3 class="font-semibold text-insec">DSGC</h3>
                         <dl class="mt-3 space-y-2 text-sm">
-                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900">180 € / UE</dd></div>
-                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Tarif en MRU</dt><dd class="font-semibold text-gray-900">18 000 MRU / UE</dd></div>
+                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900">{{ TARIFS_UE.DSGC.intecEuro }} € / UE</dd></div>
+                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Tarif en MRU</dt><dd class="font-semibold text-gray-900">{{ montant(TARIFS_UE.DSGC.mru) }} MRU / UE</dd></div>
                         </dl>
                     </article>
                 </div>
