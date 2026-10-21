@@ -1,0 +1,6 @@
+{
+    "projects": {
+        "default": "insec-bd390",
+        "local": "demo-insec"
+    }
+}

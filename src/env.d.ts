@@ -1,0 +1,20 @@
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+    readonly VITE_FIREBASE_API_KEY?: string;
+    readonly VITE_FIREBASE_AUTH_DOMAIN?: string;
+    readonly VITE_FIREBASE_PROJECT_ID?: string;
+    readonly VITE_FIREBASE_STORAGE_BUCKET?: string;
+    readonly VITE_FIREBASE_APP_ID?: string;
+    readonly VITE_UTILISER_EMULATEURS?: string;
+}
+
+interface ImportMeta {
+    readonly env: ImportMetaEnv;
+}
+
+declare module '*.vue' {
+    import type { DefineComponent } from 'vue';
+    const composant: DefineComponent<object, object, unknown>;
+    export default composant;
+}

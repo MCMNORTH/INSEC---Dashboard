@@ -8,10 +8,10 @@ Décrivez brièvement le besoin traité et le résultat attendu.
 
 ## Vérifications
 
-- [ ] Les tests Laravel passent avec `php artisan test`.
-- [ ] La compilation réussit avec `npm run build`.
-- [ ] Les droits d’accès des rôles concernés ont été vérifiés.
-- [ ] Les migrations disposent d’une méthode `down()` sûre.
+- [ ] Les tests des fonctions et des règles passent avec `npm test` (émulateurs).
+- [ ] La compilation réussit avec `npm run build` et `npm --prefix functions run build`.
+- [ ] Les droits d’accès des rôles concernés ont été vérifiés (règles Firestore/Storage et opérations).
+- [ ] Les nouveaux index Firestore sont déclarés dans `firestore.indexes.json`.
 - [ ] Aucun secret, fichier `.env`, document étudiant ou sauvegarde n’est inclus.
 - [ ] Les captures sont jointes si l’interface a changé.
 

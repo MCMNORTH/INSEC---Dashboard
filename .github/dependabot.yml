@@ -1,15 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: composer
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    groups:
-      php-dependencies:
-        patterns: ['*']
-
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -18,6 +8,16 @@ updates:
     open-pull-requests-limit: 5
     groups:
       javascript-dependencies:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /functions
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      functions-dependencies:
         patterns: ['*']
 
   - package-ecosystem: github-actions

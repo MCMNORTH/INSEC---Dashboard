@@ -1,0 +1,14 @@
+{
+    "extends": "@vue/tsconfig/tsconfig.dom.json",
+    "compilerOptions": {
+        "strict": true,
+        "noUnusedLocals": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["src/*"],
+            "@shared/*": ["functions/src/shared/*"]
+        },
+        "types": ["vite/client"]
+    },
+    "include": ["src/**/*.ts", "src/**/*.vue", "functions/src/shared/**/*.ts"]
+}

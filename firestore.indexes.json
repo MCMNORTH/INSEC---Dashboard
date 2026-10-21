@@ -1,0 +1,156 @@
+{
+    "indexes": [
+        {
+            "collectionGroup": "inscriptions",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "anneeId", "order": "ASCENDING" },
+                { "fieldPath": "ueIds", "arrayConfig": "CONTAINS" }
+            ]
+        },
+        {
+            "collectionGroup": "examens",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "statut", "order": "ASCENDING" },
+                { "fieldPath": "dateExamen", "order": "ASCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "examens",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "ueId", "order": "ASCENDING" },
+                { "fieldPath": "statut", "order": "ASCENDING" },
+                { "fieldPath": "dateExamen", "order": "ASCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "examens",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "anneeId", "order": "ASCENDING" },
+                { "fieldPath": "dateExamen", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "examens",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "ueId", "order": "ASCENDING" },
+                { "fieldPath": "dateExamen", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "resultats",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "anneeId", "order": "ASCENDING" },
+                { "fieldPath": "note", "order": "ASCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "versements",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "statut", "order": "ASCENDING" },
+                { "fieldPath": "dateVersement", "order": "ASCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "sauvegardes",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "statut", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "candidatures",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "statut", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "journalEmails",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "statut", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "alertes",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "active", "order": "ASCENDING" },
+                { "fieldPath": "archiveeLe", "order": "ASCENDING" },
+                { "fieldPath": "modifieLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "journalAudit",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "action", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "journalAudit",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "modele", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "journalAudit",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "acteurId", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "journalAudit",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "action", "order": "ASCENDING" },
+                { "fieldPath": "modele", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "journalAudit",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "action", "order": "ASCENDING" },
+                { "fieldPath": "acteurId", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "journalAudit",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "modele", "order": "ASCENDING" },
+                { "fieldPath": "acteurId", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "journalAudit",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "action", "order": "ASCENDING" },
+                { "fieldPath": "modele", "order": "ASCENDING" },
+                { "fieldPath": "acteurId", "order": "ASCENDING" },
+                { "fieldPath": "creeLe", "order": "DESCENDING" }
+            ]
+        }
+    ],
+    "fieldOverrides": []
+}

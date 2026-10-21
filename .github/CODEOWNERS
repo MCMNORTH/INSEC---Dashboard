@@ -1,6 +1,8 @@
 * @MCMNORTH
 
 /.github/ @MCMNORTH
-/app/ @MCMNORTH
-/database/ @MCMNORTH
-/routes/ @MCMNORTH
+/functions/ @MCMNORTH
+/firestore.rules @MCMNORTH
+/storage.rules @MCMNORTH
+/firestore.indexes.json @MCMNORTH
+/firebase.json @MCMNORTH

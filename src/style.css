@@ -1,0 +1,51 @@
+@import 'tailwindcss';
+@import '@fortawesome/fontawesome-free/css/all.min.css';
+@plugin '@tailwindcss/forms';
+
+@theme {
+    --color-insec: #1e2761;
+    --color-insec-fonce: #151b45;
+    --color-insec-or: #d4af37;
+    --font-sans: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+}
+
+@utility champ {
+    @apply w-full rounded-lg border-gray-300 text-sm focus:border-insec focus:ring-insec;
+}
+@utility etiquette {
+    @apply block text-sm text-gray-600;
+}
+@utility carte {
+    @apply rounded-xl bg-white shadow;
+}
+@utility bouton {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+}
+@utility bouton-principal {
+    @apply bouton bg-insec text-white hover:bg-insec-fonce;
+}
+@utility bouton-action {
+    @apply bouton bg-amber-500 text-white hover:bg-amber-600;
+}
+@utility bouton-secondaire {
+    @apply bouton border border-gray-300 bg-white text-gray-700 hover:bg-gray-50;
+}
+@utility bouton-danger {
+    @apply bouton bg-red-600 text-white hover:bg-red-700;
+}
+@utility tableau {
+    @apply w-full border-collapse text-sm;
+    & thead tr {
+        @apply bg-insec text-left text-white;
+    }
+    & th,
+    & td {
+        @apply p-3;
+    }
+    & tbody tr {
+        @apply border-b border-gray-100;
+    }
+}
+@utility titre-page {
+    @apply text-2xl font-bold text-insec;
+}
