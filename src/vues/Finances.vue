@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { appeler } from '../api';
 import BadgeStatut from '../composants/BadgeStatut.vue';
 import Chargement from '../composants/Chargement.vue';
+import DocumentsFinanciers from '../composants/DocumentsFinanciers.vue';
 import { useRequete } from '../donnees';
 import { telecharger } from '../fichiers';
 import { db } from '../firebase';
@@ -412,6 +413,8 @@ const totauxFinanciers = computed(() => ({
                     </article>
                 </div>
             </section>
+
+            <DocumentsFinanciers v-if="anneeSynthese" :annee-id="anneeSynthese" :libelle-annee="carte?.libelle ?? anneeSynthese" />
 
             <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <article class="carte p-4"><p class="text-xs text-gray-500">Étudiants inscrits · {{ carte?.libelle ?? anneeSynthese }}</p><p class="mt-1 text-2xl font-bold text-insec">{{ carte?.etudiants ?? 0 }}</p><p class="mt-1 text-xs text-gray-500">{{ totauxFinanciers.unites }} UE · {{ carte?.nbEtudiants ?? 0 }} à leur charge · {{ carte?.nbBumex ?? 0 }} BUMEX</p></article>

@@ -13,6 +13,7 @@ export const col = {
     calendriersIntec: () => db.collection('calendriersIntec'),
     resultats: () => db.collection('resultats'),
     pieces: () => db.collection('pieces'),
+    documentsFinanciers: () => db.collection('documentsFinanciers'),
     utilisateurs: () => db.collection('utilisateurs'),
     sauvegardes: () => db.collection('sauvegardes'),
     uniques: () => db.collection('uniques'),

@@ -117,4 +117,14 @@ describe('Règles Storage', () => {
         const eleve = env.authenticatedContext('u-etudiant', jeton('etudiant', { etudiantId: 'e1' })).storage();
         await assertFails(uploadBytes(ref(eleve, 'dossiers/e1/piece.pdf'), pdf, { contentType: 'application/pdf' }));
     });
+
+    it('autorise la finance à déposer un PDF financier dans son propre dossier uniquement', async () => {
+        const finance = env.authenticatedContext('u-finance', jeton('finance')).storage();
+        await assertSucceeds(uploadBytes(ref(finance, 'finances/2026-2027/facture-intec/u-finance/f.pdf'), pdf, { contentType: 'application/pdf' }));
+        await assertFails(uploadBytes(ref(finance, 'finances/2026-2027/facture-intec/u-autre/f.pdf'), pdf, { contentType: 'application/pdf' }));
+        await assertFails(uploadBytes(ref(finance, 'finances/2026-2027/autre-type/u-finance/f.pdf'), pdf, { contentType: 'application/pdf' }));
+        await assertFails(uploadBytes(ref(finance, 'finances/2026-2027/facture-intec/u-finance/f.png'), pdf, { contentType: 'image/png' }));
+        const eleve = env.authenticatedContext('u-etudiant', jeton('etudiant', { etudiantId: 'e1' })).storage();
+        await assertFails(uploadBytes(ref(eleve, 'finances/2026-2027/facture-intec/u-etudiant/f.pdf'), pdf, { contentType: 'application/pdf' }));
+    });
 });
