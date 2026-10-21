@@ -3,7 +3,10 @@ import './lib/firebase.js';
 export { synchroniserAlertes } from './handlers/alertes.js';
 export { lireCalendriersIntec, importerCalendrierIntec } from './handlers/calendriersIntec.js';
 export { basculerCompte, creerCompte } from './handlers/comptes.js';
-export { enregistrerPiece, modifierPiece, telechargerPiece, telechargerConventionIntec } from './handlers/documents.js';
+export {
+    enregistrerDocumentFinancier, enregistrerPiece, lireDocumentsFinanciers, modifierPiece, telechargerConventionIntec,
+    telechargerDocumentFinancier, telechargerPiece,
+} from './handlers/documents.js';
 export { envoyerEmail } from './handlers/emails.js';
 export { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription, supprimerEtudiant } from './handlers/etudiants.js';
 export { exporterExcel, importerEtudiants } from './handlers/excel.js';

@@ -20,6 +20,8 @@ export const SESSIONS_EXAMEN = ['Normale', 'Rattrapage'] as const;
 export const STATUTS_EXAMEN = ['Planifié', 'Terminé', 'Annulé'] as const;
 export const PRESENCES = ['Convoqué', 'Présent', 'Absent', 'Dispensé'] as const;
 export const TYPES_PIECE = ['Pièce d’identité', 'Photo', 'Diplôme', 'Relevé de notes', 'Justificatif de paiement', 'Autre'] as const;
+/** Documents financiers annuels : facture de l'INTEC et justificatif du paiement par l'INSEC. */
+export const TYPES_DOCUMENT_FINANCIER = ['facture-intec', 'justificatif-paiement'] as const;
 export const STATUTS_PIECE = ['À vérifier', 'Validé', 'Rejeté'] as const;
 export const STATUTS_EMAIL = ['Envoyé', 'Échec', 'En attente'] as const;
 export const MIME_PIECES = ['application/pdf', 'image/jpeg', 'image/png'] as const;
