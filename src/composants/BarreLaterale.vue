@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { aRole, deconnexion, session } from '../session';
 import { useAlertesNonLues } from './alertesNonLues';
@@ -20,6 +20,9 @@ const liens = [
 ] as const;
 
 const routesGestion = ['/alertes', '/comptes', '/communications', '/audit', '/sauvegardes'];
+const lienGestion = computed(() => aRole('admin', 'super_admin')
+    ? { vers: '/gestion', icone: 'fa-sliders', libelle: 'Centre de gestion' }
+    : { vers: '/alertes', icone: 'fa-bell', libelle: 'Alertes' });
 const actif = (vers: string) =>
     vers === '/gestion' && routesGestion.some((routeGestion) => route.path === routeGestion || route.path.startsWith(`${routeGestion}/`))
         ? true
@@ -87,15 +90,16 @@ async function quitter() {
                 </div>
             </div>
 
+            <!-- Le centre de gestion est réservé à l'administration ; la finance accède directement à ses alertes. -->
             <RouterLink
-                to="/gestion"
-                :class="['flex min-h-10 items-center justify-between gap-3 rounded-lg px-3 text-[13px] font-medium transition', actif('/gestion') ? 'bg-insec text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-insec']"
+                :to="lienGestion.vers"
+                :class="['flex min-h-10 items-center justify-between gap-3 rounded-lg px-3 text-[13px] font-medium transition', actif(lienGestion.vers) ? 'bg-insec text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-insec']"
             >
                 <span class="flex items-center gap-3">
-                    <i class="fa-solid fa-sliders w-5 text-center"></i>
-                    Centre de gestion
+                    <i :class="['fa-solid w-5 text-center', lienGestion.icone]"></i>
+                    {{ lienGestion.libelle }}
                 </span>
-                <span v-if="nonLues" :class="['min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold', actif('/gestion') ? 'bg-white text-insec' : 'bg-amber-100 text-amber-800']">{{ nonLues }}</span>
+                <span v-if="nonLues" :class="['min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold', actif(lienGestion.vers) ? 'bg-white text-insec' : 'bg-amber-100 text-amber-800']">{{ nonLues }}</span>
             </RouterLink>
 
             <button

@@ -56,7 +56,7 @@ async function enregistrer() {
             <div class="etiquette md:col-span-2">Épreuve INTEC
                 <p class="champ mt-1 bg-gray-50">{{ ue(f.ueId)?.code }} — {{ ue(f.ueId)?.libelle }}</p>
             </div>
-            <div class="etiquette">Année académique
+            <div class="etiquette">Année scolaire
                 <p class="champ mt-1 bg-gray-50">{{ annee(f.anneeId)?.libelle || libelleAnnee }}</p>
             </div>
             <div class="etiquette">Session INTEC

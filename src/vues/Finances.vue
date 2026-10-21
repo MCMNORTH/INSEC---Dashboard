@@ -207,7 +207,7 @@ const totauxFinanciers = computed(() => ({
         <div v-if="onglet === 'etudiants'" class="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div class="overflow-hidden rounded-xl bg-white shadow lg:col-span-2">
                 <div class="grid gap-3 p-3 sm:grid-cols-2">
-                    <label class="etiquette">Année académique
+                    <label class="etiquette">Année scolaire
                         <select v-model="anneeEtudiants" class="champ mt-1"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
                     </label>
                     <label class="etiquette">Rechercher un étudiant
@@ -363,7 +363,7 @@ const totauxFinanciers = computed(() => ({
         </div>
 
         <div v-else>
-            <label class="mb-4 flex items-center gap-3 text-sm text-gray-600">Année académique :
+            <label class="mb-4 flex items-center gap-3 text-sm text-gray-600">Année scolaire :
                 <select v-model="anneeSynthese" class="champ w-auto"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
             </label>
 
@@ -393,7 +393,7 @@ const totauxFinanciers = computed(() => ({
             <section class="mb-4 rounded-xl border border-blue-100 bg-blue-50/70 p-4 sm:p-5" aria-labelledby="tarification-ue">
                 <div class="mb-3">
                     <h2 id="tarification-ue" class="font-semibold text-insec">Tarifs convenus par UE</h2>
-                    <p class="mt-1 text-sm text-gray-600">L’INSEC facture en MRU et règle l’INTEC en euros. Pour un élève payeur, la marge affichée est une estimation avant les autres charges de l’INSEC.</p>
+                    <p class="mt-1 text-sm text-gray-600">L’INSEC facture en MRU et règle l’INTEC en euros. Pour un étudiant payeur, la marge affichée est une estimation avant les autres charges de l’INSEC.</p>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <article class="rounded-lg border border-white bg-white p-4">
@@ -414,11 +414,11 @@ const totauxFinanciers = computed(() => ({
             </section>
 
             <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <article class="carte p-4"><p class="text-xs text-gray-500">Élèves inscrits · {{ carte?.libelle ?? anneeSynthese }}</p><p class="mt-1 text-2xl font-bold text-insec">{{ carte?.etudiants ?? 0 }}</p><p class="mt-1 text-xs text-gray-500">{{ totauxFinanciers.unites }} UE · {{ carte?.nbEtudiants ?? 0 }} à leur charge · {{ carte?.nbBumex ?? 0 }} BUMEX</p></article>
+                <article class="carte p-4"><p class="text-xs text-gray-500">Étudiants inscrits · {{ carte?.libelle ?? anneeSynthese }}</p><p class="mt-1 text-2xl font-bold text-insec">{{ carte?.etudiants ?? 0 }}</p><p class="mt-1 text-xs text-gray-500">{{ totauxFinanciers.unites }} UE · {{ carte?.nbEtudiants ?? 0 }} à leur charge · {{ carte?.nbBumex ?? 0 }} BUMEX</p></article>
                 <article class="carte p-4"><p class="text-xs text-gray-500">Facture estimée de l’INTEC</p><p class="mt-1 text-lg font-bold text-insec">{{ euros(totauxFinanciers.coutIntecEuro) }}</p><p class="mt-1 text-xs text-gray-500">{{ totauxFinanciers.coutIntecMru === null ? 'Équivalent MRU à calculer après saisie du taux' : `≈ ${montant(totauxFinanciers.coutIntecMru)} MRU` }}</p></article>
-                <article class="carte p-4"><p class="text-xs text-gray-500">Tarif prévu · élèves payeurs</p><p class="mt-1 text-lg font-bold text-insec">{{ montant(totauxFinanciers.tarifEtudiantsMru) }} MRU</p><p class="mt-1 text-xs text-gray-500">Recette externe théorique selon le nombre d’UE</p></article>
+                <article class="carte p-4"><p class="text-xs text-gray-500">Tarif prévu · étudiants payeurs</p><p class="mt-1 text-lg font-bold text-insec">{{ montant(totauxFinanciers.tarifEtudiantsMru) }} MRU</p><p class="mt-1 text-xs text-gray-500">Recette externe théorique selon le nombre d’UE</p></article>
                 <article class="carte p-4"><p class="text-xs text-gray-500">Financement BUMEX · interne</p><p class="mt-1 text-lg font-bold text-amber-700">{{ montant(totauxFinanciers.financementInterneBumex) }} MRU</p><p class="mt-1 text-xs text-gray-500">Financement interne à l’INSEC, sans recette externe pour le groupe</p></article>
-                <article class="carte p-4"><p class="text-xs text-gray-500">Marge des élèves payeurs</p><p class="mt-1 text-lg font-bold text-emerald-700">{{ totauxFinanciers.margeEtudiantsMru === null ? '—' : `${montant(totauxFinanciers.margeEtudiantsMru)} MRU` }}</p><p class="mt-1 text-xs text-gray-500">Estimation avant les autres charges de l’INSEC</p></article>
+                <article class="carte p-4"><p class="text-xs text-gray-500">Marge des étudiants payeurs</p><p class="mt-1 text-lg font-bold text-emerald-700">{{ totauxFinanciers.margeEtudiantsMru === null ? '—' : `${montant(totauxFinanciers.margeEtudiantsMru)} MRU` }}</p><p class="mt-1 text-xs text-gray-500">Estimation avant les autres charges de l’INSEC</p></article>
             </div>
 
             <p v-if="totauxFinanciers.diplomesAControler" class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{{ totauxFinanciers.diplomesAControler }} inscription(s) a(ont) un diplôme non reconnu dans le barème; leur coût n’est pas estimé.</p>
@@ -434,13 +434,13 @@ const totauxFinanciers = computed(() => ({
                 </div>
                 <div class="overflow-x-auto">
                     <table class="tableau">
-                        <thead><tr><th>Élève / diplôme</th><th>UE</th><th>Facture INTEC</th><th>Tarif en MRU</th><th>Encaissement / statut</th><th>Effet pour l’INSEC</th></tr></thead>
+                        <thead><tr><th>Étudiant / diplôme</th><th>UE</th><th>Facture INTEC</th><th>Tarif en MRU</th><th>Encaissement / statut</th><th>Effet pour l’INSEC</th></tr></thead>
                         <tbody>
                             <tr v-for="ligne in detailsFinanciers" :key="ligne.id">
                                 <td class="text-gray-900">{{ ligne.nom }}<span class="block text-xs text-gray-500">{{ ligne.code }}</span></td>
                                 <td class="whitespace-nowrap">{{ ligne.unites }}</td>
                                 <td class="whitespace-nowrap">{{ ligne.coutIntecEuro === null ? 'Barème à vérifier' : euros(ligne.coutIntecEuro) }}<span class="block text-xs text-gray-500">{{ ligne.coutIntecMru === null ? '≈ — MRU' : `≈ ${montant(ligne.coutIntecMru)} MRU` }}</span></td>
-                                <td class="whitespace-nowrap">{{ ligne.tarifMru === null ? '—' : `${montant(ligne.tarifMru)} MRU` }}<span class="block text-xs text-gray-500">{{ ligne.financeurBumex ? 'Financement interne BUMEX' : 'À la charge de l’élève' }}</span></td>
+                                <td class="whitespace-nowrap">{{ ligne.tarifMru === null ? '—' : `${montant(ligne.tarifMru)} MRU` }}<span class="block text-xs text-gray-500">{{ ligne.financeurBumex ? 'Financement interne BUMEX' : 'À la charge de l’étudiant' }}</span></td>
                                 <td class="whitespace-nowrap">
                                     <template v-if="ligne.financeurBumex">
                                         <strong class="text-amber-800">{{ montant(ligne.allocationBumex) }} MRU</strong>

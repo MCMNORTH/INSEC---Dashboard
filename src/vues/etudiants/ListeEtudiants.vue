@@ -130,7 +130,7 @@ async function supprimer() {
                 <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
             </select>
         </label>
-        <p class="text-xs text-gray-500">La liste par défaut ne contient que les dossiers de l’année. L’annuaire conserve les élèves des années précédentes.</p>
+        <p class="text-xs text-gray-500">La liste par défaut ne contient que les dossiers de l’année. L’annuaire conserve les étudiants des années précédentes.</p>
     </div>
 
     <section class="mb-5 grid gap-3 sm:grid-cols-3" aria-label="Résumé des inscriptions pour l’année sélectionnée">
@@ -143,7 +143,7 @@ async function supprimer() {
             <i class="fa-solid fa-user-minus rounded-xl bg-gray-100 p-3 text-gray-600" aria-hidden="true"></i>
         </article>
         <article class="carte flex items-center justify-between p-4">
-            <div><p class="text-sm text-gray-500">Élèves avec dossier annuel</p><p class="mt-1 text-2xl font-semibold text-insec">{{ etudiantsAvecDossierAnnee }}</p></div>
+            <div><p class="text-sm text-gray-500">Étudiants suivis cette année</p><p class="mt-1 text-2xl font-semibold text-insec">{{ etudiantsAvecDossierAnnee }}</p></div>
             <i class="fa-solid fa-users rounded-xl bg-blue-50 p-3 text-blue-700" aria-hidden="true"></i>
         </article>
     </section>
@@ -190,7 +190,7 @@ async function supprimer() {
         <section v-else-if="!filtres.length" class="carte my-2 flex flex-col items-center px-6 py-12 text-center">
             <i class="fa-solid fa-magnifying-glass mb-4 text-2xl text-gray-400" aria-hidden="true"></i>
             <h2 class="font-semibold text-gray-800">{{ !etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire' ? `Aucun dossier enregistré pour ${libelleAnnee}` : 'Aucun résultat pour ces critères' }}</h2>
-            <p class="mt-1 text-sm text-gray-500">{{ !etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire' ? 'Les élèves des années précédentes restent dans l’annuaire complet.' : 'Changez l’année scolaire ou effacez la recherche et les filtres.' }}</p>
+            <p class="mt-1 text-sm text-gray-500">{{ !etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire' ? 'Les étudiants des années précédentes restent dans l’annuaire complet.' : 'Changez l’année scolaire ou effacez la recherche et les filtres.' }}</p>
             <button v-if="!etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire'" class="mt-4 cursor-pointer text-sm font-semibold text-insec underline" @click="filtreInscription = 'annuaire'">Afficher l’annuaire complet</button>
             <button v-else class="mt-4 cursor-pointer text-sm font-semibold text-insec underline" @click="effacerFiltres">Effacer la recherche et les filtres</button>
         </section>
