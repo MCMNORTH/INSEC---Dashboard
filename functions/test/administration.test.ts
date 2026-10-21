@@ -37,25 +37,35 @@ describe('Administration', () => {
     });
 
     describe('Comptes', () => {
-        it('crée un compte étudiant avec ses droits et refuse un second compte sur le même dossier', async () => {
-            const { uid } = await appeler(creerCompte, { nom: 'Awa Ba', email: 'awa.compte@example.com', motDePasse: 'motdepasse-solide', role: 'etudiant', etudiantId }, admin);
+        it('crée un compte finance sans mot de passe choisi par l’administrateur', async () => {
+            const { uid } = await appeler(creerCompte, { nom: 'Awa Ba', email: 'awa.compte@example.com', motDePasse: 'ignore-1234', role: 'finance' }, admin);
             const utilisateur = await auth.getUser(uid);
-            expect(utilisateur.customClaims).toEqual({ role: 'etudiant', etudiantId });
-            expect(await doc(`utilisateurs/${uid}`)).toMatchObject({ role: 'etudiant', etudiantId, actif: true });
+            expect(utilisateur.customClaims).toEqual({ role: 'finance' });
+            expect(utilisateur.passwordHash).toBeUndefined();
+            expect(utilisateur.providerData.some((p) => p.providerId === 'password')).toBe(false);
+            expect(await doc(`utilisateurs/${uid}`)).toMatchObject({ role: 'finance', actif: true });
             const audit = (await liste('journalAudit')).find((a) => a.modele === 'User')!;
-            expect(JSON.stringify(audit)).not.toContain('motdepasse-solide');
-            await attendreErreur(
-                appeler(creerCompte, { nom: 'Doublon', email: 'autre@example.com', motDePasse: 'motdepasse-solide', role: 'etudiant', etudiantId }, admin),
-                'invalid-argument', 'etudiantId',
-            );
+            expect(JSON.stringify(audit)).not.toContain('ignore-1234');
         });
 
-        it('exige un dossier pour les rôles étudiant et enseignant', async () => {
-            await attendreErreur(appeler(creerCompte, { nom: 'X', email: 'x@example.com', motDePasse: 'motdepasse-solide', role: 'enseignant' }, admin), 'invalid-argument', 'enseignantId');
+        it('refuse la création de comptes étudiant, enseignant ou super-administrateur', async () => {
+            for (const role of ['etudiant', 'enseignant', 'super_admin']) {
+                await attendreErreur(appeler(creerCompte, { nom: 'X', email: `x-${role}@example.com`, role }, admin), 'invalid-argument', 'role');
+            }
+        });
+
+        it('réserve la création et la désactivation des administrateurs au super-administrateur', async () => {
+            await attendreErreur(appeler(creerCompte, { nom: 'Admin 2', email: 'admin2@example.com', role: 'admin' }, admin), 'permission-denied');
+            const superAdmin = await acteur('super_admin');
+            const { uid } = await appeler(creerCompte, { nom: 'Admin 2', email: 'admin2@example.com', role: 'admin' }, superAdmin);
+            await attendreErreur(appeler(basculerCompte, { uid }, admin), 'permission-denied');
+            await attendreErreur(appeler(basculerCompte, { uid: superAdmin.uid }, admin), 'permission-denied');
+            await appeler(basculerCompte, { uid }, superAdmin);
+            expect((await auth.getUser(uid)).disabled).toBe(true);
         });
 
         it('désactive un compte, qui perd immédiatement l’accès, mais pas le sien', async () => {
-            const { uid } = await appeler(creerCompte, { nom: 'Finance', email: 'finance@example.com', motDePasse: 'motdepasse-solide', role: 'finance' }, admin);
+            const { uid } = await appeler(creerCompte, { nom: 'Finance', email: 'finance@example.com', role: 'finance' }, admin);
             await appeler(basculerCompte, { uid }, admin);
             expect((await auth.getUser(uid)).disabled).toBe(true);
             await attendreErreur(appeler(ajouterEcheance, { inscriptionId: 'x', libelle: 'T', montant: 1, dateEcheance: '2026-01-01' }, { uid, role: 'finance' }), 'permission-denied');

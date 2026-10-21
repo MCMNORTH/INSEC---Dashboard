@@ -36,40 +36,19 @@ export async function provisionnerCompte(profil: ProfilCompte, motDePasse?: stri
 }
 
 export const creerCompte = operation('creerCompte', ROLES_ADMIN, async (donnees, acteur) => {
-    const v = valider(
-        z.object({
-            nom: s.texte(255),
-            email: s.email(),
-            motDePasse: z.string().min(8, 'au moins 8 caractères.').max(128),
-            role: s.choix(ROLES_CREABLES),
-            etudiantId: s.texteOptionnel(200),
-            enseignantId: s.texteOptionnel(200),
-        }),
-        donnees,
-    );
-    const etudiantId = v.role === 'etudiant' ? v.etudiantId : null;
-    const enseignantId = v.role === 'enseignant' ? v.enseignantId : null;
-    if (v.role === 'etudiant' && !etudiantId) erreurChamp('etudiantId', 'Un dossier étudiant est obligatoire.');
-    if (v.role === 'enseignant' && !enseignantId) erreurChamp('enseignantId', 'Un dossier enseignant est obligatoire.');
-    if (etudiantId) {
-        await exiger(null, col.etudiants().doc(etudiantId), 'Dossier étudiant introuvable.');
-        if (!(await col.utilisateurs().where('etudiantId', '==', etudiantId).limit(1).get()).empty) {
-            erreurChamp('etudiantId', 'Ce dossier étudiant est déjà rattaché à un compte.');
-        }
+    const v = valider(z.object({ nom: s.texte(255), email: s.email(), role: s.choix(ROLES_CREABLES) }), donnees);
+    if (v.role === 'admin' && acteur.role !== 'super_admin') {
+        throw new HttpsError('permission-denied', 'Seul le super-administrateur peut créer un compte administrateur.');
     }
-    if (enseignantId) {
-        await exiger(null, col.enseignants().doc(enseignantId), 'Dossier enseignant introuvable.');
-        if (!(await col.utilisateurs().where('enseignantId', '==', enseignantId).limit(1).get()).empty) {
-            erreurChamp('enseignantId', 'Ce dossier enseignant est déjà rattaché à un compte.');
-        }
-    }
-    const profil = { nom: v.nom, email: v.email, role: v.role, etudiantId, enseignantId };
-    const uid = await provisionnerCompte(profil, v.motDePasse);
+    const profil = { nom: v.nom, email: v.email, role: v.role, etudiantId: null, enseignantId: null };
+    // Aucun mot de passe n'est choisi par l'administrateur : la personne définit le sien
+    // grâce à l'e-mail de réinitialisation envoyé par Firebase Authentication.
+    const uid = await provisionnerCompte(profil);
     const lot = db.batch();
     lot.set(col.utilisateurs().doc(uid), { ...profil, actif: true, ...trace(acteur, true) });
     auditerModele(lot, acteur, 'User', uid, 'created', null, { ...profil, actif: true });
     await lot.commit();
-    return { uid, message: 'Compte utilisateur créé.' };
+    return { uid, email: v.email, message: 'Compte créé. Un e-mail va permettre à la personne de définir son mot de passe.' };
 });
 
 export const basculerCompte = operation('basculerCompte', ROLES_ADMIN, async (donnees, acteur) => {
@@ -77,8 +56,8 @@ export const basculerCompte = operation('basculerCompte', ROLES_ADMIN, async (do
     if (uid === acteur.uid) refuser('Vous ne pouvez pas désactiver votre propre compte.');
     const ref = col.utilisateurs().doc(uid);
     const compte = await exiger(null, ref, 'Compte introuvable.');
-    if (compte.role === 'super_admin' && acteur.role !== 'super_admin') {
-        throw new HttpsError('permission-denied', 'Seul un super-administrateur peut modifier ce compte.');
+    if ((compte.role === 'super_admin' || compte.role === 'admin') && acteur.role !== 'super_admin') {
+        throw new HttpsError('permission-denied', 'Seul le super-administrateur peut activer ou désactiver un compte administrateur.');
     }
     const actif = !compte.actif;
     await auth.updateUser(uid, { disabled: !actif });
