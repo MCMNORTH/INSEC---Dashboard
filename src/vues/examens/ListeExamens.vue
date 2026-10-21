@@ -7,7 +7,7 @@ import Chargement from '../../composants/Chargement.vue';
 import Pagination from '../../composants/Pagination.vue';
 import { useRequete } from '../../donnees';
 import { db } from '../../firebase';
-import { dateHeureParis } from '../../format';
+import { heureNouakchottDepuisParis, horaireExamen } from '../../format';
 import { CALENDRIERS_INTEC } from '../../calendrierIntec';
 import { useReferentiel } from '../../referentiel';
 import type { Examen, ResultatHistorique } from '../../types';
@@ -325,10 +325,10 @@ async function importerClasseurConfirme() {
         <div v-else>
             <div class="overflow-x-auto">
                 <table class="tableau">
-                    <thead><tr><th>Date et heure (Paris)</th><th>Diplôme / UE INTEC</th><th>UE locale</th><th>Suivi INSEC</th></tr></thead>
+                    <thead><tr><th>Date et heure</th><th>Diplôme / UE INTEC</th><th>UE locale</th><th>Suivi INSEC</th></tr></thead>
                     <tbody>
                         <tr v-for="e in calendrierIntec" :key="e.codeUE">
-                            <td><strong>{{ e.dateFr }}</strong><br /><span class="text-gray-500">{{ e.heure }} (Paris)</span></td>
+                            <td><strong>{{ e.dateFr }}</strong><br /><span class="text-gray-500">{{ e.heure }} (Paris) · {{ heureNouakchottDepuisParis(e.date, e.heure) }} (Nouakchott)</span></td>
                             <td><span class="font-semibold">{{ e.diplôme }} · {{ e.codeUE }}</span><br /><span class="text-gray-500">{{ e.intitule }}</span></td>
                             <td>
                                 <span v-if="e.ue" class="font-medium">{{ e.ue.code }} · {{ e.ue.libelle }}</span>
@@ -354,10 +354,10 @@ async function importerClasseurConfirme() {
     <Chargement :chargement="chargement" :erreur="erreur">
         <div class="overflow-x-auto rounded-xl bg-white shadow">
             <table class="tableau">
-                <thead><tr><th>Date et heure (Paris)</th><th>Diplôme / UE</th><th>Session</th><th>Salle</th><th>Convoqués</th><th>Statut</th></tr></thead>
+                <thead><tr><th>Date et heure</th><th>Diplôme / UE</th><th>Session</th><th>Salle</th><th>Convoqués</th><th>Statut</th></tr></thead>
                 <tbody>
                     <tr v-for="e in affiches" :key="e.id" class="cursor-pointer hover:bg-gray-50" @click="router.push(`/examens/${e.id}`)">
-                        <td>{{ dateHeureParis(e.dateExamen) }}</td>
+                        <td>{{ horaireExamen(e.dateExamen) }}</td>
                         <td><strong>{{ formation(e.formationId)?.code }} · {{ ue(e.ueId)?.code }}</strong><br /><span class="text-gray-500">{{ ue(e.ueId)?.libelle }}</span></td>
                         <td>{{ e.session }}<br /><span class="text-xs text-gray-500">{{ annee(e.anneeId)?.libelle }}</span></td>
                         <td>{{ e.salle || '—' }}</td>

@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { CALENDRIERS_INTEC, CALENDRIER_INTEC_2026_2027 } from '../../calendrierIntec';
 import { appeler, messageErreur } from '../../api';
 import Chargement from '../../composants/Chargement.vue';
-import { montant } from '../../format';
+import { heureNouakchott, heureNouakchottDepuisParis, montant } from '../../format';
 
 interface Tableau {
     annees: { id: string; libelle: string }[];
@@ -180,7 +180,7 @@ const cartes = (t: Tableau) => [
                 <div v-else-if="prochainesEpreuvesOfficielles.length" class="divide-y divide-gray-100">
                     <div v-for="e in prochainesEpreuvesOfficielles" :key="e.codeUE" class="flex flex-wrap items-center gap-4 px-5 py-3">
                         <span class="min-w-32 rounded-lg bg-indigo-50 px-3 py-2 text-center text-sm font-semibold text-insec">
-                            {{ e.dateFr }}<span class="ml-2 text-xs font-normal text-gray-600">{{ e.heure }}</span>
+                            {{ e.dateFr }}<span class="ml-2 text-xs font-normal text-gray-600">{{ e.heure }} (Paris) · {{ heureNouakchottDepuisParis(e.date, e.heure) }} (Nouakchott)</span>
                         </span>
                         <span class="min-w-0 flex-1">
                             <strong class="block text-sm text-gray-900">{{ e.diplôme }} · UE {{ e.codeUE }}</strong>
@@ -202,7 +202,7 @@ const cartes = (t: Tableau) => [
                     <header class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
                         <div>
                             <h2 class="font-bold text-insec">Prochains examens</h2>
-                            <p class="mt-1 text-xs text-gray-500">Sessions planifiées dans les 30 prochains jours · heures de Paris</p>
+                            <p class="mt-1 text-xs text-gray-500">Sessions planifiées dans les 30 prochains jours · heures de Paris et de Nouakchott</p>
                         </div>
                         <RouterLink to="/examens" class="text-sm font-semibold text-insec hover:underline">Voir les examens <i class="fa-solid fa-arrow-right ml-1"></i></RouterLink>
                     </header>
@@ -214,7 +214,7 @@ const cartes = (t: Tableau) => [
                             </span>
                             <span class="min-w-0 flex-1">
                                 <strong class="block truncate text-sm text-gray-900">{{ e.ue }}</strong>
-                                <span class="mt-1 block text-xs text-gray-500">{{ heureParis(e.dateExamen) }} · {{ e.salle || 'Salle à définir' }}</span>
+                                <span class="mt-1 block text-xs text-gray-500">{{ heureParis(e.dateExamen) }} (Paris) · {{ heureNouakchott(e.dateExamen) }} (Nouakchott) · {{ e.salle || 'Salle à définir' }}</span>
                             </span>
                             <i class="fa-solid fa-chevron-right text-xs text-gray-300"></i>
                         </RouterLink>

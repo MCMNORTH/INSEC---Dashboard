@@ -205,7 +205,10 @@ export const modifierInscription = operation('modifierInscription', ROLES_ADMIN,
         if ((avant.financeur ?? 'etudiant') !== (v.financeur ?? 'etudiant') && (avant.totalVerse ?? 0) > 0) {
             erreurChamp('financeur', 'Le financeur ne peut pas être changé : des versements sont déjà enregistrés sur cette inscription.');
         }
-        const autres = await tx.get(col.inscriptions().where('etudiantId', '==', etudiantId));
+        const [autres, convocations] = await Promise.all([
+            tx.get(col.inscriptions().where('etudiantId', '==', etudiantId)),
+            tx.get(col.resultats().where('inscriptionId', '==', v.id)),
+        ]);
         const doublonActif = v.statut === 'active' && autres.docs.some((inscription) =>
             inscription.id !== v.id
             && inscription.get('statut') === 'active'
@@ -223,9 +226,20 @@ export const modifierInscription = operation('modifierInscription', ROLES_ADMIN,
             ...(montantAuTarif && montantTarif !== (avant.montantDu ?? 0) ? { montantDu: montantTarif } : {}),
         };
         const toutes = autres.docs.map((d) => (d.id === v.id ? { ...avant, ...apres } : { id: d.id, ...d.data() }));
+        // Une inscription qui n'est plus active, ou une UE retirée, ne doit plus être convoquée aux épreuves à venir.
+        const convocationsARetirer = convocations.docs.filter((r) =>
+            r.get('presence') === 'Convoqué' && r.get('note') === null && r.get('statutExamen') === 'Planifié'
+            && (v.statut !== 'active' || !v.ueIds.includes(r.get('ueId'))),
+        );
         tx.update(ref, { ...apres, ...trace(acteur) });
         tx.update(col.etudiants().doc(etudiantId), { ...resumeInscriptions(toutes), ...trace(acteur) });
-        auditerModele(tx, acteur, 'Inscription', v.id, 'updated', avant, apres);
+        convocationsARetirer.forEach((r) => {
+            tx.delete(r.ref);
+            tx.update(col.examens().doc(r.get('examenId')), { nbConvoques: FieldValue.increment(-1) });
+        });
+        auditerModele(tx, acteur, 'Inscription', v.id, 'updated', avant, {
+            ...apres, ...(convocationsARetirer.length ? { convocationsRetirees: convocationsARetirer.map((r) => r.id) } : {}),
+        });
     });
     return { etudiantId, message: 'Inscription mise à jour.' };
 });

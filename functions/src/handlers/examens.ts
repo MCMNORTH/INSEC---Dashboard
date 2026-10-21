@@ -1,14 +1,27 @@
-import type { WriteBatch } from 'firebase-admin/firestore';
+import type { QueryDocumentSnapshot, WriteBatch } from 'firebase-admin/firestore';
 import { auditer, auditerModele, trace } from '../lib/audit.js';
 import { operation } from '../lib/contexte.js';
 import { col, exiger, nomComplet } from '../lib/donnees.js';
 import { mettreEnFileEmail } from '../lib/email.js';
 import { db, Timestamp } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
-import { PRESENCES, resultatValide, ROLES_ADMIN, SESSIONS_EXAMEN, STATUTS_EXAMEN } from '../shared/domaine.js';
+import { FUSEAU_LOCAL, PRESENCES, resultatValide, ROLES_ADMIN, SESSIONS_EXAMEN, STATUTS_EXAMEN } from '../shared/domaine.js';
 
+/** Date et heure de Nouakchott (horodatage des documents) ; pour une épreuve, utiliser horaireExamen. */
 export const formaterDateHeure = (d: Date) =>
-    new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short' }).format(d).replace(' ', ' à ');
+    new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU_LOCAL, dateStyle: 'short', timeStyle: 'short' }).format(d).replace(' ', ' à ');
+
+/**
+ * Inscriptions à convoquer : uniquement les inscriptions actives, une seule par étudiant
+ * (la plus récente si un étudiant en a plusieurs la même année).
+ */
+export function inscriptionsConvocables(docs: QueryDocumentSnapshot[]): QueryDocumentSnapshot[] {
+    const parEtudiant = new Map<string, QueryDocumentSnapshot>();
+    docs.filter((d) => d.get('statut') === 'active')
+        .sort((a, b) => (a.get('ordre') ?? 0) - (b.get('ordre') ?? 0))
+        .forEach((d) => parEtudiant.set(d.get('etudiantId'), d));
+    return [...parEtudiant.values()];
+}
 
 /** Exécute des écritures par lots de 400 (limite Firestore : 500 opérations par lot). */
 export async function ecrireParLots<T>(elements: T[], ecrire: (lot: WriteBatch, element: T) => void): Promise<void> {
@@ -38,7 +51,9 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
     if (!ue.exists) erreurChamp('ueId', 'UE inconnue.');
     if (!annee.exists) erreurChamp('anneeId', 'Année académique inconnue.');
 
-    const eligibles = await col.inscriptions().where('anneeId', '==', v.anneeId).where('ueIds', 'array-contains', v.ueId).get();
+    const eligibles = inscriptionsConvocables(
+        (await col.inscriptions().where('anneeId', '==', v.anneeId).where('ueIds', 'array-contains', v.ueId).get()).docs,
+    );
     const dateExamen = Timestamp.fromDate(new Date(v.dateExamen));
     const examensDeCetteUe = await col.examens().where('ueId', '==', v.ueId).get();
     const examenExistant = examensDeCetteUe.docs.find((document) =>
@@ -49,7 +64,9 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
     if (examenExistant) {
         const resultatsExistants = await col.resultats().where('examenId', '==', examenExistant.id).get();
         const inscriptionsDejaAjoutees = new Set(resultatsExistants.docs.map((document) => document.get('inscriptionId') as string));
-        const inscriptionsAajouter = eligibles.docs.filter((inscription) => !inscriptionsDejaAjoutees.has(inscription.id));
+        const etudiantsDejaConvoques = new Set(resultatsExistants.docs.map((document) => document.get('etudiantId') as string));
+        const inscriptionsAajouter = eligibles.filter((inscription) =>
+            !inscriptionsDejaAjoutees.has(inscription.id) && !etudiantsDejaConvoques.has(inscription.get('etudiantId')));
         if (inscriptionsAajouter.length && examenExistant.get('statut') !== 'Annulé') {
             const premierNumero = await db.runTransaction(async (tx) => {
                 const compteur = col.compteurs().doc('convocations');
@@ -88,20 +105,20 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
     const premier = await db.runTransaction(async (tx) => {
         const compteur = col.compteurs().doc('convocations');
         const valeur = ((await tx.get(compteur)).get('valeur') as number | undefined) ?? 0;
-        tx.set(compteur, { valeur: valeur + eligibles.size });
+        tx.set(compteur, { valeur: valeur + eligibles.length });
         return valeur + 1;
     });
 
     const examen = {
         ueId: v.ueId, formationId: ue.get('formationId'), anneeId: v.anneeId, session: v.session, dateExamen,
-        salle: v.salle, noteSur: v.noteSur, seuilValidation: v.seuilValidation, statut: v.statut, nbConvoques: eligibles.size,
+        salle: v.salle, noteSur: v.noteSur, seuilValidation: v.seuilValidation, statut: v.statut, nbConvoques: eligibles.length,
     };
     const lotExamen = db.batch();
     lotExamen.set(ref, { ...examen, ...trace(acteur, true) });
     auditerModele(lotExamen, acteur, 'Examen', ref.id, 'created', null, examen);
     await lotExamen.commit();
 
-    const convocations = eligibles.docs.map((inscription, index) => ({ inscription, numero: premier + index }));
+    const convocations = eligibles.map((inscription, index) => ({ inscription, numero: premier + index }));
     await ecrireParLots(convocations, (lot, { inscription, numero }) => {
         lot.set(col.resultats().doc(`${ref.id}_${inscription.id}`), {
             examenId: ref.id, inscriptionId: inscription.id, etudiantId: inscription.get('etudiantId'),
@@ -114,11 +131,11 @@ export const creerExamen = operation('creerExamen', ROLES_ADMIN, async (donnees,
     const lotAudit = db.batch();
     auditer(lotAudit, acteur, {
         action: 'created', modele: 'Examen', modeleId: ref.id,
-        description: 'Ouverture du suivi local de l’épreuve INTEC ' + ue.get('code') + ' pour ' + eligibles.size + ' étudiant(s). Aucun e-mail envoyé.',
-        apres: { candidatsAjoutes: eligibles.size, convocationsEnvoyees: 0 },
+        description: 'Ouverture du suivi local de l’épreuve INTEC ' + ue.get('code') + ' pour ' + eligibles.length + ' étudiant(s). Aucun e-mail envoyé.',
+        apres: { candidatsAjoutes: eligibles.length, convocationsEnvoyees: 0 },
     });
     await lotAudit.commit();
-    return { id: ref.id, message: 'Suivi INSEC ouvert pour l’épreuve INTEC avec ' + eligibles.size + ' candidat(s). Aucun e-mail n’a été envoyé.' };
+    return { id: ref.id, message: 'Suivi INSEC ouvert pour l’épreuve INTEC avec ' + eligibles.length + ' candidat(s). Aucun e-mail n’a été envoyé.' };
 });
 
 export const enregistrerResultat = operation('enregistrerResultat', ROLES_ADMIN, async (donnees, acteur) => {

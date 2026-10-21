@@ -3,9 +3,9 @@ import ExcelJS from 'exceljs';
 import { auditerDirect, auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
 import { col, refUnique, type Doc } from '../lib/donnees.js';
-import { db, FUSEAU } from '../lib/firebase.js';
+import { db } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
-import { dateDuJour, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, statutPaiement, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
+import { dateDuJour, dateHeureDansFuseau, FUSEAU_EXAMENS, FUSEAU_LOCAL, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, statutPaiement, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
 import { attributsInscription, cleEmailEtudiant, controlerInscription, resumeInscriptions } from './etudiants.js';
 
 type Valeur = string | number | null | undefined;
@@ -131,19 +131,24 @@ async function resultats() {
     ]);
     const parEtudiant = parId(etudiantsSnap.docs);
     const { wb, feuille } = classeur('Résultats', [
-        'Étudiant', 'E-mail', 'Diplôme', 'UE', 'Libellé UE', 'Session', 'Date examen', 'Présence', 'Note', 'Note sur', 'Décision',
+        'Étudiant', 'E-mail', 'Diplôme', 'UE', 'Libellé UE', 'Session', 'Date examen (heure de Paris)', 'Date examen (heure de Nouakchott)',
+        'Présence', 'Note', 'Note sur', 'Décision',
     ]);
-    const format = new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU, dateStyle: 'short', timeStyle: 'short' });
+    const dansFuseau = (d: Date, fuseau: string) => {
+        const { date, heure } = dateHeureDansFuseau(d, fuseau);
+        return `${date} ${heure}`;
+    };
     for (const d of liste.docs) {
         const r = d.data();
         const e = parEtudiant.get(r.etudiantId);
         const ue = ues.get(r.ueId);
         ajouter(feuille, [
             `${e?.prenom ?? ''} ${e?.nom ?? ''}`.trim(), e?.email, formations.get(r.formationId)?.code, ue?.code, ue?.libelle,
-            r.session, format.format(r.dateExamen.toDate()), r.presence, r.note, r.noteSur, r.valide ? 'Validée' : 'Non validée',
+            r.session, dansFuseau(r.dateExamen.toDate(), FUSEAU_EXAMENS), dansFuseau(r.dateExamen.toDate(), FUSEAU_LOCAL),
+            r.presence, r.note, r.noteSur, r.valide ? 'Validée' : 'Non validée',
         ]);
     }
-    feuille.getColumn(9).numFmt = feuille.getColumn(10).numFmt = '0.00';
+    feuille.getColumn(10).numFmt = feuille.getColumn(11).numFmt = '0.00';
     return finaliser(wb, feuille, `resultats-insec-${suffixe()}.xlsx`);
 }
 

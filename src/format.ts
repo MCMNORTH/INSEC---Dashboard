@@ -1,4 +1,4 @@
-import { formaterMontant } from '@shared/domaine';
+import { dateHeureDansFuseau, formaterMontant, FUSEAU_EXAMENS, FUSEAU_LOCAL, horaireExamen as horaire } from '@shared/domaine';
 import type { Timestamp } from 'firebase/firestore';
 
 export { formaterMontant as montant };
@@ -25,8 +25,6 @@ export function dateHeure(valeur: DateSouple): string {
     return d ? `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : '—';
 }
 
-const FUSEAU_EXAMENS = 'Europe/Paris';
-
 function partiesParis(dateInstant: Date) {
     return Object.fromEntries(
         new Intl.DateTimeFormat('en-GB', {
@@ -41,12 +39,22 @@ function partiesParis(dateInstant: Date) {
     );
 }
 
-/** Formate les horaires des épreuves dans le fuseau officiel du calendrier INTEC. */
-export function dateHeureParis(valeur: DateSouple): string {
+/** Horaire d'une épreuve avec l'heure de Paris et l'heure de Nouakchott. */
+export function horaireExamen(valeur: DateSouple): string {
     const d = versDate(valeur);
-    if (!d) return '—';
-    const p = partiesParis(d);
-    return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+    return d ? horaire(d) : '—';
+}
+
+/** Heure de Nouakchott (HH:MM) d'un instant. */
+export function heureNouakchott(valeur: DateSouple): string {
+    const d = versDate(valeur);
+    return d ? dateHeureDansFuseau(d, FUSEAU_LOCAL).heure : '';
+}
+
+/** Heure de Nouakchott correspondant à une date (AAAA-MM-JJ) et une heure (HH:MM) de Paris du calendrier INTEC. */
+export function heureNouakchottDepuisParis(dateIso: string, heureParis: string): string {
+    const instant = instantDepuisDateHeureParis(`${dateIso}T${heureParis}`);
+    return instant ? heureNouakchott(instant) : '';
 }
 
 /** Interprète la valeur d'un champ datetime-local comme une heure de Paris. */
