@@ -88,7 +88,6 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
     const comptages = await Promise.all([
         ...STATUTS_ETUDIANT.map((statut) => col.etudiants().where('statut', '==', statut).count().get()),
         col.etudiants().count().get(),
-        col.enseignants().count().get(),
     ]);
     const repartition = Object.fromEntries(STATUTS_ETUDIANT.map((statut, n) => [statut, comptages[n].data().count]));
     const totalEtudiants = comptages[STATUTS_ETUDIANT.length].data().count;
@@ -103,7 +102,6 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
         performanceDiplomes, performanceUes, impayes, examensProchains, paiements12, repartition,
         totalEtudiants, etudiantsInscrits, etudiantsSansInscription, etudiantsAvecDossierAnnee,
         etudiantsActifs: repartition['Actif'] ?? 0,
-        totalEnseignants: comptages[STATUTS_ETUDIANT.length + 1].data().count,
         inscriptionsActives: inscriptions.filter((i) => i.statut === 'active').length,
     };
 });

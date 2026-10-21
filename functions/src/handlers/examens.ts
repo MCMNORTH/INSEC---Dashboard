@@ -172,7 +172,7 @@ export const enregistrerResultat = operation('enregistrerResultat', ROLES_ADMIN,
                 sujet: 'Publication d’un résultat INSEC', titre: 'Votre résultat est disponible',
                 message: 'Une note vient d’être publiée dans votre dossier académique.',
                 details: { UE: ue.code, Note: `${note}/${avant.noteSur}`, Décision: apres.valide ? 'Validée' : 'Non validée' },
-                lien: '/portail/etudiant', libelleLien: 'Consulter mon espace',
+                lien: null, libelleLien: null,
             });
         }
     });

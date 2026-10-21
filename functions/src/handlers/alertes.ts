@@ -57,46 +57,6 @@ export async function calculerAlertes(acteur: Pick<Acteur, 'role' | 'etudiantId'
         const codes = await codesUe(examens.map((e) => e.get('ueId')));
         examens.forEach((e) => alertes.push(alerteExamen({ id: e.id, ...e.data() }, codes.get(e.get('ueId'))!, `/examens/${e.id}`)));
     }
-    if (role === 'etudiant' && acteur.etudiantId) {
-        const [inscriptions, resultats, pieces] = await Promise.all([
-            col.inscriptions().where('etudiantId', '==', acteur.etudiantId).get(),
-            col.resultats().where('etudiantId', '==', acteur.etudiantId).get(),
-            col.pieces().where('etudiantId', '==', acteur.etudiantId).where('statut', '==', 'Rejeté').get(),
-        ]);
-        inscriptions.docs.forEach((d) => {
-            const retard = montantEnRetard(d.data() as never);
-            if (retard > 0) alertes.push({
-                cle: `mon-retard-${d.id}`, type: 'finance', niveau: 'danger', titre: 'Échéance de paiement dépassée',
-                message: `Votre montant en retard est de ${formaterMontant(retard)} MRU.`, lien: '/portail/etudiant',
-            });
-        });
-        const codes = await codesUe(resultats.docs.map((r) => r.get('ueId')));
-        const maintenant = Date.now();
-        resultats.docs.forEach((d) => {
-            const r = d.data();
-            const date = r.dateExamen.toMillis();
-            if (r.statutExamen === 'Planifié' && date >= maintenant && date <= maintenant + 14 * JOUR) {
-                alertes.push(alerteExamen(r, codes.get(r.ueId)!, '/portail/etudiant'));
-            }
-            if (r.note !== null && r.note !== undefined) alertes.push({
-                cle: `resultat-${d.id}-${r.modifieLe?.toMillis?.() ?? 0}`, type: 'resultat', niveau: r.valide ? 'success' : 'warning',
-                titre: 'Résultat publié', message: `${codes.get(r.ueId)} : ${r.note}/${r.noteSur}.`, lien: '/portail/etudiant',
-            });
-        });
-        pieces.docs.forEach((p) => alertes.push({
-            cle: `mon-document-${p.id}`, type: 'document', niveau: 'danger', titre: 'Document à remplacer',
-            message: `${p.get('type')}${p.get('note') ? ` : ${p.get('note')}` : ' a été rejeté.'}`, lien: '/portail/etudiant',
-        }));
-    }
-    if (role === 'enseignant' && acteur.enseignantId) {
-        const ueIds = (await col.affectations().where('enseignantId', '==', acteur.enseignantId).get()).docs.map((a) => a.get('ueId') as string);
-        for (let i = 0; i < ueIds.length; i += 30) {
-            const examens = (await col.examens().where('ueId', 'in', ueIds.slice(i, i + 30)).where('statut', '==', 'Planifié')
-                .where('dateExamen', '>=', Timestamp.now()).where('dateExamen', '<=', dans(14)).get()).docs;
-            const codes = await codesUe(examens.map((e) => e.get('ueId')));
-            examens.forEach((e) => alertes.push(alerteExamen({ id: e.id, ...e.data() }, codes.get(e.get('ueId'))!, '/portail/enseignant')));
-        }
-    }
     // Une même clé ne peut apparaître qu'une fois (ex. examen visible via plusieurs résultats).
     return [...new Map(alertes.map((a) => [a.cle, a])).values()];
 }

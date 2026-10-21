@@ -93,21 +93,11 @@ async function demo() {
         });
         lot.set(db.collection('uniques').doc(`etudiant-email:${e.email}`), { proprietaire: id });
     }
-    lot.set(db.collection('enseignants').doc('demo-fatimetou'), {
-        nom: 'Sidi', prenom: 'Fatimetou', specialite: 'Comptabilité', email: 'fatimetou.sidi@example.com', telephone: null,
-        nbUe: 1, nbEtudiants: 2, creeLe: FieldValue.serverTimestamp(), modifieLe: FieldValue.serverTimestamp(),
-    });
-    lot.set(db.collection('uniques').doc('enseignant-email:fatimetou.sidi@example.com'), { proprietaire: 'demo-fatimetou' });
-    lot.set(db.collection('affectations').doc('demo-fatimetou_TEC119'), {
-        enseignantId: 'demo-fatimetou', ueId: 'TEC119', nombreEtudiants: 2, creeLe: FieldValue.serverTimestamp(),
-    });
     await lot.commit();
     const motDePasse = 'insec-demo-2026';
     await compte({ nom: 'Admin Démo', email: 'admin@insec.test', role: 'admin', etudiantId: null, enseignantId: null }, motDePasse);
     await compte({ nom: 'Finance Démo', email: 'finance@insec.test', role: 'finance', etudiantId: null, enseignantId: null }, motDePasse);
-    await compte({ nom: 'Fatimetou Sidi', email: 'enseignant@insec.test', role: 'enseignant', etudiantId: null, enseignantId: 'demo-fatimetou' }, motDePasse);
-    await compte({ nom: 'Awa Ba', email: 'etudiant@insec.test', role: 'etudiant', etudiantId: 'demo-awa', enseignantId: null }, motDePasse);
-    console.log(`Données de démonstration créées (mot de passe des comptes démo : ${motDePasse}).`);
+    console.log('Données de démonstration créées (mots de passe des comptes démo : voir README, émulateurs uniquement).');
 }
 
 async function principal() {

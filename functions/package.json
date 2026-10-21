@@ -11,7 +11,7 @@
         "typecheck": "tsc -p tsconfig.test.json",
         "test": "firebase emulators:exec --project demo-insec --only auth,firestore,storage \"vitest run\"",
         "amorcer": "npm run build && node lib/scripts/amorcer.js",
-        "amorcer:local": "npm run build && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 GCLOUD_PROJECT=demo-insec SUPER_ADMIN_EMAIL=superadmin@insec.test SUPER_ADMIN_NOM='Super Admin' SUPER_ADMIN_MOT_DE_PASSE=insec-super-2026 node lib/scripts/amorcer.js --demo"
+        "amorcer:local": "npm run build && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 GCLOUD_PROJECT=demo-insec SUPER_ADMIN_EMAIL=superadmin@insec.test SUPER_ADMIN_NOM='Super Admin' node lib/scripts/amorcer.js --demo"
     },
     "dependencies": {
         "@google-cloud/firestore": "^9.3.0",

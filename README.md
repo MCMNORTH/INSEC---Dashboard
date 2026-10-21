@@ -1,6 +1,6 @@
 # INSEC Dashboard
 
-Application de gestion administrative, académique et financière de l’INSEC : admissions, inscriptions, étudiants, enseignants, examens, paiements, documents, communications, alertes, imports/exports, audit et sauvegardes.
+Application de gestion administrative, académique et financière de l’INSEC, réservée à l’équipe (administration et finance) : étudiants et inscriptions annuelles, finances, examens INTEC, documents, communications, alertes, imports/exports, audit et sauvegardes.
 
 L’application fonctionne entièrement sur **Firebase** :
 
@@ -14,7 +14,7 @@ L’application fonctionne entièrement sur **Firebase** :
 | Sauvegarde quotidienne à 02:00 | Cloud Scheduler + export Firestore géré |
 | Sondes `/health/live` et `/health/ready` | Hosting → fonction `sante` |
 
-Le schéma relationnel d’origine est conservé dans `docs/schema_relationnel_INSEC.png` à titre historique.
+L’ancienne version Laravel est archivée par le tag Git `laravel-archive`.
 
 ## Architecture
 
@@ -22,7 +22,7 @@ Le schéma relationnel d’origine est conservé dans `docs/schema_relationnel_I
 - **Écritures** : toutes passent par des fonctions appelables (`functions/src/handlers`) qui valident les données, appliquent les règles métier dans une transaction et ajoutent l’entrée du **journal d’audit** dans la même transaction. Aucune écriture directe n’est autorisée depuis le navigateur, sauf le marquage lu/archivé de ses propres alertes.
 - **Règles partagées** : les calculs financiers et académiques (`functions/src/shared/domaine.ts`) sont utilisés à la fois par les fonctions et par l’interface.
 - **E-mails** : les opérations ajoutent un document à `journalEmails` ; le déclencheur `envoyerEmail` l’expédie par SMTP et met à jour son statut (`Envoyé` / `Échec`), visible dans *Communications*.
-- **Unicité et numérotation** : les contraintes d’unicité (e-mail étudiant, candidature par année…) utilisent la collection technique `uniques` ; les numéros de reçu (`REC-AAAAMM-000001`) et de convocation, la collection `compteurs`.
+- **Unicité et numérotation** : les contraintes d’unicité (e-mail étudiant…) utilisent la collection technique `uniques` ; les numéros de reçu (`REC-AAAAMM-000001`) et de convocation, la collection `compteurs`.
 
 ## Développement local
 
@@ -44,11 +44,9 @@ Comptes créés par `amorcer:local` (émulateurs uniquement) :
 
 | Rôle | E-mail | Mot de passe |
 | --- | --- | --- |
-| Super-administrateur | `superadmin@insec.test` | `insec-super-2026` |
+| Super-administrateur | `superadmin@insec.test` | aucun : utiliser « Mot de passe oublié » (lien visible dans l’Emulator UI, onglet Authentication) |
 | Administrateur | `admin@insec.test` | `insec-demo-2026` |
 | Finance | `finance@insec.test` | `insec-demo-2026` |
-| Enseignant | `enseignant@insec.test` | `insec-demo-2026` |
-| Étudiant | `etudiant@insec.test` | `insec-demo-2026` |
 
 En local, les e-mails sont simulés (journalisés comme envoyés) et l’interface Emulator UI est disponible sur http://127.0.0.1:4000.
 
@@ -71,7 +69,7 @@ npm run build                    # vérification des types et compilation de l�
 4. Préparez les sauvegardes avant le déploiement : créez le bucket `<projet>-sauvegardes` (ou celui indiqué dans `BACKUP_BUCKET`) dans la même région que Firestore (`europe-west1` pour `insec-bd390`). Le code purge les archives après 30 jours ; ajoutez une règle de cycle de vie de secours à 35 jours et activez la *suppression réversible* (soft delete). Les exports gérés s’exécutent avec le compte de service Firestore affiché dans **Firestore → Importations/Exportations** ; dans le même projet, ce compte dispose normalement de l’accès requis au bucket. Le compte d’exécution des fonctions doit pouvoir lancer les exports (rôle **Cloud Datastore Import Export Admin** sur le projet) et gérer les objets du bucket pour copier, vérifier et purger les pièces jointes (rôle **Storage Object Admin** sur le bucket). Vérifiez le compte d’exécution réel dans les paramètres de sécurité de la fonction avant de lui accorder ces rôles ; ne donnez pas `Storage Admin` au niveau du projet.
 5. Déployez :
    ```bash
-   firebase deploy
+   firebase deploy --project insec-bd390
    ```
    Le déploiement compile l’interface et les fonctions, publie les règles et crée les index. La création des index composites peut prendre quelques minutes.
 6. Créez le premier super-administrateur (l’inscription publique des comptes internes n’existe pas) avec des identifiants Google Cloud autorisés (`gcloud auth application-default login`) :
@@ -98,7 +96,7 @@ npm run build                    # vérification des types et compilation de l�
 
 - Ne versionnez jamais de secret, de document étudiant ou de sauvegarde. Les paramètres non secrets de production vont dans `functions/.env.<projet>` (non versionné), le mot de passe SMTP dans Secret Manager.
 - Un compte désactivé perd immédiatement l’accès aux opérations et est déconnecté de l’interface ; ses jetons de lecture expirent au plus tard dans l’heure.
-- Le formulaire public de préinscription est exposé sans authentification : activez **App Check** (reCAPTCHA Enterprise) avant l’ouverture au public si des abus sont constatés.
+- Aucune page ni fonction n’est accessible sans connexion, hormis la connexion et « Mot de passe oublié ».
 - Consultez régulièrement le journal d’audit.
 
 ## Limites connues

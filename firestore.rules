@@ -1,8 +1,8 @@
 rules_version = '2';
 
 // Toutes les écritures métier passent par les Cloud Functions (validation, transactions, audit).
-// Le navigateur ne dispose que d'accès en lecture, restreints selon le rôle porté par le jeton
-// (custom claims : role, etudiantId, enseignantId), à l'exception de l'état lu/archivé des alertes.
+// Le navigateur ne dispose que d'accès en lecture, réservés à l'équipe INSEC selon le rôle porté
+// par le jeton (custom claim role), à l'exception de l'état lu/archivé de ses propres alertes.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -10,27 +10,21 @@ service cloud.firestore {
     function role() { return connecte() ? request.auth.token.get('role', '') : ''; }
     function admin() { return role() in ['admin', 'super_admin']; }
     function finance() { return role() in ['admin', 'super_admin', 'finance']; }
-    function etudiant(id) { return role() == 'etudiant' && request.auth.token.get('etudiantId', '') == id; }
-    function enseignant(id) { return role() == 'enseignant' && request.auth.token.get('enseignantId', '') == id; }
 
-    // Référentiel : les diplômes et années alimentent le formulaire public de préinscription.
-    match /formations/{id} { allow read: if true; }
-    match /annees/{id} { allow read: if true; }
-    match /ues/{id} { allow read: if connecte(); }
+    // Référentiel des diplômes, UE et années scolaires.
+    match /formations/{id} { allow read: if finance(); }
+    match /annees/{id} { allow read: if finance(); }
+    match /ues/{id} { allow read: if finance(); }
 
-    match /etudiants/{id} { allow read: if finance() || etudiant(id); }
-    match /inscriptions/{id} { allow read: if finance() || etudiant(resource.data.etudiantId); }
-    match /versements/{id} { allow read: if finance() || etudiant(resource.data.etudiantId); }
+    match /etudiants/{id} { allow read: if finance(); }
+    match /inscriptions/{id} { allow read: if finance(); }
+    match /versements/{id} { allow read: if finance(); }
 
-    // Le calendrier des examens n'est pas confidentiel pour les membres connectés de l'établissement.
-    match /examens/{id} { allow read: if admin() || role() in ['enseignant', 'etudiant']; }
-    match /resultats/{id} { allow read: if admin() || etudiant(resource.data.etudiantId); }
+    match /examens/{id} { allow read: if admin(); }
+    match /resultats/{id} { allow read: if admin(); }
     match /resultatsHistoriques/{id} { allow read: if admin(); }
 
     match /pieces/{id} { allow read: if admin(); }
-    match /candidatures/{id} { allow read: if admin(); }
-    match /enseignants/{id} { allow read: if admin() || enseignant(id); }
-    match /affectations/{id} { allow read: if admin() || enseignant(resource.data.enseignantId); }
 
     match /utilisateurs/{uid} {
       allow read: if admin() || (connecte() && request.auth.uid == uid);

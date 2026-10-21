@@ -147,8 +147,8 @@ describe('Administration', () => {
 
             const eleve = await acteur('etudiant', { etudiantId });
             await appeler(synchroniserAlertes, {}, eleve);
-            const [siennes] = (await db.collection(`utilisateurs/${eleve.uid}/alertes`).get()).docs.map((d) => d.data());
-            expect(siennes).toMatchObject({ titre: 'Échéance de paiement dépassée', lien: '/portail/etudiant' });
+            // Les anciens comptes étudiant n'ont plus d'espace dans l'application : aucune alerte ne leur est produite.
+            expect((await db.collection(`utilisateurs/${eleve.uid}/alertes`).get()).size).toBe(0);
         });
 
         it('calcule les indicateurs du tableau de bord pour l’année choisie', async () => {
@@ -167,7 +167,7 @@ describe('Administration', () => {
 
     describe('E-mails, sauvegardes et supervision', () => {
         it('marque un e-mail envoyé ou en échec selon le transport', async () => {
-            const email = { destinataire: 'awa@example.com', nomDestinataire: 'Awa Ba', type: 'Test', sujet: 'Sujet', titre: 'Titre <b>', message: 'Message', lien: '/portail/etudiant' };
+            const email = { destinataire: 'awa@example.com', nomDestinataire: 'Awa Ba', type: 'Test', sujet: 'Sujet', titre: 'Titre <b>', message: 'Message', lien: '/finances' };
             const ref = await db.collection('journalEmails').add({ ...email, statut: 'En attente' });
             await expedier(ref.id, email, nodemailer.createTransport({ jsonTransport: true }));
             expect(await doc(`journalEmails/${ref.id}`)).toMatchObject({ statut: 'Envoyé', erreur: null });
@@ -175,7 +175,7 @@ describe('Administration', () => {
             expect((await doc(`journalEmails/${ref.id}`))?.statut).toBe('Échec');
             const html = rendreEmail(email, 'https://dashboard.insec.test/');
             expect(html).toContain('Titre &lt;b&gt;');
-            expect(html).toContain('https://dashboard.insec.test/portail/etudiant');
+            expect(html).toContain('https://dashboard.insec.test/finances');
         });
 
         it('réserve la restauration au super-administrateur récemment authentifié', async () => {
