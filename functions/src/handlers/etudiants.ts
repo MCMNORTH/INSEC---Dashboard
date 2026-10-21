@@ -135,11 +135,10 @@ export const supprimerEtudiant = operation('supprimerEtudiant', ROLES_ADMIN, asy
         const etudiant = await exiger(tx, ref, 'Étudiant introuvable.');
         const versements = await tx.get(col.versements().where('etudiantId', '==', id).limit(1));
         if (!versements.empty) refuser('Impossible de supprimer cet étudiant : un historique financier existe.');
-        const [inscriptions, resultats, pieces, candidatures, comptes] = await Promise.all([
+        const [inscriptions, resultats, pieces, comptes] = await Promise.all([
             tx.get(col.inscriptions().where('etudiantId', '==', id)),
             tx.get(col.resultats().where('etudiantId', '==', id)),
             tx.get(col.pieces().where('etudiantId', '==', id)),
-            tx.get(col.candidatures().where('etudiantId', '==', id)),
             tx.get(col.utilisateurs().where('etudiantId', '==', id)),
         ]);
         const examensTouches = new Map<string, number>();
@@ -154,7 +153,6 @@ export const supprimerEtudiant = operation('supprimerEtudiant', ROLES_ADMIN, asy
             chemins.push(p.get('chemin'));
             tx.delete(p.ref);
         });
-        candidatures.docs.forEach((c) => tx.update(c.ref, { etudiantId: null }));
         comptes.docs.forEach((c) => tx.update(c.ref, { etudiantId: null }));
         if (etudiant.email) libererUnique(tx, cleEmailEtudiant(etudiant.email));
         tx.delete(ref);

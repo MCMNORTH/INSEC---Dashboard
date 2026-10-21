@@ -3,10 +3,10 @@
 ## Règles de travail
 
 1. Ne travaillez pas directement sur `main`. Créez une branche courte depuis la dernière version de `main`.
-2. Utilisez un nom explicite, par exemple `feature/admissions`, `fix/calcul-solde` ou `docs/deploiement`.
+2. Utilisez un nom explicite, par exemple `feat/relances`, `fix/calcul-solde` ou `docs/deploiement`.
 3. Limitez chaque pull request à un objectif cohérent et décrivez les risques éventuels.
 4. N’ajoutez jamais de secrets, de données réelles d’étudiants, d’export Firestore, de document administratif ou de sauvegarde.
-5. Attendez la réussite de tous les contrôles GitHub et l’approbation du responsable avant la fusion.
+5. Fusionnez uniquement quand les deux contrôles GitHub (« Firebase · Functions et règles » et « Front-end · Node.js 24 ») sont verts. Le projet est mené par une seule personne : aucune approbation tierce n’est exigée, mais relisez le résumé de la PR avant de fusionner.
 
 ## Vérifications locales obligatoires
 
@@ -22,9 +22,9 @@ Toute écriture de données passe par une Cloud Function : validez les entrées,
 
 Préférez des messages courts et explicites :
 
-- `feat: add student payment reminder`
-- `fix: prevent duplicate enrollment`
-- `test: cover finance role permissions`
-- `docs: update recovery procedure`
+- `feat: ajouter les relances de paiement`
+- `fix: empêcher une inscription en double`
+- `test: couvrir les droits du rôle finance`
+- `docs: mettre à jour la procédure de restauration`
 
-Une pull request doit préciser son objectif, les vérifications réalisées, les risques et la procédure de retour arrière. Les conversations de revue doivent être résolues avant la fusion.
+Une pull request doit préciser son objectif, les vérifications réalisées, les risques et la procédure de retour arrière.

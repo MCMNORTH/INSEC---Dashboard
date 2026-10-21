@@ -31,8 +31,9 @@ beforeEach(async () => {
         await setDoc(doc(db, 'inscriptions/i1'), { etudiantId: 'e1' });
         await setDoc(doc(db, 'inscriptions/i2'), { etudiantId: 'e2' });
         await setDoc(doc(db, 'resultats/r1'), { etudiantId: 'e1' });
+        await setDoc(doc(db, 'examens/x1'), { ueId: 'TEC111' });
+        await setDoc(doc(db, 'candidatures/ADM-1'), { email: 'ancien@example.com' });
         await setDoc(doc(db, 'enseignants/p1'), { nom: 'Sidi' });
-        await setDoc(doc(db, 'affectations/p1_TEC111'), { enseignantId: 'p1', ueId: 'TEC111' });
         await setDoc(doc(db, 'journalAudit/a1'), { action: 'created' });
         await setDoc(doc(db, 'sauvegardes/s1'), { statut: 'Terminée' });
         await setDoc(doc(db, 'uniques/etudiant-email:awa@example.com'), { proprietaire: 'e1' });
@@ -41,9 +42,9 @@ beforeEach(async () => {
 });
 
 describe('Règles Firestore', () => {
-    it('expose le référentiel public mais aucune donnée personnelle aux visiteurs', async () => {
+    it('n’expose rien aux visiteurs non connectés, pas même le référentiel', async () => {
         const visiteur = env.unauthenticatedContext().firestore();
-        await assertSucceeds(getDoc(doc(visiteur, 'formations/DGC')));
+        await assertFails(getDoc(doc(visiteur, 'formations/DGC')));
         await assertFails(getDoc(doc(visiteur, 'ues/TEC111')));
         await assertFails(getDoc(doc(visiteur, 'etudiants/e1')));
         await assertFails(getDoc(doc(visiteur, 'candidatures/ADM-1')));
@@ -56,30 +57,32 @@ describe('Règles Firestore', () => {
         await assertFails(setDoc(doc(admin, 'journalAudit/a2'), { action: 'faux' }));
     });
 
-    it('limite l’étudiant à son propre dossier', async () => {
+    it('refuse tout accès aux anciens comptes étudiant et enseignant', async () => {
         const eleve = env.authenticatedContext('u-etudiant', jeton('etudiant', { etudiantId: 'e1' })).firestore();
-        await assertSucceeds(getDoc(doc(eleve, 'etudiants/e1')));
-        await assertFails(getDoc(doc(eleve, 'etudiants/e2')));
-        await assertSucceeds(getDocs(query(collection(eleve, 'inscriptions'), where('etudiantId', '==', 'e1'))));
-        await assertFails(getDocs(collection(eleve, 'inscriptions')));
-        await assertFails(getDoc(doc(eleve, 'inscriptions/i2')));
-        await assertSucceeds(getDoc(doc(eleve, 'resultats/r1')));
-        await assertFails(getDoc(doc(eleve, 'journalAudit/a1')));
+        const prof = env.authenticatedContext('u-prof', jeton('enseignant', { enseignantId: 'p1' })).firestore();
+        for (const ctx of [eleve, prof]) {
+            for (const chemin of ['etudiants/e1', 'inscriptions/i1', 'resultats/r1', 'examens/x1', 'formations/DGC', 'enseignants/p1', 'candidatures/ADM-1']) {
+                await assertFails(getDoc(doc(ctx, chemin)));
+            }
+        }
+        await assertFails(getDocs(query(collection(eleve, 'inscriptions'), where('etudiantId', '==', 'e1'))));
     });
 
-    it('limite l’enseignant à sa fiche et à ses affectations', async () => {
-        const prof = env.authenticatedContext('u-prof', jeton('enseignant', { enseignantId: 'p1' })).firestore();
-        await assertSucceeds(getDoc(doc(prof, 'enseignants/p1')));
-        await assertSucceeds(getDocs(query(collection(prof, 'affectations'), where('enseignantId', '==', 'p1'))));
-        await assertFails(getDoc(doc(prof, 'etudiants/e1')));
-        await assertFails(getDoc(doc(prof, 'resultats/r1')));
+    it('ferme les anciennes collections candidatures et enseignants, même à l’administration', async () => {
+        const admin = env.authenticatedContext('u-admin', jeton('admin')).firestore();
+        await assertSucceeds(getDoc(doc(admin, 'examens/x1')));
+        await assertSucceeds(getDoc(doc(admin, 'formations/DGC')));
+        await assertFails(getDoc(doc(admin, 'candidatures/ADM-1')));
+        await assertFails(getDoc(doc(admin, 'enseignants/p1')));
     });
 
     it('ouvre les finances au rôle finance sans les journaux ni les sauvegardes', async () => {
         const finance = env.authenticatedContext('u-finance', jeton('finance')).firestore();
         await assertSucceeds(getDocs(collection(finance, 'inscriptions')));
         await assertSucceeds(getDoc(doc(finance, 'etudiants/e2')));
+        await assertSucceeds(getDoc(doc(finance, 'formations/DGC')));
         await assertFails(getDoc(doc(finance, 'resultats/r1')));
+        await assertFails(getDoc(doc(finance, 'examens/x1')));
         await assertFails(getDoc(doc(finance, 'journalAudit/a1')));
     });
 

@@ -2,7 +2,6 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import BarreLaterale from './composants/BarreLaterale.vue';
-import EnTetePortail from './composants/EnTetePortail.vue';
 import MessageFlash from './composants/MessageFlash.vue';
 import { aRole, session } from './session';
 
@@ -25,8 +24,8 @@ const miseEnPage = computed(() => {
             <RouterView :key="route.path" />
         </main>
     </div>
+    <!-- Comptes hors équipe INSEC (anciens rôles étudiant/enseignant) : seule la page « Accès refusé » s'affiche. -->
     <div v-else class="min-h-screen bg-gray-100">
-        <EnTetePortail />
         <main class="mx-auto max-w-6xl p-4 sm:p-6">
             <MessageFlash />
             <RouterView :key="route.path" />

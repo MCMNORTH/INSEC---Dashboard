@@ -19,7 +19,7 @@ export interface Email {
     titre: string;
     message: string;
     details?: Record<string, string>;
-    /** Chemin dans l'application (ex. /portail/etudiant), complété avec APP_URL à l'envoi. */
+    /** Chemin dans l'application (ex. /finances), complété avec APP_URL à l'envoi. */
     lien?: string | null;
     libelleLien?: string | null;
 }

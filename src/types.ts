@@ -151,42 +151,6 @@ export interface Piece {
     creeLe?: Timestamp;
 }
 
-export interface Candidature {
-    id: string;
-    reference: string;
-    nom: string;
-    prenom: string;
-    email: string;
-    telephone: string;
-    dateNaissance: string | null;
-    dernierDiplome: string;
-    formationId: string;
-    anneeId: string;
-    motivation: string | null;
-    statut: string;
-    noteInterne: string | null;
-    etudiantId: string | null;
-    creeLe?: Timestamp;
-}
-
-export interface Enseignant {
-    id: string;
-    nom: string;
-    prenom: string;
-    specialite: string;
-    email: string;
-    telephone: string | null;
-    nbUe: number;
-    nbEtudiants: number;
-}
-
-export interface Affectation {
-    id: string;
-    enseignantId: string;
-    ueId: string;
-    nombreEtudiants: number;
-}
-
 export interface Utilisateur {
     id: string;
     nom: string;

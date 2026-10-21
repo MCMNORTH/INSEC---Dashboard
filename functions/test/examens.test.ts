@@ -41,7 +41,7 @@ describe('Examens et résultats', () => {
         await appeler(enregistrerResultat, { id: resultat.id, presence: 'Présent', note: 12, commentaire: 'Admis' }, admin);
         expect(await doc(`resultats/${resultat.id}`)).toMatchObject({ note: 12, valide: true });
         const emails = await liste('journalEmails');
-        expect(emails.some((e) => e.type === 'Résultat' && e.lien === '/portail/etudiant')).toBe(true);
+        expect(emails.some((e) => e.type === 'Résultat' && e.lien === null)).toBe(true);
 
         const releve = await appeler(genererPdf, { type: 'releve', id: resultat.inscriptionId }, admin);
         const pdf = Buffer.from(releve.contenu, 'base64');
