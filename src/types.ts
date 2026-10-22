@@ -61,6 +61,8 @@ export interface Inscription {
     montantBumex?: number;
     statutBumex?: 'a_regler' | 'reglee';
     echeances: Echeance[];
+    derniereRelanceLe?: string | null;
+    nbRelances?: number;
     ordre: number;
     creeLe?: Timestamp;
 }
