@@ -285,7 +285,7 @@ async function enregistrer() {
             <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-500 ring-1 ring-red-100"><i class="fa-solid fa-file-pdf"></i></span>
         </header>
         <div class="space-y-5 p-5 sm:p-6">
-            <div class="flex items-start gap-3 rounded-2xl border border-insec-100 bg-insec-50/60 p-4 text-sm leading-6 text-insec-950">
+            <div class="flex items-start gap-3 rounded-2xl border border-insec-100 bg-insec-50/60 p-4 text-sm leading-6 text-insec-700">
                 <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-insec-100 text-insec-600"><i class="fa-solid fa-circle-info text-xs"></i></span>
                 <p>
                     Téléchargez le PDF depuis la

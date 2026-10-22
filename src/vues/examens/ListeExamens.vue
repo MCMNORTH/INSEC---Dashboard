@@ -212,7 +212,7 @@ async function importerClasseurConfirme() {
             <p class="sous-titre">Calendrier officiel INTEC, candidats, convocations et retour des copies</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-white pl-3.5 shadow-xs transition hover:border-gray-300">
+            <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-surface pl-3.5 shadow-xs transition hover:border-gray-300">
                 <i class="fa-regular fa-calendar text-sm text-insec-500"></i>
                 <select v-model="anneeId" class="border-0 bg-transparent py-2.5 pl-2 text-sm font-semibold text-gray-900 focus:ring-0" aria-label="Année scolaire">
                     <option v-for="a in annees" :key="a.id" :value="a.id">Année {{ a.libelle }}</option>
@@ -249,8 +249,8 @@ async function importerClasseurConfirme() {
                         <tr v-for="e in calendrierIntec" :key="e.codeUE">
                             <td>
                                 <div class="flex items-center gap-3">
-                                    <span class="flex w-12 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-white text-center ring-1 ring-gray-200">
-                                        <span class="w-full bg-insec-900 py-0.5 text-[9.5px] font-semibold tracking-wider text-white uppercase">{{ e.dateFr.split(' ')[1]?.slice(0, 4) }}</span>
+                                    <span class="flex w-12 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-surface text-center ring-1 ring-gray-200">
+                                        <span class="w-full bg-insec-600 py-0.5 text-[9.5px] font-semibold tracking-wider text-white uppercase">{{ e.dateFr.split(' ')[1]?.slice(0, 4) }}</span>
                                         <span class="py-0.5 font-titre text-base leading-6 font-bold text-gray-900">{{ e.dateFr.split(' ')[0] }}</span>
                                     </span>
                                     <span>
@@ -414,7 +414,7 @@ async function importerClasseurConfirme() {
                             <thead><tr><th class="sticky top-0 left-0 z-20 min-w-52 bg-gray-50">Étudiant</th><th v-for="colonne in groupe.colonnes" :key="colonne.code" class="min-w-44"><span class="block">{{ colonne.code }}</span><span class="text-[11px] font-normal tracking-normal text-gray-400 normal-case">{{ colonne.libelle }}</span></th><th class="min-w-56">Écarts à vérifier</th></tr></thead>
                             <tbody>
                                 <tr v-for="candidat in groupe.candidats" :key="candidat.cle" :class="candidat.ecarts.length ? 'bg-amber-50/60' : ''">
-                                    <th scope="row" :class="['sticky left-0 z-10 min-w-52 px-4 text-left font-medium text-gray-900', candidat.ecarts.length ? 'bg-amber-50' : 'bg-white']">{{ candidat.nom }}</th>
+                                    <th scope="row" :class="['sticky left-0 z-10 min-w-52 px-4 text-left font-medium text-gray-900', candidat.ecarts.length ? 'bg-amber-50' : 'bg-surface']">{{ candidat.nom }}</th>
                                     <td v-for="colonne in groupe.colonnes" :key="colonne.code" class="align-top">
                                         <template v-if="candidat.parUe.get(colonne.code)?.length">
                                             <div v-for="(r, index) in candidat.parUe.get(colonne.code)" :key="r.id" :class="index ? 'mt-2 border-t border-gray-200 pt-2' : ''">

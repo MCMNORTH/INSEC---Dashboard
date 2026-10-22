@@ -74,7 +74,7 @@ async function enregistrer() {
                             {{ correspondances.length }} correspondance(s) trouvée(s) dans l’annuaire
                         </p>
                         <ul class="mt-3 space-y-2 text-sm">
-                            <li v-for="e in correspondances" :key="e.id" class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-2 ring-1 ring-amber-100">
+                            <li v-for="e in correspondances" :key="e.id" class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface/70 px-3 py-2 ring-1 ring-amber-100">
                                 <span class="text-gray-900">{{ e.prenom }} {{ e.nom }} <span class="text-gray-500">· {{ e.email || 'sans e-mail' }}</span></span>
                                 <RouterLink :to="`/etudiants/${e.id}`" class="lien">Ouvrir la fiche et ajouter une inscription</RouterLink>
                             </li>

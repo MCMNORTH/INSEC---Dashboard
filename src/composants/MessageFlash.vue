@@ -22,7 +22,7 @@ watch(() => [flash.texte, flash.type], () => {
                 v-if="flash.texte"
                 :key="flash.texte"
                 :role="flash.type === 'erreur' ? 'alert' : 'status'"
-                class="pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border border-gray-200/80 bg-white/95 p-4 shadow-flottant backdrop-blur-xl"
+                class="pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border border-gray-200/80 bg-surface/95 p-4 shadow-flottant backdrop-blur-xl"
             >
                 <span
                     :class="[

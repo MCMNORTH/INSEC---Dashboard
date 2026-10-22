@@ -151,7 +151,7 @@ async function envoyerConvocation(r: Resultat) {
             <section class="carte relative overflow-hidden">
                 <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-linear-to-b from-insec-50/80 to-transparent"></div>
                 <div class="relative flex flex-wrap items-start gap-5 p-5 sm:p-6">
-                    <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-insec-600 to-insec-900 text-white shadow-sm">
+                    <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-insec-600 to-insec-700 text-white shadow-sm">
                         <i class="fa-solid fa-calendar-check text-xl"></i>
                     </span>
                     <div class="min-w-0 flex-1">
@@ -160,10 +160,10 @@ async function envoyerConvocation(r: Resultat) {
                     </div>
                 </div>
                 <dl class="relative grid gap-px border-t border-gray-100 bg-gray-100 text-sm sm:grid-cols-2 md:grid-cols-4">
-                    <div class="bg-white px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Date officielle INTEC</dt><dd class="mt-1 font-semibold text-gray-900">{{ horaireExamen(examen.dateExamen) }}</dd></div>
-                    <div class="bg-white px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Session</dt><dd class="mt-1 font-semibold text-gray-900">{{ examen.session }}</dd></div>
-                    <div class="bg-white px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Salle</dt><dd class="mt-1 font-semibold text-gray-900">{{ examen.salle || '—' }}</dd></div>
-                    <div class="bg-white px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Validation</dt><dd class="mt-1 font-semibold text-gray-900 tabular-nums">{{ examen.seuilValidation }}/{{ examen.noteSur }}</dd></div>
+                    <div class="bg-surface px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Date officielle INTEC</dt><dd class="mt-1 font-semibold text-gray-900">{{ horaireExamen(examen.dateExamen) }}</dd></div>
+                    <div class="bg-surface px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Session</dt><dd class="mt-1 font-semibold text-gray-900">{{ examen.session }}</dd></div>
+                    <div class="bg-surface px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Salle</dt><dd class="mt-1 font-semibold text-gray-900">{{ examen.salle || '—' }}</dd></div>
+                    <div class="bg-surface px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Validation</dt><dd class="mt-1 font-semibold text-gray-900 tabular-nums">{{ examen.seuilValidation }}/{{ examen.noteSur }}</dd></div>
                 </dl>
             </section>
 
@@ -184,7 +184,7 @@ async function envoyerConvocation(r: Resultat) {
                 <form class="space-y-5 p-5 sm:p-6" @submit.prevent="enregistrerPreparation">
                     <div class="grid gap-4 lg:grid-cols-3">
                         <section class="rounded-2xl border border-gray-200 p-4">
-                            <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-900 text-[11px] font-bold text-white">1</span>Réception des sujets</h3>
+                            <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-600 text-[11px] font-bold text-white">1</span>Réception des sujets</h3>
                             <label class="etiquette">Date de réception
                                 <input v-model="preparation.sujetsRecusLe" type="date" class="champ mt-1.5" />
                             </label>
@@ -194,7 +194,7 @@ async function envoyerConvocation(r: Resultat) {
                             <p class="mt-2 text-xs text-gray-500">Renseignez la date et le nombre de lots ensemble pour confirmer la réception.</p>
                         </section>
                         <section class="rounded-2xl border border-gray-200 p-4">
-                            <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-900 text-[11px] font-bold text-white">2</span>Organisation de la salle</h3>
+                            <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-600 text-[11px] font-bold text-white">2</span>Organisation de la salle</h3>
                             <label class="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2.5 text-sm text-gray-700 transition hover:bg-gray-50">
                                 <input v-model="preparation.salleConfirmee" type="checkbox" class="mt-0.5" />
                                 <span>Salle d’examen confirmée</span>
@@ -205,7 +205,7 @@ async function envoyerConvocation(r: Resultat) {
                             </label>
                         </section>
                         <section class="rounded-2xl border border-gray-200 p-4">
-                            <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-900 text-[11px] font-bold text-white">3</span>Retour des copies</h3>
+                            <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-600 text-[11px] font-bold text-white">3</span>Retour des copies</h3>
                             <label class="etiquette">Copies rassemblées
                                 <input v-model.number="preparation.nombreCopiesRassemblees" type="number" min="0" :max="candidatsPresents" step="1" class="champ mt-1.5" />
                             </label>

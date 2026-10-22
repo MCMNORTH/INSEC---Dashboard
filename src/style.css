@@ -4,27 +4,35 @@
 
 /*
  * Système de design INSEC.
- * Bleu nuit du logo pour la marque, rouge du logo en accent discret.
+ * Bleu clair et franc pour la marque, rouge du logo en accent discret.
  * Les gris, bleus et indigos de Tailwind sont rattachés à la palette INSEC
  * pour que toutes les vues partagent les mêmes teintes.
+ * Mode sombre : les mêmes noms de couleurs prennent d'autres valeurs
+ * sous [data-theme='dark'] (voir plus bas), les vues n'ont rien à changer.
  */
-@theme {
-    --color-insec: #1e2761;
-    --color-insec-fonce: #121735;
-    --color-insec-or: #d4af37;
-    --color-insec-rouge: #d9061b;
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-    --color-insec-50: #f3f5fc;
-    --color-insec-100: #e6eaf7;
-    --color-insec-200: #cbd3ee;
-    --color-insec-300: #a3b1df;
-    --color-insec-400: #7486c9;
-    --color-insec-500: #5065b3;
-    --color-insec-600: #3c4e9a;
-    --color-insec-700: #2f3d7d;
-    --color-insec-800: #263166;
-    --color-insec-900: #1e2761;
-    --color-insec-950: #121735;
+@theme {
+    --color-insec: #2563eb;
+    --color-insec-fonce: #1d4ed8;
+    --color-insec-or: #d4af37;
+    --color-insec-rouge: #e01a2e;
+
+    --color-insec-50: #eff5ff;
+    --color-insec-100: #dbe8fe;
+    --color-insec-200: #bfd5fe;
+    --color-insec-300: #93b8fd;
+    --color-insec-400: #6095fa;
+    --color-insec-500: #3b76f6;
+    --color-insec-600: #2563eb;
+    --color-insec-700: #1d4ed8;
+    --color-insec-800: #1e40af;
+    --color-insec-900: #1e3a8a;
+    --color-insec-950: #172554;
+
+    /* Surfaces : cartes et menus (surface), fond de page (fond). */
+    --color-surface: #ffffff;
+    --color-fond: #f6f7f9;
 
     /* Gris neutres légèrement bleutés, accordés au bleu INSEC. */
     --color-gray-50: oklch(98.5% 0.003 264);
@@ -77,6 +85,111 @@
     }
 }
 
+/*
+ * Mode sombre : mêmes noms, autres valeurs.
+ * Gris inversés (clair ↔ foncé), fonds teintés transformés en voiles discrets,
+ * textes colorés éclaircis pour rester lisibles sur fond sombre.
+ */
+:root[data-theme='dark'] {
+    color-scheme: dark;
+
+    --color-surface: #151a23;
+    --color-fond: #0d1117;
+
+    --color-gray-50: #1a202b;
+    --color-gray-100: #202733;
+    --color-gray-200: #2a3240;
+    --color-gray-300: #3a4352;
+    --color-gray-400: #6b7485;
+    --color-gray-500: #8e97a8;
+    --color-gray-600: #a9b1bf;
+    --color-gray-700: #c3c9d4;
+    --color-gray-800: #dce0e7;
+    --color-gray-900: #eef0f4;
+    --color-gray-950: #f8f9fb;
+
+    --color-insec-50: color-mix(in oklab, #3b76f6 14%, var(--color-surface));
+    --color-insec-100: color-mix(in oklab, #3b76f6 22%, var(--color-surface));
+    --color-insec-200: color-mix(in oklab, #3b76f6 34%, var(--color-surface));
+    --color-insec-600: #3b76f6;
+    --color-insec-700: #6095fa;
+    --color-insec-800: #93b8fd;
+    --color-insec-900: #bfd5fe;
+    --color-insec-950: #dbe8fe;
+    --color-insec: #6095fa;
+    --color-insec-fonce: #93b8fd;
+
+    --color-red-50: color-mix(in oklab, oklch(63.7% 0.237 25.331) 12%, var(--color-surface));
+    --color-red-100: color-mix(in oklab, oklch(63.7% 0.237 25.331) 20%, var(--color-surface));
+    --color-red-200: color-mix(in oklab, oklch(63.7% 0.237 25.331) 32%, var(--color-surface));
+    --color-red-600: oklch(63.7% 0.237 25.331);
+    --color-red-700: oklch(70.4% 0.191 22.216);
+    --color-red-800: oklch(80.8% 0.114 19.571);
+    --color-red-900: oklch(88.5% 0.062 18.334);
+    --color-red-950: oklch(93.6% 0.032 17.717);
+    --color-orange-50: color-mix(in oklab, oklch(70.5% 0.213 47.604) 12%, var(--color-surface));
+    --color-orange-100: color-mix(in oklab, oklch(70.5% 0.213 47.604) 20%, var(--color-surface));
+    --color-orange-200: color-mix(in oklab, oklch(70.5% 0.213 47.604) 32%, var(--color-surface));
+    --color-orange-600: oklch(70.5% 0.213 47.604);
+    --color-orange-700: oklch(75% 0.183 55.934);
+    --color-orange-800: oklch(83.7% 0.128 66.29);
+    --color-orange-900: oklch(90.1% 0.076 70.697);
+    --color-orange-950: oklch(95.4% 0.038 75.164);
+    --color-amber-50: color-mix(in oklab, oklch(76.9% 0.188 70.08) 12%, var(--color-surface));
+    --color-amber-100: color-mix(in oklab, oklch(76.9% 0.188 70.08) 20%, var(--color-surface));
+    --color-amber-200: color-mix(in oklab, oklch(76.9% 0.188 70.08) 32%, var(--color-surface));
+    --color-amber-600: oklch(76.9% 0.188 70.08);
+    --color-amber-700: oklch(82.8% 0.189 84.429);
+    --color-amber-800: oklch(87.9% 0.169 91.605);
+    --color-amber-900: oklch(92.4% 0.12 95.746);
+    --color-amber-950: oklch(96.2% 0.059 95.617);
+    --color-yellow-50: color-mix(in oklab, oklch(79.5% 0.184 86.047) 12%, var(--color-surface));
+    --color-yellow-100: color-mix(in oklab, oklch(79.5% 0.184 86.047) 20%, var(--color-surface));
+    --color-yellow-200: color-mix(in oklab, oklch(79.5% 0.184 86.047) 32%, var(--color-surface));
+    --color-yellow-600: oklch(79.5% 0.184 86.047);
+    --color-yellow-700: oklch(85.2% 0.199 91.936);
+    --color-yellow-800: oklch(90.5% 0.182 98.111);
+    --color-yellow-900: oklch(94.5% 0.129 101.54);
+    --color-yellow-950: oklch(97.3% 0.071 103.193);
+    --color-green-50: color-mix(in oklab, oklch(72.3% 0.219 149.579) 12%, var(--color-surface));
+    --color-green-100: color-mix(in oklab, oklch(72.3% 0.219 149.579) 20%, var(--color-surface));
+    --color-green-200: color-mix(in oklab, oklch(72.3% 0.219 149.579) 32%, var(--color-surface));
+    --color-green-600: oklch(72.3% 0.219 149.579);
+    --color-green-700: oklch(79.2% 0.209 151.711);
+    --color-green-800: oklch(87.1% 0.15 154.449);
+    --color-green-900: oklch(92.5% 0.084 155.995);
+    --color-green-950: oklch(96.2% 0.044 156.743);
+    --color-emerald-50: color-mix(in oklab, oklch(69.6% 0.17 162.48) 12%, var(--color-surface));
+    --color-emerald-100: color-mix(in oklab, oklch(69.6% 0.17 162.48) 20%, var(--color-surface));
+    --color-emerald-200: color-mix(in oklab, oklch(69.6% 0.17 162.48) 32%, var(--color-surface));
+    --color-emerald-600: oklch(69.6% 0.17 162.48);
+    --color-emerald-700: oklch(76.5% 0.177 163.223);
+    --color-emerald-800: oklch(84.5% 0.143 164.978);
+    --color-emerald-900: oklch(90.5% 0.093 164.15);
+    --color-emerald-950: oklch(95% 0.052 163.051);
+    --color-sky-50: color-mix(in oklab, oklch(68.5% 0.169 237.323) 12%, var(--color-surface));
+    --color-sky-100: color-mix(in oklab, oklch(68.5% 0.169 237.323) 20%, var(--color-surface));
+    --color-sky-200: color-mix(in oklab, oklch(68.5% 0.169 237.323) 32%, var(--color-surface));
+    --color-sky-600: oklch(68.5% 0.169 237.323);
+    --color-sky-700: oklch(74.6% 0.16 232.661);
+    --color-sky-800: oklch(82.8% 0.111 230.318);
+    --color-sky-900: oklch(90.1% 0.058 230.902);
+    --color-sky-950: oklch(95.1% 0.026 236.824);
+    --color-slate-50: color-mix(in oklab, oklch(55.4% 0.046 257.417) 12%, var(--color-surface));
+    --color-slate-100: color-mix(in oklab, oklch(55.4% 0.046 257.417) 20%, var(--color-surface));
+    --color-slate-200: color-mix(in oklab, oklch(55.4% 0.046 257.417) 32%, var(--color-surface));
+    --color-slate-600: oklch(55.4% 0.046 257.417);
+    --color-slate-700: oklch(70.4% 0.04 256.788);
+    --color-slate-800: oklch(86.9% 0.022 252.894);
+    --color-slate-900: oklch(92.9% 0.013 255.508);
+    --color-slate-950: oklch(96.8% 0.007 247.896);
+
+
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-carte: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-flottant: 0 16px 40px -8px rgb(0 0 0 / 0.6), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+}
+
 @layer base {
     html {
         -webkit-text-size-adjust: 100%;
@@ -85,7 +198,7 @@
         scrollbar-width: thin;
     }
     body {
-        @apply bg-[#f5f6fb] text-gray-800;
+        @apply bg-fond text-gray-800 transition-colors duration-200;
     }
     h1, h2, h3 {
         @apply font-titre;
@@ -107,29 +220,29 @@
     /* Menus déroulants natifs : flèche fine, coins arrondis, survol et focus soignés. */
     select {
         @apply cursor-pointer appearance-none bg-no-repeat pr-10;
-        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%236b7290' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M6.5 8l3.5-3.5L13.5 8M6.5 12l3.5 3.5 3.5-3.5'/%3e%3c/svg%3e");
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238e97a8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M6.5 8l3.5-3.5L13.5 8M6.5 12l3.5 3.5 3.5-3.5'/%3e%3c/svg%3e");
         background-position: right 0.7rem center;
         background-size: 1.1rem;
         print-color-adjust: exact;
     }
     select option {
-        @apply bg-white py-2 text-gray-900;
+        @apply bg-surface py-2 text-gray-900;
     }
     select option:checked {
-        @apply bg-insec-50 font-semibold text-insec-900;
+        @apply bg-insec-50 font-semibold text-insec-700;
     }
     select optgroup {
         @apply font-semibold text-gray-500;
     }
     input[type='checkbox'],
     input[type='radio'] {
-        @apply h-4 w-4 cursor-pointer border-gray-300 text-insec-700 shadow-xs transition focus:ring-2 focus:ring-insec-500/30 focus:ring-offset-0;
+        @apply h-4 w-4 cursor-pointer border-gray-300 bg-surface text-insec-600 shadow-xs transition focus:ring-2 focus:ring-insec-500/30 focus:ring-offset-0;
     }
     input[type='checkbox'] {
         @apply rounded-[5px];
     }
     input[type='file']::file-selector-button {
-        @apply mr-3 cursor-pointer rounded-lg border-0 bg-insec-50 px-3 py-1.5 text-xs font-semibold text-insec-800 transition hover:bg-insec-100;
+        @apply mr-3 cursor-pointer rounded-lg border-0 bg-insec-50 px-3 py-1.5 text-xs font-semibold text-insec-700 transition hover:bg-insec-100;
     }
     details > summary {
         @apply cursor-pointer list-none;
@@ -141,7 +254,7 @@
 
 /* ——— Formulaires ——— */
 @utility champ {
-    @apply w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-xs transition duration-150 placeholder:text-gray-400 hover:border-gray-300 focus:border-insec-500 focus:ring-4 focus:ring-insec-500/12 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500;
+    @apply w-full rounded-xl border border-gray-200 bg-surface px-3.5 py-2.5 text-sm text-gray-900 shadow-xs transition duration-150 placeholder:text-gray-400 hover:border-gray-300 focus:border-insec-500 focus:ring-4 focus:ring-insec-500/12 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500;
 }
 @utility etiquette {
     @apply block text-[13px] font-medium text-gray-700;
@@ -149,7 +262,7 @@
 
 /* ——— Surfaces ——— */
 @utility carte {
-    @apply rounded-2xl border border-gray-200/80 bg-white shadow-carte;
+    @apply rounded-2xl border border-gray-200/80 bg-surface shadow-carte;
 }
 @utility panneau-entete {
     @apply flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6;
@@ -163,19 +276,19 @@
     @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold whitespace-nowrap transition duration-150 select-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-55;
 }
 @utility bouton-principal {
-    @apply bouton bg-insec-900 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_1px_2px_rgb(16_24_64/0.25)] hover:bg-insec-800;
+    @apply bouton bg-[#2563eb] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(16_24_64/0.2)] hover:bg-[#1d4ed8];
 }
 @utility bouton-action {
-    @apply bouton bg-linear-to-b from-insec-600 to-insec-700 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_1px_2px_rgb(16_24_64/0.25),0_4px_12px_-4px_rgb(60_78_154/0.5)] hover:from-insec-500 hover:to-insec-700;
+    @apply bouton bg-[#2563eb] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(16_24_64/0.2),0_4px_12px_-4px_rgb(37_99_235/0.45)] hover:bg-[#1d4ed8];
 }
 @utility bouton-secondaire {
-    @apply bouton border border-gray-200 bg-white text-gray-700 shadow-xs hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900;
+    @apply bouton border border-gray-200 bg-surface text-gray-700 shadow-xs hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900;
 }
 @utility bouton-fantome {
     @apply bouton text-gray-600 hover:bg-gray-100 hover:text-gray-900;
 }
 @utility bouton-danger {
-    @apply bouton bg-red-600 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(127_29_29/0.3)] hover:bg-red-700;
+    @apply bouton bg-[#dc2626] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(127_29_29/0.3)] hover:bg-[#b91c1c];
 }
 @utility bouton-icone {
     @apply inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700;
@@ -203,7 +316,7 @@
     @apply font-titre text-2xl font-bold tracking-tight text-gray-900 sm:text-[1.75rem];
 }
 @utility surtitre {
-    @apply text-xs font-semibold tracking-[0.14em] text-insec-500 uppercase;
+    @apply text-xs font-semibold tracking-[0.14em] text-insec-600 uppercase;
 }
 @utility sous-titre {
     @apply mt-1.5 max-w-3xl text-sm leading-6 text-gray-500;

@@ -121,7 +121,7 @@ async function supprimer() {
             <p class="sous-titre">Vérifiez l’inscription à l’INSEC pour chaque année scolaire. L’historique reste sur la fiche de l’étudiant.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-white pl-3.5 shadow-xs transition hover:border-gray-300">
+            <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-surface pl-3.5 shadow-xs transition hover:border-gray-300">
                 <i class="fa-regular fa-calendar text-sm text-insec-500"></i>
                 <span class="sr-only">Année scolaire</span>
                 <select v-model="anneeId" class="border-0 bg-transparent py-2.5 pl-2 text-sm font-semibold text-gray-900 focus:ring-0" aria-label="Année scolaire">
@@ -152,7 +152,7 @@ async function supprimer() {
                 <p class="text-[13px] font-medium text-gray-500">Étudiants suivis cette année</p>
                 <p class="mt-2 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ etudiantsAvecDossierAnnee }}</p>
             </div>
-            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-800 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-users text-sm"></i></span>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-700 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-users text-sm"></i></span>
         </button>
     </section>
 
@@ -180,7 +180,7 @@ async function supprimer() {
     <Chargement :chargement="chargement || chargementInscriptions" :erreur="erreur || erreurInscriptions">
         <section v-if="!etudiants.length" class="carte my-2 overflow-hidden">
             <div class="grid gap-6 p-6 sm:grid-cols-[auto_1fr] sm:items-center sm:p-8">
-                <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-insec-500 to-insec-900 text-white shadow-lg">
+                <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-insec-500 to-insec-700 text-white shadow-lg">
                     <i class="fa-solid fa-users text-2xl" aria-hidden="true"></i>
                 </div>
                 <div>

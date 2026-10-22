@@ -120,7 +120,7 @@ const icone = (action: string) => (action === 'download' ? 'fa-download' : actio
     </Chargement>
     <nav class="mt-5 flex items-center justify-between gap-3 text-sm text-gray-500" aria-label="Pagination">
         <button class="bouton-secondaire" :disabled="page <= 1 || chargement" @click="charger('precedente')"><i class="fa-solid fa-chevron-left text-xs"></i> Précédent</button>
-        <span class="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-medium text-gray-700 shadow-xs">Page {{ page }}</span>
+        <span class="rounded-xl border border-gray-200 bg-surface px-3 py-1.5 text-[13px] font-medium text-gray-700 shadow-xs">Page {{ page }}</span>
         <button class="bouton-secondaire" :disabled="!suivante || chargement" @click="charger('suivante')">Suivant <i class="fa-solid fa-chevron-right text-xs"></i></button>
     </nav>
 </template>
