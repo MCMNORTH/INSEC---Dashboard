@@ -21,7 +21,7 @@ Réponds toujours en **français**, simplement et clairement. Le code, l’inter
 
 ## Architecture (version officielle : Vue 3 + Firebase)
 
-L’ancienne version Laravel est archivée par le tag `laravel-archive` ; les travaux abandonnés par les tags `archive/*`. Ne plus les modifier.
+Seule la version Vue + Firebase existe (l’ancien site Laravel et son hébergement Render ont été retirés). Le tag `archive/production-2026-10-19` conserve, pour référence, le code serveur récupéré de la production du 19 octobre 2026 : ne pas le modifier.
 
 | Besoin | Technologie |
 | --- | --- |
