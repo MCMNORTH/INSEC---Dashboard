@@ -54,48 +54,52 @@ async function toutLire() {
 const STYLES: Record<string, [string, string]> = {
     danger: ['bg-red-50 text-red-700', 'fa-circle-exclamation'],
     warning: ['bg-amber-50 text-amber-700', 'fa-triangle-exclamation'],
-    success: ['bg-green-50 text-green-700', 'fa-circle-check'],
-    info: ['bg-blue-50 text-blue-700', 'fa-circle-info'],
+    success: ['bg-emerald-50 text-emerald-700', 'fa-circle-check'],
+    info: ['bg-insec-50 text-insec-700', 'fa-circle-info'],
 };
 </script>
 
 <template>
     <div class="mx-auto max-w-5xl">
-        <div class="mb-7 flex flex-wrap items-center justify-between gap-4">
+        <header class="en-tete-page">
             <div>
-                <h1 class="titre-page">Centre d’alertes</h1>
-                <p class="mt-1 text-sm text-gray-500">Échéances, examens, documents et résultats importants.</p>
+                <p class="surtitre">Notifications</p>
+                <h1 class="titre-page mt-1.5">Centre d’alertes</h1>
+                <p class="sous-titre">Échéances, examens, documents et résultats importants.</p>
             </div>
-            <button class="bouton-secondaire" :disabled="!alertes.some((a) => !a.lueLe)" @click="toutLire"><i class="fa-solid fa-check-double"></i> Tout marquer comme lu</button>
-        </div>
-        <p v-if="synchronisation" class="mb-3 text-xs text-gray-400"><i class="fa-solid fa-rotate fa-spin mr-1"></i> Actualisation des alertes…</p>
+            <button class="bouton-secondaire" :disabled="!alertes.some((a) => !a.lueLe)" @click="toutLire"><i class="fa-solid fa-check-double text-xs"></i> Tout marquer comme lu</button>
+        </header>
+        <p v-if="synchronisation" class="mb-3 flex items-center gap-2 text-xs text-gray-400"><i class="fa-solid fa-rotate fa-spin"></i> Actualisation des alertes…</p>
         <Chargement :chargement="chargement" :erreur="erreur">
-            <div class="space-y-3">
-                <article
-                    v-for="a in affichees"
-                    :key="a.id"
-                    :class="['flex gap-4 rounded-xl border bg-white p-5', a.lueLe ? 'border-gray-200 opacity-75' : 'border-insec-or']"
-                >
-                    <div :class="['flex h-11 w-11 shrink-0 items-center justify-center rounded-full', STYLES[a.niveau]?.[0] ?? 'bg-gray-50 text-gray-700']">
-                        <i :class="['fa-solid', STYLES[a.niveau]?.[1] ?? 'fa-bell']"></i>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <div class="flex justify-between gap-3">
-                            <h2 class="font-semibold text-insec">{{ a.titre }}</h2>
-                            <span class="text-xs whitespace-nowrap text-gray-400">{{ depuis(a.modifieLe) }}</span>
+            <section v-if="alertes.length" class="carte overflow-hidden">
+                <ul class="divide-y divide-gray-100">
+                    <li
+                        v-for="a in affichees"
+                        :key="a.id"
+                        :class="['relative flex gap-4 px-5 py-4 transition sm:px-6', a.lueLe ? 'hover:bg-gray-50/70' : 'bg-insec-50/40 hover:bg-insec-50/70']"
+                    >
+                        <span v-if="!a.lueLe" class="absolute top-6 left-2 h-1.5 w-1.5 rounded-full bg-[#e01a2e] shadow-[0_0_6px_rgb(224_26_46/0.6)]" title="Non lue"></span>
+                        <span :class="['flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 ring-black/5 ring-inset', STYLES[a.niveau]?.[0] ?? 'bg-gray-50 text-gray-700']">
+                            <i :class="['fa-solid text-sm', STYLES[a.niveau]?.[1] ?? 'fa-bell']"></i>
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                <h2 :class="['text-sm', a.lueLe ? 'font-medium text-gray-700' : 'font-semibold text-gray-900']">{{ a.titre }}</h2>
+                                <span class="text-xs whitespace-nowrap text-gray-400">{{ depuis(a.modifieLe) }}</span>
+                            </div>
+                            <p class="mt-1 text-sm leading-6 text-gray-600">{{ a.message }}</p>
+                            <div class="mt-2.5 flex flex-wrap items-center gap-2">
+                                <button class="bouton-secondaire min-h-8 px-3 py-1 text-xs" @click="lire(a)">{{ a.lien ? 'Consulter' : 'Marquer comme lue' }} <i class="fa-solid fa-arrow-right text-[10px]"></i></button>
+                                <button class="bouton-fantome min-h-8 px-3 py-1 text-xs" @click="archiver(a)"><i class="fa-solid fa-box-archive text-[11px]"></i> Archiver</button>
+                            </div>
                         </div>
-                        <p class="mt-1 text-sm text-gray-600">{{ a.message }}</p>
-                        <div class="mt-3 flex gap-4">
-                            <button class="cursor-pointer text-sm font-semibold text-insec" @click="lire(a)">{{ a.lien ? 'Consulter' : 'Marquer comme lue' }} <i class="fa-solid fa-arrow-right ml-1"></i></button>
-                            <button class="cursor-pointer text-sm text-gray-400 hover:text-gray-700" @click="archiver(a)">Archiver</button>
-                        </div>
-                    </div>
-                </article>
-                <div v-if="!alertes.length && !synchronisation" class="rounded-xl border border-gray-200 bg-white p-12 text-center">
-                    <i class="fa-regular fa-bell text-4xl text-gray-300"></i>
-                    <p class="mt-4 font-semibold">Aucune alerte active</p>
-                    <p class="mt-1 text-sm text-gray-500">Tout est à jour pour le moment.</p>
-                </div>
+                    </li>
+                </ul>
+            </section>
+            <div v-else-if="!synchronisation" class="carte flex flex-col items-center px-6 py-16 text-center">
+                <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100"><i class="fa-regular fa-bell text-xl"></i></span>
+                <p class="mt-4 font-semibold text-gray-900">Aucune alerte active</p>
+                <p class="mt-1 text-sm text-gray-500">Tout est à jour pour le moment.</p>
             </div>
             <Pagination v-model="page" :total="alertes.length" :par-page="20" />
         </Chargement>

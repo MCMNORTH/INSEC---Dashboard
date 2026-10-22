@@ -101,7 +101,7 @@ function annulerVersement(v: Versement) {
     if (motif?.trim()) void executer('annulerVersement', { id: v.id, motif });
 }
 const couleurStatut = (statut: string) =>
-    statut === 'Validée' ? 'text-green-400' : statut === 'En attente' ? 'text-amber-400' : 'text-red-300 line-through';
+    statut === 'Validée' ? 'text-gray-900' : statut === 'En attente' ? 'text-amber-700' : 'text-gray-400 line-through';
 
 // Relances de paiement (envoi manuel, une par inscription et par jour au maximum).
 const retardsAnnee = computed(() => lignesEtudiants.value.filter(({ dossier }) => montantEnRetard(dossier) > 0).length);
@@ -239,316 +239,427 @@ const totauxFinanciers = computed(() => ({
 }));
 </script>
 
+
 <template>
-    <h1 class="mb-4 text-xl font-bold text-insec">Finances</h1>
-    <div class="mb-4 flex gap-2">
-        <button :class="['bouton', onglet === 'etudiants' ? 'bg-insec text-white' : 'border bg-white text-gray-600']" @click="onglet = 'etudiants'">Étudiants</button>
-        <button :class="['bouton', onglet === 'synthese' ? 'bg-insec text-white' : 'border bg-white text-gray-600']" @click="onglet = 'synthese'">Synthèse annuelle</button>
-    </div>
+    <header class="en-tete-page">
+        <div>
+            <p class="surtitre">Gestion</p>
+            <h1 class="titre-page mt-1.5">Finances</h1>
+            <p class="sous-titre">Versements, échéances, relances et synthèse annuelle des frais facturés et encaissés, en MRU.</p>
+        </div>
+        <div class="inline-flex rounded-xl bg-gray-100 p-1" role="tablist" aria-label="Vues des finances">
+            <button
+                type="button"
+                role="tab"
+                :aria-selected="onglet === 'etudiants'"
+                :class="['inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition', onglet === 'etudiants' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800']"
+                @click="onglet = 'etudiants'"
+            ><i class="fa-solid fa-user-graduate text-xs"></i>Étudiants</button>
+            <button
+                type="button"
+                role="tab"
+                :aria-selected="onglet === 'synthese'"
+                :class="['inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition', onglet === 'synthese' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800']"
+                @click="onglet = 'synthese'"
+            ><i class="fa-solid fa-chart-pie text-xs"></i>Synthèse annuelle</button>
+        </div>
+    </header>
 
     <Chargement :chargement="chargement" :erreur="erreur">
-        <div v-if="onglet === 'etudiants'" class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div class="overflow-hidden rounded-xl bg-white shadow lg:col-span-2">
-                <div class="grid gap-3 p-3 sm:grid-cols-2">
+        <div v-if="onglet === 'etudiants'" class="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+            <section class="carte overflow-hidden lg:col-span-2">
+                <div class="grid gap-3 border-b border-gray-100 p-4 sm:grid-cols-2 sm:p-5">
                     <label class="etiquette">Année scolaire
-                        <select v-model="anneeEtudiants" class="champ mt-1"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
+                        <select v-model="anneeEtudiants" class="champ mt-1.5"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
                     </label>
                     <label class="etiquette">Rechercher un étudiant
-                        <input v-model="recherche" type="search" placeholder="Nom ou prénom…" class="champ mt-1" aria-label="Rechercher" />
+                        <span class="relative mt-1.5 block">
+                            <i class="fa-solid fa-magnifying-glass pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-[13px] text-gray-400"></i>
+                            <input v-model="recherche" type="search" placeholder="Nom ou prénom…" class="champ pl-10" aria-label="Rechercher" />
+                        </span>
                     </label>
                 </div>
-                <div v-if="retardsAnnee" class="mx-3 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
-                    <span><i class="fa-solid fa-triangle-exclamation mr-1"></i>{{ retardsAnnee }} étudiant(s) en retard de paiement sur cette année.</span>
-                    <button type="button" class="bouton-secondaire whitespace-nowrap" :disabled="envoi" @click="relancerTous">Relancer tous les retards</button>
+                <div v-if="retardsAnnee" class="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-red-200/80 bg-linear-to-r from-red-50 to-white p-3 sm:mx-5">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"><i class="fa-solid fa-triangle-exclamation text-sm"></i></span>
+                    <span class="min-w-0 flex-1 text-sm text-red-900"><strong class="font-semibold">{{ retardsAnnee }} étudiant(s)</strong> en retard de paiement sur cette année.</span>
+                    <button type="button" class="bouton-secondaire" :disabled="envoi" @click="relancerTous"><i class="fa-regular fa-paper-plane text-xs"></i>Relancer tous les retards</button>
                 </div>
-                <div class="max-h-[70vh] overflow-y-auto">
+                <div class="mt-2 max-h-[70vh] overflow-auto">
                     <table class="tableau">
-                        <thead class="sticky top-0"><tr><th>Étudiant</th><th>Financeur</th><th>Restant étudiant</th><th>Statut</th></tr></thead>
+                        <thead class="sticky top-0 z-10"><tr><th>Étudiant</th><th>Financeur</th><th class="text-right">Restant étudiant</th><th>Statut</th></tr></thead>
                         <tbody>
                             <tr
                                 v-for="ligne in lignesEtudiants"
                                 :key="ligne.dossier.id"
-                                :class="['cursor-pointer hover:bg-gray-50', ligne.dossier.id === inscription?.id ? 'bg-blue-50' : '']"
+                                :class="['cursor-pointer', ligne.dossier.id === inscription?.id ? 'bg-insec-50/70 shadow-[inset_3px_0_0_var(--color-insec-600)]' : '']"
                                 @click="ouvrir(ligne.etudiant.id, ligne.dossier.id)"
                             >
-                                <td class="text-gray-900">{{ ligne.etudiant.nom }} {{ ligne.etudiant.prenom }}<span class="block text-xs text-gray-500">{{ formation(ligne.dossier.formationId)?.code }} · {{ ligne.dossier.ueIds.length }} UE</span></td>
+                                <td>
+                                    <span class="block font-semibold text-gray-900">{{ ligne.etudiant.nom }} {{ ligne.etudiant.prenom }}</span>
+                                    <span class="block text-xs text-gray-500">{{ formation(ligne.dossier.formationId)?.code }} · {{ ligne.dossier.ueIds.length }} UE</span>
+                                </td>
                                 <td><BadgeStatut :statut="ligne.dossier.financeur === 'bumex' ? 'Pris en charge par BUMEX' : 'À la charge de l’étudiant'" /></td>
-                                <td class="text-gray-700">{{ ligne.dossier.financeur === 'bumex' ? '—' : montant(soldeRestant(ligne.dossier)) }}</td>
+                                <td class="text-right whitespace-nowrap tabular-nums">
+                                    <template v-if="ligne.dossier.financeur === 'bumex'"><span class="text-gray-300">—</span></template>
+                                    <template v-else><span class="font-semibold text-gray-900">{{ montant(soldeRestant(ligne.dossier)) }}</span> <span class="text-[11px] font-medium text-gray-400">MRU</span></template>
+                                </td>
                                 <td>
                                     <BadgeStatut :statut="ligne.dossier.financeur === 'bumex' ? (ligne.dossier.statutBumex === 'reglee' ? 'BUMEX a réglé' : 'À régler par BUMEX') : statutPaiement(ligne.dossier)" />
                                 </td>
                             </tr>
-                            <tr v-if="!lignesEtudiants.length"><td colspan="4" class="p-6 text-center text-gray-400">Aucune inscription pour {{ annee(anneeEtudiants)?.libelle ?? anneeEtudiants }}.</td></tr>
+                            <tr v-if="!lignesEtudiants.length"><td colspan="4" class="py-12 text-center text-sm text-gray-400">Aucune inscription pour {{ annee(anneeEtudiants)?.libelle ?? anneeEtudiants }}.</td></tr>
                         </tbody>
                     </table>
                 </div>
-                <p class="p-3 text-xs text-gray-400">Cliquez sur un étudiant pour ouvrir son dossier.</p>
-            </div>
+                <p class="flex items-center gap-2 border-t border-gray-100 px-5 py-3 text-xs text-gray-400"><i class="fa-regular fa-hand-pointer"></i>Cliquez sur un étudiant pour ouvrir son dossier.</p>
+            </section>
 
-            <div v-if="selectionne" class="rounded-xl bg-insec p-5 text-white shadow">
-                <p class="text-xs font-bold tracking-wide text-amber-400 uppercase">Dossier — {{ selectionne.nom }} {{ selectionne.prenom }}</p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <button
-                        v-for="d in dossiers"
-                        :key="d.id"
-                        :class="['cursor-pointer rounded px-2 py-1 text-xs', inscription?.id === d.id ? 'bg-amber-500 text-white' : 'bg-white/10 text-blue-100']"
-                        @click="ouvrir(selectionne.id, d.id)"
-                    >{{ formation(d.formationId)?.code }} {{ annee(d.anneeId)?.libelle }}</button>
+            <aside v-if="selectionne" class="carte overflow-hidden lg:sticky lg:top-24">
+                <div class="relative overflow-hidden bg-insec-950 px-5 pt-5 pb-4 text-white">
+                    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_80%_at_0%_0%,rgb(80_101_179/0.5),transparent_60%)]"></div>
+                    <p class="relative text-[10.5px] font-semibold tracking-[0.16em] text-insec-300 uppercase">Dossier financier</p>
+                    <p class="relative mt-1 font-titre text-lg font-bold">{{ selectionne.nom }} {{ selectionne.prenom }}</p>
+                    <div class="relative mt-3 flex flex-wrap gap-1.5">
+                        <button
+                            v-for="d in dossiers"
+                            :key="d.id"
+                            type="button"
+                            :class="['cursor-pointer rounded-lg px-2.5 py-1 text-xs font-semibold transition', inscription?.id === d.id ? 'bg-white text-insec-900' : 'bg-white/10 text-insec-100 hover:bg-white/20']"
+                            @click="ouvrir(selectionne.id, d.id)"
+                        >{{ formation(d.formationId)?.code }} {{ annee(d.anneeId)?.libelle }}</button>
+                    </div>
                 </div>
 
-                <template v-if="inscription">
-                    <p class="mt-4 rounded-lg border border-white/20 bg-white/10 p-3 text-sm" :class="inscription.financeur === 'bumex' ? 'text-green-100' : 'text-blue-100'">
-                        <template v-if="inscription.financeur === 'bumex'">Cette inscription est prise en charge par BUMEX. Montant couvert : {{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU · {{ inscription.statutBumex === 'reglee' ? 'intégralement réglé par BUMEX' : 'paiement de BUMEX à confirmer' }}.</template>
-                        <template v-else>Les frais de cette inscription sont à la charge de l’étudiant.</template>
+                <div v-if="inscription" class="p-5">
+                    <p :class="['flex items-start gap-2.5 rounded-xl border p-3 text-sm', inscription.financeur === 'bumex' ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900' : 'border-insec-100 bg-insec-50/60 text-insec-900']">
+                        <i :class="['fa-solid mt-0.5 text-xs', inscription.financeur === 'bumex' ? 'fa-building-columns text-emerald-600' : 'fa-user text-insec-500']"></i>
+                        <span>
+                            <template v-if="inscription.financeur === 'bumex'">Cette inscription est prise en charge par BUMEX. Montant couvert : {{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU · {{ inscription.statutBumex === 'reglee' ? 'intégralement réglé par BUMEX' : 'paiement de BUMEX à confirmer' }}.</template>
+                            <template v-else>Les frais de cette inscription sont à la charge de l’étudiant.</template>
+                        </span>
                     </p>
+
                     <template v-if="inscription.financeur !== 'bumex'">
-                    <p class="mt-4 text-xs text-blue-200">Montant brut</p>
-                    <p class="text-2xl font-bold">{{ montant(inscription.montantDu) }} MRU</p>
-                    <p class="mt-3 text-xs text-blue-200">Remise · Montant net</p>
-                    <p class="text-sm"><span class="text-amber-300">- {{ montant(inscription.montantRemise) }}</span> · <strong>{{ montant(montantNet(inscription)) }} MRU</strong></p>
-                    <p class="mt-4 text-xs text-blue-200">Total versé</p>
-                    <p class="text-lg font-bold text-green-400">{{ montant(inscription.totalVerse) }} MRU</p>
-                    <p class="mt-4 text-xs text-blue-200">Solde restant (calculé)</p>
-                    <p class="text-lg font-bold text-amber-400">{{ montant(soldeRestant(inscription)) }} MRU</p>
-                    <button
-                        v-if="aRole('admin', 'super_admin')"
-                        class="mt-3 w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20"
-                        @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))"
-                    >Télécharger la facture PDF</button>
-                    <button
-                        v-if="aRole('admin', 'super_admin')"
-                        type="button"
-                        class="mt-2 w-full rounded-lg border border-white/30 px-3 py-2 text-sm text-blue-50 hover:bg-white/10"
-                        :disabled="envoi || !emailEtudiantValide"
-                        @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email ?? '')"
-                    >Envoyer la facture par e-mail</button>
-                    <p v-if="emailEtudiantValide" role="status" class="mt-2 text-xs text-blue-100">Destinataire : {{ selectionne.email }}</p>
-                    <p v-else class="mt-2 rounded bg-amber-400/15 p-2 text-xs text-amber-100">
-                        Adresse e-mail absente ou invalide. <RouterLink :to="`/etudiants/${selectionne.id}/modifier`" class="underline">Corriger la fiche étudiant</RouterLink> avant l’envoi.
-                    </p>
-                    <div v-if="montantEnRetard(inscription) > 0" class="mt-2 rounded bg-red-500/20 p-2 text-xs text-red-200">
-                        <p>En retard : {{ montant(montantEnRetard(inscription)) }} MRU</p>
-                        <button
-                            type="button"
-                            class="mt-2 w-full cursor-pointer rounded border border-red-200/40 px-2 py-1 font-semibold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
-                            @click="relancer"
-                        >{{ inscription.derniereRelanceLe === aujourdhui() ? 'Déjà relancé aujourd’hui' : 'Relancer par e-mail' }}</button>
-                    </div>
-                    <p v-if="inscription.derniereRelanceLe" class="mt-1 text-[10px] text-blue-200">Dernière relance : {{ date(inscription.derniereRelanceLe) }}<template v-if="inscription.nbRelances"> · {{ inscription.nbRelances }} relance(s) au total</template></p>
+                        <dl class="mt-4 grid grid-cols-2 gap-3">
+                            <div class="col-span-2 rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
+                                <dt class="text-xs text-gray-500">Montant brut</dt>
+                                <dd class="mt-0.5 font-titre text-2xl font-bold text-gray-900 tabular-nums">{{ montant(inscription.montantDu) }} <span class="text-sm font-semibold text-gray-400">MRU</span></dd>
+                                <dd class="mt-1 text-xs text-gray-500">Remise <span class="font-semibold text-amber-700 tabular-nums">- {{ montant(inscription.montantRemise) }}</span> · net <strong class="text-gray-900 tabular-nums">{{ montant(montantNet(inscription)) }} MRU</strong></dd>
+                            </div>
+                            <div class="rounded-xl bg-emerald-50/70 p-3 ring-1 ring-emerald-100">
+                                <dt class="text-xs text-emerald-700">Total versé</dt>
+                                <dd class="mt-0.5 text-lg font-bold text-emerald-700 tabular-nums">{{ montant(inscription.totalVerse) }} <span class="text-[11px] font-semibold">MRU</span></dd>
+                            </div>
+                            <div class="rounded-xl bg-amber-50/70 p-3 ring-1 ring-amber-100">
+                                <dt class="text-xs text-amber-800">Solde restant (calculé)</dt>
+                                <dd class="mt-0.5 text-lg font-bold text-amber-800 tabular-nums">{{ montant(soldeRestant(inscription)) }} <span class="text-[11px] font-semibold">MRU</span></dd>
+                            </div>
+                        </dl>
 
-                    <form class="mt-4 space-y-2 border-t border-blue-400/30 pt-4" @submit.prevent="majSituation">
-                        <div class="flex gap-2">
-                            <label class="flex-1 text-xs text-blue-200">Montant brut <input v-model.number="situation.montantDu" type="number" min="0" class="mt-1 w-full rounded-lg text-xs text-gray-900" required /></label>
-                            <label class="flex-1 text-xs text-blue-200">Remise <input v-model.number="situation.montantRemise" type="number" min="0" class="mt-1 w-full rounded-lg text-xs text-gray-900" required /></label>
+                        <div v-if="aRole('admin', 'super_admin')" class="mt-4 grid grid-cols-1 gap-2">
+                            <button type="button" class="bouton-principal w-full" @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))">
+                                <i class="fa-solid fa-file-pdf text-xs"></i>Télécharger la facture PDF
+                            </button>
+                            <button
+                                type="button"
+                                class="bouton-secondaire w-full"
+                                :disabled="envoi || !emailEtudiantValide"
+                                @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email ?? '')"
+                            ><i class="fa-regular fa-envelope text-xs"></i>Envoyer la facture par e-mail</button>
                         </div>
-                        <p v-if="erreurs.montantRemise" class="text-xs text-red-200">{{ erreurs.montantRemise }}</p>
-                        <textarea v-model="situation.noteFinanciere" placeholder="Note financière interne" class="w-full rounded-lg text-xs text-gray-900" maxlength="2000"></textarea>
-                        <button class="bouton w-full bg-amber-500 py-2 text-xs text-white" :disabled="envoi">Mettre à jour</button>
-                    </form>
+                        <p v-if="emailEtudiantValide" role="status" class="mt-2 text-xs text-gray-500"><i class="fa-regular fa-envelope mr-1"></i>Destinataire : {{ selectionne.email }}</p>
+                        <p v-else class="mt-2 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 text-xs text-amber-900">
+                            Adresse e-mail absente ou invalide. <RouterLink :to="`/etudiants/${selectionne.id}/modifier`" class="lien">Corriger la fiche étudiant</RouterLink> avant l’envoi.
+                        </p>
+                        <div v-if="montantEnRetard(inscription) > 0" class="mt-3 rounded-xl border border-red-200 bg-red-50/70 p-3 text-sm text-red-800">
+                            <p class="flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-xs text-red-500"></i>En retard : <strong class="tabular-nums">{{ montant(montantEnRetard(inscription)) }} MRU</strong></p>
+                            <button
+                                type="button"
+                                class="bouton-danger mt-2 w-full"
+                                :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
+                                @click="relancer"
+                            >{{ inscription.derniereRelanceLe === aujourdhui() ? 'Déjà relancé aujourd’hui' : 'Relancer par e-mail' }}</button>
+                        </div>
+                        <p v-if="inscription.derniereRelanceLe" class="mt-1.5 text-[11px] text-gray-500">Dernière relance : {{ date(inscription.derniereRelanceLe) }}<template v-if="inscription.nbRelances"> · {{ inscription.nbRelances }} relance(s) au total</template></p>
 
-                    <div class="mt-4 border-t border-blue-400/30 pt-4">
-                        <p class="mb-2 text-xs text-blue-200">Échéancier</p>
-                        <template v-for="e in inscription.echeances" :key="e.id">
-                            <form v-if="echeanceEnCours === e.id" class="mb-1 grid grid-cols-2 gap-1 rounded bg-white/10 p-2" @submit.prevent="enregistrerEcheance">
-                                <input v-model="echeanceModifiee.libelle" class="rounded text-xs text-gray-900" required maxlength="100" aria-label="Libellé" />
-                                <input v-model.number="echeanceModifiee.montant" type="number" min="1" class="rounded text-xs text-gray-900" required aria-label="Montant" />
-                                <input v-model="echeanceModifiee.dateEcheance" type="date" class="rounded text-xs text-gray-900" required aria-label="Date d’échéance" />
-                                <span class="flex gap-1">
-                                    <button class="flex-1 cursor-pointer rounded bg-amber-500 text-xs" :disabled="envoi">Enregistrer</button>
-                                    <button type="button" class="cursor-pointer rounded bg-white/10 px-2 text-xs" @click="echeanceEnCours = null">Annuler</button>
-                                </span>
+                        <form class="mt-5 space-y-3 border-t border-gray-100 pt-5" @submit.prevent="majSituation">
+                            <h3 class="titre-section text-sm">Situation financière</h3>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="etiquette">Montant brut <input v-model.number="situation.montantDu" type="number" min="0" class="champ mt-1.5" required /></label>
+                                <label class="etiquette">Remise <input v-model.number="situation.montantRemise" type="number" min="0" class="champ mt-1.5" required /></label>
+                            </div>
+                            <p v-if="erreurs.montantRemise" class="text-xs text-red-600">{{ erreurs.montantRemise }}</p>
+                            <textarea v-model="situation.noteFinanciere" placeholder="Note financière interne" class="champ" rows="2" maxlength="2000"></textarea>
+                            <button class="bouton-secondaire w-full" :disabled="envoi">Mettre à jour</button>
+                        </form>
+
+                        <div class="mt-5 border-t border-gray-100 pt-5">
+                            <h3 class="titre-section mb-3 text-sm">Échéancier</h3>
+                            <ul class="space-y-1.5">
+                                <li v-for="e in inscription.echeances" :key="e.id">
+                                    <form v-if="echeanceEnCours === e.id" class="grid grid-cols-2 gap-2 rounded-xl bg-insec-50/60 p-2.5 ring-1 ring-insec-100" @submit.prevent="enregistrerEcheance">
+                                        <input v-model="echeanceModifiee.libelle" class="champ px-2.5 py-1.5 text-xs" required maxlength="100" aria-label="Libellé" />
+                                        <input v-model.number="echeanceModifiee.montant" type="number" min="1" class="champ px-2.5 py-1.5 text-xs" required aria-label="Montant" />
+                                        <input v-model="echeanceModifiee.dateEcheance" type="date" class="champ px-2.5 py-1.5 text-xs" required aria-label="Date d’échéance" />
+                                        <span class="flex gap-1.5">
+                                            <button class="bouton-principal min-h-0 flex-1 px-2 py-1.5 text-xs" :disabled="envoi">Enregistrer</button>
+                                            <button type="button" class="bouton-fantome min-h-0 px-2 py-1.5 text-xs" @click="echeanceEnCours = null">Annuler</button>
+                                        </span>
+                                    </form>
+                                    <div v-else class="group flex items-center gap-2 rounded-xl px-3 py-2 text-xs ring-1 ring-gray-100 transition hover:bg-gray-50">
+                                        <span class="min-w-0 flex-1"><span class="font-medium text-gray-800">{{ e.libelle }}</span> <span class="text-gray-500">· {{ date(e.dateEcheance) }}</span></span>
+                                        <strong class="text-gray-900 tabular-nums">{{ montant(e.montant) }}</strong>
+                                        <button type="button" class="bouton-icone h-7 w-7" title="Modifier" :disabled="envoi" @click="editerEcheance(e)"><i class="fa-solid fa-pen text-[11px]"></i></button>
+                                        <button type="button" class="bouton-icone h-7 w-7 hover:bg-red-50 hover:text-red-600" title="Supprimer" :disabled="envoi" @click="supprimerEcheance(e)"><i class="fa-solid fa-trash text-[11px]"></i></button>
+                                    </div>
+                                </li>
+                            </ul>
+                            <p v-if="!inscription.echeances?.length" class="text-xs text-gray-400">Aucune échéance.</p>
+                            <form class="mt-3 grid grid-cols-2 gap-2" @submit.prevent="ajouterEcheance">
+                                <input v-model="echeance.libelle" placeholder="Ex. 1re tranche" class="champ px-2.5 py-2 text-xs" required maxlength="100" />
+                                <input v-model.number="echeance.montant" type="number" min="1" placeholder="Montant" class="champ px-2.5 py-2 text-xs" required />
+                                <input v-model="echeance.dateEcheance" type="date" class="champ px-2.5 py-2 text-xs" required aria-label="Date d’échéance" />
+                                <button class="bouton-secondaire min-h-0 py-2 text-xs" :disabled="envoi"><i class="fa-solid fa-plus text-[10px]"></i>Échéance</button>
                             </form>
-                            <div v-else class="mb-1 flex items-center justify-between gap-2 rounded bg-white/10 px-2 py-1 text-xs">
-                                <span class="min-w-0 flex-1">{{ e.libelle }} · {{ date(e.dateEcheance) }}</span><strong>{{ montant(e.montant) }}</strong>
-                                <button type="button" class="cursor-pointer text-blue-200 underline" :disabled="envoi" @click="editerEcheance(e)">Modifier</button>
-                                <button type="button" class="cursor-pointer text-red-200 underline" :disabled="envoi" @click="supprimerEcheance(e)">Supprimer</button>
-                            </div>
-                        </template>
-                        <p v-if="!inscription.echeances?.length" class="text-xs text-blue-200">Aucune échéance.</p>
-                        <form class="mt-2 grid grid-cols-2 gap-2" @submit.prevent="ajouterEcheance">
-                            <input v-model="echeance.libelle" placeholder="Ex. 1re tranche" class="rounded text-xs text-gray-900" required maxlength="100" />
-                            <input v-model.number="echeance.montant" type="number" min="1" placeholder="Montant" class="rounded text-xs text-gray-900" required />
-                            <input v-model="echeance.dateEcheance" type="date" class="rounded text-xs text-gray-900" required aria-label="Date d’échéance" />
-                            <button class="cursor-pointer rounded bg-white/10 text-xs" :disabled="envoi">+ Échéance</button>
-                        </form>
-                        <form class="mt-3 space-y-2 rounded-lg bg-white/5 p-2" @submit.prevent="genererEcheancier">
-                            <p class="text-xs text-blue-200">Générer l’échéancier sur le reste à payer ({{ montant(soldeRestant(inscription)) }} MRU)</p>
-                            <div class="grid grid-cols-3 gap-2">
-                                <label class="text-[10px] text-blue-200">Tranches<input v-model.number="echeancier.nombre" type="number" min="2" max="12" class="mt-1 w-full rounded text-xs text-gray-900" required /></label>
-                                <label class="text-[10px] text-blue-200">1re échéance<input v-model="echeancier.premiereDate" type="date" class="mt-1 w-full rounded text-xs text-gray-900" required /></label>
-                                <label class="text-[10px] text-blue-200">Tous les (mois)<input v-model.number="echeancier.intervalleMois" type="number" min="1" max="6" class="mt-1 w-full rounded text-xs text-gray-900" required /></label>
-                            </div>
-                            <label v-if="inscription.echeances?.length" class="flex items-center gap-2 text-[10px] text-blue-200"><input v-model="echeancier.remplacer" type="checkbox" /> Remplacer l’échéancier existant</label>
-                            <p v-if="erreurs.nombre" class="text-xs text-red-200">{{ erreurs.nombre }}</p>
-                            <button class="w-full cursor-pointer rounded bg-white/10 py-1 text-xs" :disabled="envoi || soldeRestant(inscription) <= 0">Générer l’échéancier</button>
-                        </form>
-                        <p v-if="erreurs.montant" class="mt-1 text-xs text-red-200">{{ erreurs.montant }}</p>
-                    </div>
-
-                    <div class="mt-4 border-t border-blue-400/30 pt-4">
-                        <p class="mb-2 text-xs text-blue-200">Versements</p>
-                        <div class="mb-4 space-y-2">
-                            <div v-for="v in versements" :key="v.id">
-                                <div class="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2 text-xs">
-                                    <span>{{ date(v.dateVersement) }}</span>
-                                    <span>{{ montant(v.montant) }}</span>
-                                    <span :class="couleurStatut(v.statut)">{{ v.statut }}</span>
+                            <form class="mt-3 space-y-2.5 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-3" @submit.prevent="genererEcheancier">
+                                <p class="text-xs font-medium text-gray-600">Générer l’échéancier sur le reste à payer ({{ montant(soldeRestant(inscription)) }} MRU)</p>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <label class="text-[11px] font-medium text-gray-500">Tranches<input v-model.number="echeancier.nombre" type="number" min="2" max="12" class="champ mt-1 px-2.5 py-1.5 text-xs" required /></label>
+                                    <label class="text-[11px] font-medium text-gray-500">1re échéance<input v-model="echeancier.premiereDate" type="date" class="champ mt-1 px-2 py-1.5 text-xs" required /></label>
+                                    <label class="text-[11px] font-medium text-gray-500">Tous les (mois)<input v-model.number="echeancier.intervalleMois" type="number" min="1" max="6" class="champ mt-1 px-2.5 py-1.5 text-xs" required /></label>
                                 </div>
-                                <p v-if="v.motifAnnulation || v.motifRejet" class="px-2 text-[10px] text-red-200">Motif : {{ v.motifAnnulation || v.motifRejet }}</p>
-                                <p class="px-2 text-[10px]">
-                                    <template v-if="v.statut === 'En attente'">
-                                        <button type="button" class="cursor-pointer text-green-300 underline" :disabled="envoi" @click="traiterVersement(v, 'Validée')">Valider</button>
-                                        <button type="button" class="ml-2 cursor-pointer text-red-200 underline" :disabled="envoi" @click="traiterVersement(v, 'Rejetée')">Rejeter</button>
-                                    </template>
-                                    <button v-else-if="v.statut === 'Validée'" type="button" class="cursor-pointer text-red-200 underline" :disabled="envoi" @click="annulerVersement(v)">Annuler ce versement</button>
-                                </p>
-                                <p class="px-2 text-[10px] text-blue-200">
-                                    {{ v.numeroRecu }} · {{ v.modePaiement }}<template v-if="v.reference"> · {{ v.reference }}</template>
-                                    <button
-                                        v-if="aRole('admin', 'super_admin')"
-                                        class="ml-1 cursor-pointer underline disabled:cursor-not-allowed disabled:opacity-50"
-                                        :disabled="envoi || v.statut !== 'Validée'"
-                                        :title="v.statut === 'Validée' ? 'Télécharger le reçu PDF' : 'Disponible après validation du versement'"
-                                        @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))"
-                                    >reçu PDF</button>
-                                    <button
-                                        v-if="aRole('admin', 'super_admin')"
-                                        type="button"
-                                        class="ml-2 cursor-pointer underline"
-                                        :disabled="envoi || v.statut !== 'Validée' || !emailEtudiantValide"
-                                        title="Envoyer le reçu par e-mail (versement validé)"
-                                        @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')"
-                                    >Envoyer</button>
-                                </p>
-                            </div>
-                            <p v-if="!versements.length" class="text-xs text-blue-200">Aucun versement.</p>
+                                <label v-if="inscription.echeances?.length" class="flex items-center gap-2 text-xs text-gray-600"><input v-model="echeancier.remplacer" type="checkbox" /> Remplacer l’échéancier existant</label>
+                                <p v-if="erreurs.nombre" class="text-xs text-red-600">{{ erreurs.nombre }}</p>
+                                <button class="bouton-secondaire min-h-0 w-full py-2 text-xs" :disabled="envoi || soldeRestant(inscription) <= 0"><i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>Générer l’échéancier</button>
+                            </form>
+                            <p v-if="erreurs.montant" class="mt-1 text-xs text-red-600">{{ erreurs.montant }}</p>
                         </div>
-                        <form class="space-y-2" @submit.prevent="confirmerVersement">
-                            <p class="text-xs text-blue-200">Ajouter un versement</p>
-                            <div class="flex gap-2">
-                                <input v-model.number="versement.montant" type="number" min="1" placeholder="Montant" class="w-1/2 rounded-lg text-xs text-gray-900" required />
-                                <input v-model="versement.dateVersement" type="date" class="w-1/2 rounded-lg text-xs text-gray-900" required aria-label="Date du versement" />
-                            </div>
-                            <select v-model="versement.statut" class="w-full rounded-lg text-xs text-gray-900" aria-label="Statut"><option>Validée</option><option>En attente</option></select>
-                            <div class="flex gap-2">
-                                <select v-model="versement.modePaiement" class="w-1/2 rounded-lg text-xs text-gray-900" aria-label="Mode de paiement"><option v-for="m in MODES_PAIEMENT" :key="m">{{ m }}</option></select>
-                                <input v-model="versement.reference" placeholder="Référence (facultatif)" class="w-1/2 rounded-lg text-xs text-gray-900" maxlength="100" />
-                            </div>
-                            <textarea v-model="versement.note" placeholder="Note (facultatif)" class="w-full rounded-lg text-xs text-gray-900" maxlength="1000"></textarea>
-                            <button class="bouton w-full bg-amber-500 py-2 text-xs text-white hover:bg-amber-600" :disabled="envoi">+ Ajouter le versement</button>
-                        </form>
-                    </div>
+
+                        <div class="mt-5 border-t border-gray-100 pt-5">
+                            <h3 class="titre-section mb-3 text-sm">Versements</h3>
+                            <ul class="mb-4 space-y-2">
+                                <li v-for="v in versements" :key="v.id" class="rounded-xl p-3 ring-1 ring-gray-100">
+                                    <div class="flex items-center justify-between gap-2 text-xs">
+                                        <span class="text-gray-500">{{ date(v.dateVersement) }}</span>
+                                        <strong :class="['tabular-nums', couleurStatut(v.statut)]">{{ montant(v.montant) }} MRU</strong>
+                                        <BadgeStatut :statut="v.statut" />
+                                    </div>
+                                    <p v-if="v.motifAnnulation || v.motifRejet" class="mt-1.5 text-[11px] text-red-600">Motif : {{ v.motifAnnulation || v.motifRejet }}</p>
+                                    <p class="mt-1.5 text-[11px] text-gray-500">
+                                        {{ v.numeroRecu }} · {{ v.modePaiement }}<template v-if="v.reference"> · {{ v.reference }}</template>
+                                    </p>
+                                    <p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                                        <template v-if="v.statut === 'En attente'">
+                                            <button type="button" class="cursor-pointer font-semibold text-emerald-700 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Validée')">Valider</button>
+                                            <button type="button" class="cursor-pointer font-semibold text-red-600 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Rejetée')">Rejeter</button>
+                                        </template>
+                                        <button v-else-if="v.statut === 'Validée'" type="button" class="cursor-pointer font-medium text-red-600 hover:underline" :disabled="envoi" @click="annulerVersement(v)">Annuler ce versement</button>
+                                        <button
+                                            v-if="aRole('admin', 'super_admin')"
+                                            class="lien disabled:cursor-not-allowed disabled:opacity-50"
+                                            :disabled="envoi || v.statut !== 'Validée'"
+                                            :title="v.statut === 'Validée' ? 'Télécharger le reçu PDF' : 'Disponible après validation du versement'"
+                                            @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))"
+                                        >Reçu PDF</button>
+                                        <button
+                                            v-if="aRole('admin', 'super_admin')"
+                                            type="button"
+                                            class="lien disabled:cursor-not-allowed disabled:opacity-50"
+                                            :disabled="envoi || v.statut !== 'Validée' || !emailEtudiantValide"
+                                            title="Envoyer le reçu par e-mail (versement validé)"
+                                            @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')"
+                                        >Envoyer</button>
+                                    </p>
+                                </li>
+                                <li v-if="!versements.length" class="text-xs text-gray-400">Aucun versement.</li>
+                            </ul>
+                            <form class="space-y-2.5 rounded-xl bg-gray-50/70 p-3 ring-1 ring-gray-100" @submit.prevent="confirmerVersement">
+                                <p class="text-xs font-semibold text-gray-700">Ajouter un versement</p>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input v-model.number="versement.montant" type="number" min="1" placeholder="Montant" class="champ py-2 text-xs" required />
+                                    <input v-model="versement.dateVersement" type="date" class="champ py-2 text-xs" required aria-label="Date du versement" />
+                                </div>
+                                <select v-model="versement.statut" class="champ py-2 text-xs" aria-label="Statut"><option>Validée</option><option>En attente</option></select>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <select v-model="versement.modePaiement" class="champ py-2 text-xs" aria-label="Mode de paiement"><option v-for="m in MODES_PAIEMENT" :key="m">{{ m }}</option></select>
+                                    <input v-model="versement.reference" placeholder="Référence (facultatif)" class="champ py-2 text-xs" maxlength="100" />
+                                </div>
+                                <textarea v-model="versement.note" placeholder="Note (facultatif)" class="champ py-2 text-xs" rows="2" maxlength="1000"></textarea>
+                                <button class="bouton-action w-full" :disabled="envoi"><i class="fa-solid fa-plus text-xs"></i>Ajouter le versement</button>
+                            </form>
+                        </div>
                     </template>
-                    <div v-else class="mt-4 rounded-lg bg-green-900/30 p-3 text-sm text-green-100">
-                        Aucun versement étudiant ni reçu étudiant ne doit être saisi pour cette inscription. Le règlement est suivi séparément au titre de BUMEX.
+                    <div v-else class="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-sm text-emerald-900">
+                        <i class="fa-solid fa-circle-info mt-0.5 text-xs text-emerald-600"></i>
+                        <span>Aucun versement étudiant ni reçu étudiant ne doit être saisi pour cette inscription. Le règlement est suivi séparément au titre de BUMEX.</span>
                     </div>
-                </template>
-                <p v-else class="mt-4 text-sm text-blue-200">
+                </div>
+                <p v-else class="p-5 text-sm text-gray-500">
                     Cet étudiant n’a pas encore d’inscription.
-                    <RouterLink v-if="aRole('admin', 'super_admin')" :to="`/etudiants/${selectionne.id}/inscriptions/nouvelle`" class="text-amber-400 underline">Créer une inscription</RouterLink>
+                    <RouterLink v-if="aRole('admin', 'super_admin')" :to="`/etudiants/${selectionne.id}/inscriptions/nouvelle`" class="lien">Créer une inscription</RouterLink>
                 </p>
-            </div>
+            </aside>
+            <aside v-else class="carte hidden flex-col items-center px-6 py-14 text-center lg:flex">
+                <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-insec-50 text-insec-500 ring-1 ring-insec-100"><i class="fa-solid fa-wallet"></i></span>
+                <p class="mt-3 font-semibold text-gray-900">Aucun dossier ouvert</p>
+                <p class="mt-1 max-w-xs text-sm text-gray-500">Choisissez un étudiant dans la liste pour voir ses versements et son échéancier.</p>
+            </aside>
         </div>
 
         <div v-else>
-            <label class="mb-4 flex items-center gap-3 text-sm text-gray-600">Année scolaire :
-                <select v-model="anneeSynthese" class="champ w-auto"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
-            </label>
+            <div class="carte mb-6 flex flex-wrap items-center gap-3 p-3">
+                <label class="flex items-center gap-2 pl-2 text-sm font-medium text-gray-600">
+                    <i class="fa-regular fa-calendar text-insec-500"></i>Année scolaire
+                    <select v-model="anneeSynthese" class="champ w-auto"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
+                </label>
+            </div>
 
-            <section class="mb-4 rounded-xl border border-blue-100 bg-white p-4 shadow-sm" aria-labelledby="taux-euro-mru">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <h2 id="taux-euro-mru" class="font-semibold text-insec">Taux de conversion EUR / MRU</h2>
-                        <p class="mt-1 text-sm text-gray-600">Saisissez le taux réellement appliqué par votre banque ou votre opération de change. Le taux est commun aux années; les montants affichés sont recalculés avec le taux enregistré.</p>
-                        <p v-if="dateTauxFormatee" class="mt-1 text-xs text-gray-500">Dernière mise à jour : {{ dateTauxFormatee }} · saisie manuelle</p>
-                        <p v-else-if="!chargementTaux" class="mt-1 text-xs text-amber-800">Aucun taux n’est encore enregistré. Les équivalents en MRU et les marges restent masqués jusqu’à sa saisie.</p>
-                        <p v-if="erreurTaux" role="alert" class="mt-1 text-xs text-red-700">{{ erreurTaux }}</p>
+            <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Chiffres clés de l’année">
+                <article class="carte p-5">
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="text-[13px] font-medium text-gray-500">Étudiants inscrits · {{ carte?.libelle ?? anneeSynthese }}</p>
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-800 text-white shadow-sm"><i class="fa-solid fa-users text-[13px]"></i></span>
                     </div>
-                    <form v-if="tauxAdmin" class="flex flex-wrap items-end gap-2" @submit.prevent="enregistrerTaux">
-                        <label class="etiquette">1 EUR =
-                            <div class="mt-1 flex items-center gap-2">
-                                <input v-model.number="tauxSaisi" class="champ w-36" type="number" min="1" max="200" step="0.01" required aria-label="Taux MRU par euro" />
-                                <span class="text-sm font-semibold text-insec">MRU</span>
-                            </div>
-                        </label>
-                        <button class="bouton bg-insec text-white" :disabled="envoi || chargementTaux || tauxSaisi === null">Enregistrer le taux</button>
-                    </form>
-                    <p v-else-if="tauxEuroMru !== null" class="rounded-lg bg-blue-50 px-4 py-3 text-lg font-bold text-insec">1 EUR = {{ nombreFormate(tauxEuroMru) }} MRU</p>
-                </div>
-                <p v-if="tauxEuroMru !== null" class="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-950">Taux enregistré : <strong>1 EUR = {{ nombreFormate(tauxEuroMru) }} MRU</strong>. Les conversions sont estimatives et ne comprennent pas les frais bancaires.</p>
+                    <p class="mt-3 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ carte?.etudiants ?? 0 }}</p>
+                    <p class="mt-2.5 text-xs text-gray-500">{{ totauxFinanciers.unites }} UE · {{ carte?.nbEtudiants ?? 0 }} à leur charge · {{ carte?.nbBumex ?? 0 }} BUMEX</p>
+                </article>
+                <article class="carte p-5">
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="text-[13px] font-medium text-gray-500">Facture estimée de l’INTEC</p>
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-sky-400 to-sky-600 text-white shadow-sm"><i class="fa-solid fa-euro-sign text-[13px]"></i></span>
+                    </div>
+                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ euros(totauxFinanciers.coutIntecEuro) }}</p>
+                    <p class="mt-2.5 text-xs text-gray-500">{{ totauxFinanciers.coutIntecMru === null ? 'Équivalent MRU à calculer après saisie du taux' : `≈ ${montant(totauxFinanciers.coutIntecMru)} MRU` }}</p>
+                </article>
+                <article class="carte p-5">
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="text-[13px] font-medium text-gray-500">Tarif prévu · étudiants payeurs</p>
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-slate-400 to-slate-600 text-white shadow-sm"><i class="fa-solid fa-receipt text-[13px]"></i></span>
+                    </div>
+                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ montant(totauxFinanciers.tarifEtudiantsMru) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></p>
+                    <p class="mt-2.5 text-xs text-gray-500">Recette externe théorique selon le nombre d’UE</p>
+                </article>
+                <article class="carte p-5">
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="text-[13px] font-medium text-gray-500">Financement BUMEX · interne</p>
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm"><i class="fa-solid fa-building-columns text-[13px]"></i></span>
+                    </div>
+                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ montant(totauxFinanciers.financementInterneBumex) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></p>
+                    <p class="mt-2.5 text-xs text-gray-500">Financement interne à l’INSEC, sans recette externe pour le groupe</p>
+                </article>
+                <article class="carte p-5">
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="text-[13px] font-medium text-gray-500">Marge des étudiants payeurs</p>
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-emerald-600 text-white shadow-sm"><i class="fa-solid fa-arrow-trend-up text-[13px]"></i></span>
+                    </div>
+                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-emerald-700 tabular-nums">
+                        <template v-if="totauxFinanciers.margeEtudiantsMru === null">—</template>
+                        <template v-else>{{ montant(totauxFinanciers.margeEtudiantsMru) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></template>
+                    </p>
+                    <p class="mt-2.5 text-xs text-gray-500">Estimation avant les autres charges de l’INSEC</p>
+                </article>
             </section>
 
-            <section class="mb-4 rounded-xl border border-blue-100 bg-blue-50/70 p-4 sm:p-5" aria-labelledby="tarification-ue">
-                <div class="mb-3">
-                    <h2 id="tarification-ue" class="font-semibold text-insec">Tarifs convenus par UE</h2>
-                    <p class="mt-1 text-sm text-gray-600">L’INSEC facture en MRU et règle l’INTEC en euros. Pour un étudiant payeur, la marge affichée est une estimation avant les autres charges de l’INSEC.</p>
-                </div>
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <article class="rounded-lg border border-white bg-white p-4">
-                        <h3 class="font-semibold text-insec">DGC</h3>
-                        <dl class="mt-3 space-y-2 text-sm">
-                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900">{{ TARIFS_UE.DGC.intecEuro }} € / UE</dd></div>
-                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Tarif en MRU</dt><dd class="font-semibold text-gray-900">{{ montant(TARIFS_UE.DGC.mru) }} MRU / UE</dd></div>
-                        </dl>
-                    </article>
-                    <article class="rounded-lg border border-white bg-white p-4">
-                        <h3 class="font-semibold text-insec">DSGC</h3>
-                        <dl class="mt-3 space-y-2 text-sm">
-                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900">{{ TARIFS_UE.DSGC.intecEuro }} € / UE</dd></div>
-                            <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-600">Tarif en MRU</dt><dd class="font-semibold text-gray-900">{{ montant(TARIFS_UE.DSGC.mru) }} MRU / UE</dd></div>
-                        </dl>
-                    </article>
-                </div>
-            </section>
+            <div class="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <section class="carte overflow-hidden" aria-labelledby="taux-euro-mru">
+                    <header class="panneau-entete">
+                        <div>
+                            <h2 id="taux-euro-mru" class="titre-section">Taux de conversion EUR / MRU</h2>
+                            <p v-if="dateTauxFormatee" class="mt-0.5 text-xs text-gray-500">Dernière mise à jour : {{ dateTauxFormatee }} · saisie manuelle</p>
+                        </div>
+                        <span v-if="tauxEuroMru !== null" class="pastille bg-insec-50 text-insec-700 ring-insec-600/15"><span class="h-1.5 w-1.5 rounded-full bg-insec-500"></span>1 EUR = {{ nombreFormate(tauxEuroMru) }} MRU</span>
+                    </header>
+                    <div class="p-5 sm:p-6">
+                        <p class="text-sm text-gray-600">Saisissez le taux réellement appliqué par votre banque ou votre opération de change. Le taux est commun aux années; les montants affichés sont recalculés avec le taux enregistré.</p>
+                        <p v-if="!dateTauxFormatee && !chargementTaux" class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900"><i class="fa-solid fa-circle-info mt-0.5 text-amber-500"></i>Aucun taux n’est encore enregistré. Les équivalents en MRU et les marges restent masqués jusqu’à sa saisie.</p>
+                        <p v-if="erreurTaux" role="alert" class="mt-3 text-xs text-red-700">{{ erreurTaux }}</p>
+                        <form v-if="tauxAdmin" class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="enregistrerTaux">
+                            <label class="etiquette">1 EUR =
+                                <span class="relative mt-1.5 block">
+                                    <input v-model.number="tauxSaisi" class="champ w-44 pr-14 tabular-nums" type="number" min="1" max="200" step="0.01" required aria-label="Taux MRU par euro" />
+                                    <span class="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-xs font-semibold text-gray-400">MRU</span>
+                                </span>
+                            </label>
+                            <button class="bouton-principal" :disabled="envoi || chargementTaux || tauxSaisi === null">Enregistrer le taux</button>
+                        </form>
+                        <p v-else-if="tauxEuroMru !== null" class="mt-4 font-titre text-xl font-bold text-gray-900">1 EUR = {{ nombreFormate(tauxEuroMru) }} MRU</p>
+                        <p v-if="tauxEuroMru !== null" class="mt-4 text-xs text-gray-500">Taux enregistré : <strong class="text-gray-700">1 EUR = {{ nombreFormate(tauxEuroMru) }} MRU</strong>. Les conversions sont estimatives et ne comprennent pas les frais bancaires.</p>
+                    </div>
+                </section>
+
+                <section class="carte overflow-hidden" aria-labelledby="tarification-ue">
+                    <header class="panneau-entete">
+                        <div>
+                            <h2 id="tarification-ue" class="titre-section">Tarifs convenus par UE</h2>
+                            <p class="mt-0.5 text-xs text-gray-500">L’INSEC facture en MRU et règle l’INTEC en euros. Pour un étudiant payeur, la marge affichée est une estimation avant les autres charges de l’INSEC.</p>
+                        </div>
+                    </header>
+                    <div class="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 sm:p-6">
+                        <article class="rounded-xl bg-gray-50/70 p-4 ring-1 ring-gray-100">
+                            <h3 class="flex items-center gap-2 font-semibold text-gray-900"><span class="pastille bg-insec-900 text-white ring-insec-900">DGC</span></h3>
+                            <dl class="mt-3 space-y-2 text-sm">
+                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ TARIFS_UE.DGC.intecEuro }} € / UE</dd></div>
+                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">Tarif en MRU</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ montant(TARIFS_UE.DGC.mru) }} MRU / UE</dd></div>
+                            </dl>
+                        </article>
+                        <article class="rounded-xl bg-gray-50/70 p-4 ring-1 ring-gray-100">
+                            <h3 class="flex items-center gap-2 font-semibold text-gray-900"><span class="pastille bg-insec-600 text-white ring-insec-600">DSGC</span></h3>
+                            <dl class="mt-3 space-y-2 text-sm">
+                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ TARIFS_UE.DSGC.intecEuro }} € / UE</dd></div>
+                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">Tarif en MRU</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ montant(TARIFS_UE.DSGC.mru) }} MRU / UE</dd></div>
+                            </dl>
+                        </article>
+                    </div>
+                </section>
+            </div>
 
             <DocumentsFinanciers v-if="anneeSynthese" :annee-id="anneeSynthese" :libelle-annee="carte?.libelle ?? anneeSynthese" />
 
-            <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <article class="carte p-4"><p class="text-xs text-gray-500">Étudiants inscrits · {{ carte?.libelle ?? anneeSynthese }}</p><p class="mt-1 text-2xl font-bold text-insec">{{ carte?.etudiants ?? 0 }}</p><p class="mt-1 text-xs text-gray-500">{{ totauxFinanciers.unites }} UE · {{ carte?.nbEtudiants ?? 0 }} à leur charge · {{ carte?.nbBumex ?? 0 }} BUMEX</p></article>
-                <article class="carte p-4"><p class="text-xs text-gray-500">Facture estimée de l’INTEC</p><p class="mt-1 text-lg font-bold text-insec">{{ euros(totauxFinanciers.coutIntecEuro) }}</p><p class="mt-1 text-xs text-gray-500">{{ totauxFinanciers.coutIntecMru === null ? 'Équivalent MRU à calculer après saisie du taux' : `≈ ${montant(totauxFinanciers.coutIntecMru)} MRU` }}</p></article>
-                <article class="carte p-4"><p class="text-xs text-gray-500">Tarif prévu · étudiants payeurs</p><p class="mt-1 text-lg font-bold text-insec">{{ montant(totauxFinanciers.tarifEtudiantsMru) }} MRU</p><p class="mt-1 text-xs text-gray-500">Recette externe théorique selon le nombre d’UE</p></article>
-                <article class="carte p-4"><p class="text-xs text-gray-500">Financement BUMEX · interne</p><p class="mt-1 text-lg font-bold text-amber-700">{{ montant(totauxFinanciers.financementInterneBumex) }} MRU</p><p class="mt-1 text-xs text-gray-500">Financement interne à l’INSEC, sans recette externe pour le groupe</p></article>
-                <article class="carte p-4"><p class="text-xs text-gray-500">Marge des étudiants payeurs</p><p class="mt-1 text-lg font-bold text-emerald-700">{{ totauxFinanciers.margeEtudiantsMru === null ? '—' : `${montant(totauxFinanciers.margeEtudiantsMru)} MRU` }}</p><p class="mt-1 text-xs text-gray-500">Estimation avant les autres charges de l’INSEC</p></article>
-            </div>
-
-            <p v-if="totauxFinanciers.diplomesAControler" class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{{ totauxFinanciers.diplomesAControler }} inscription(s) a(ont) un diplôme non reconnu dans le barème; leur coût n’est pas estimé.</p>
-            <section v-if="anneeSynthese === '2024-2025' && aRole('admin', 'super_admin')" class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <h2 class="font-semibold text-emerald-900">Règlement BUMEX — 2024–2025</h2>
-                <p class="mt-1 text-sm text-emerald-800">Les 11 inscriptions historiques, soit 41 UE et 656 000 MRU, ont été marquées réglées selon la confirmation de la direction. Cela représente un financement interne de l’INSEC; aucun versement étudiant ni reçu fictif n’est créé.</p>
+            <p v-if="totauxFinanciers.diplomesAControler" class="mb-4 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+                <i class="fa-solid fa-triangle-exclamation mt-0.5 text-amber-500"></i>
+                <span>{{ totauxFinanciers.diplomesAControler }} inscription(s) a(ont) un diplôme non reconnu dans le barème; leur coût n’est pas estimé.</span>
+            </p>
+            <section v-if="anneeSynthese === '2024-2025' && aRole('admin', 'super_admin')" class="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><i class="fa-solid fa-circle-check text-sm"></i></span>
+                <div>
+                    <h2 class="titre-section text-emerald-900">Règlement BUMEX — 2024–2025</h2>
+                    <p class="mt-1 text-sm text-emerald-800">Les 11 inscriptions historiques, soit 41 UE et 656 000 MRU, ont été marquées réglées selon la confirmation de la direction. Cela représente un financement interne de l’INSEC; aucun versement étudiant ni reçu fictif n’est créé.</p>
+                </div>
             </section>
 
-            <section class="overflow-hidden rounded-xl bg-white shadow">
-                <div class="border-b border-gray-100 px-4 py-3">
-                    <h2 class="font-semibold text-insec">Détail des inscriptions · {{ carte?.libelle ?? anneeSynthese }}</h2>
-                    <p class="mt-1 text-xs text-gray-500">Coûts calculés à partir des UE inscrites et du barème du diplôme. Seules les inscriptions de l’année sélectionnée apparaissent ici.</p>
-                </div>
+            <section class="carte overflow-hidden">
+                <header class="panneau-entete">
+                    <div>
+                        <h2 class="titre-section">Détail des inscriptions · {{ carte?.libelle ?? anneeSynthese }}</h2>
+                        <p class="mt-0.5 text-xs text-gray-500">Coûts calculés à partir des UE inscrites et du barème du diplôme. Seules les inscriptions de l’année sélectionnée apparaissent ici.</p>
+                    </div>
+                </header>
                 <div class="overflow-x-auto">
                     <table class="tableau">
-                        <thead><tr><th>Étudiant / diplôme</th><th>UE</th><th>Facture INTEC</th><th>Tarif en MRU</th><th>Encaissement / statut</th><th>Effet pour l’INSEC</th></tr></thead>
+                        <thead><tr><th>Étudiant / diplôme</th><th class="text-right">UE</th><th class="text-right">Facture INTEC</th><th class="text-right">Tarif en MRU</th><th class="text-right">Encaissement / statut</th><th>Effet pour l’INSEC</th></tr></thead>
                         <tbody>
                             <tr v-for="ligne in detailsFinanciers" :key="ligne.id">
-                                <td class="text-gray-900">{{ ligne.nom }}<span class="block text-xs text-gray-500">{{ ligne.code }}</span></td>
-                                <td class="whitespace-nowrap">{{ ligne.unites }}</td>
-                                <td class="whitespace-nowrap">{{ ligne.coutIntecEuro === null ? 'Barème à vérifier' : euros(ligne.coutIntecEuro) }}<span class="block text-xs text-gray-500">{{ ligne.coutIntecMru === null ? '≈ — MRU' : `≈ ${montant(ligne.coutIntecMru)} MRU` }}</span></td>
-                                <td class="whitespace-nowrap">{{ ligne.tarifMru === null ? '—' : `${montant(ligne.tarifMru)} MRU` }}<span class="block text-xs text-gray-500">{{ ligne.financeurBumex ? 'Financement interne BUMEX' : 'À la charge de l’étudiant' }}</span></td>
-                                <td class="whitespace-nowrap">
+                                <td><span class="block font-semibold text-gray-900">{{ ligne.nom }}</span><span class="block text-xs text-gray-500">{{ ligne.code }}</span></td>
+                                <td class="text-right whitespace-nowrap tabular-nums">{{ ligne.unites }}</td>
+                                <td class="text-right whitespace-nowrap tabular-nums">{{ ligne.coutIntecEuro === null ? 'Barème à vérifier' : euros(ligne.coutIntecEuro) }}<span class="block text-xs text-gray-500">{{ ligne.coutIntecMru === null ? '≈ — MRU' : `≈ ${montant(ligne.coutIntecMru)} MRU` }}</span></td>
+                                <td class="text-right whitespace-nowrap tabular-nums">{{ ligne.tarifMru === null ? '—' : `${montant(ligne.tarifMru)} MRU` }}<span class="block text-xs text-gray-500">{{ ligne.financeurBumex ? 'Financement interne BUMEX' : 'À la charge de l’étudiant' }}</span></td>
+                                <td class="text-right whitespace-nowrap tabular-nums">
                                     <template v-if="ligne.financeurBumex">
-                                        <strong class="text-amber-800">{{ montant(ligne.allocationBumex) }} MRU</strong>
+                                        <strong class="font-semibold text-amber-800">{{ montant(ligne.allocationBumex) }} MRU</strong>
                                         <span class="block text-xs text-gray-500">{{ ligne.bumexRegle ? 'Financement BUMEX indiqué comme réglé' : 'Financement BUMEX à suivre' }}</span>
                                     </template>
                                     <template v-else>
-                                        <strong>{{ montant(ligne.encaisse ?? 0) }} MRU encaissés</strong>
+                                        <strong class="font-semibold text-gray-900">{{ montant(ligne.encaisse ?? 0) }} MRU encaissés</strong>
                                         <span class="block text-xs text-gray-500">{{ montant(ligne.restant ?? 0) }} MRU restant dus</span>
                                     </template>
                                 </td>
-                                <td class="min-w-48 text-sm">
+                                <td class="min-w-48 text-sm text-gray-600">
                                     <template v-if="ligne.financeurBumex">Charge financée en interne; aucune marge externe n’est comptabilisée.</template>
                                     <template v-else-if="ligne.margeTheorique === null">Saisissez le taux EUR/MRU pour estimer la marge.</template>
-                                    <template v-else><strong class="text-emerald-700">{{ montant(ligne.margeTheorique) }} MRU</strong><span class="block text-xs text-gray-500">Marge théorique avant les autres charges</span></template>
+                                    <template v-else><strong class="font-semibold text-emerald-700 tabular-nums">{{ montant(ligne.margeTheorique) }} MRU</strong><span class="block text-xs text-gray-500">Marge théorique avant les autres charges</span></template>
                                 </td>
                             </tr>
-                            <tr v-if="!detailsFinanciers.length"><td colspan="6" class="p-8 text-center text-gray-500">Aucune inscription enregistrée pour {{ carte?.libelle ?? anneeSynthese }}.</td></tr>
+                            <tr v-if="!detailsFinanciers.length"><td colspan="6" class="py-12 text-center text-sm text-gray-400">Aucune inscription enregistrée pour {{ carte?.libelle ?? anneeSynthese }}.</td></tr>
                         </tbody>
                     </table>
                 </div>

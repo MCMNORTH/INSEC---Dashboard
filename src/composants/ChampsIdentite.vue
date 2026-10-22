@@ -15,27 +15,27 @@ const valeurs = defineModel<Identite>({ required: true });
 </script>
 
 <template>
-    <div class="grid gap-4 md:grid-cols-2">
+    <div class="grid gap-x-5 gap-y-4 md:grid-cols-2">
         <label class="etiquette">Nom
-            <input v-model="valeurs.nom" class="champ mt-1" required maxlength="255" />
-            <span v-if="erreurs.nom" class="text-xs text-red-600">{{ erreurs.nom }}</span>
+            <input v-model="valeurs.nom" class="champ mt-1.5" required maxlength="255" />
+            <span v-if="erreurs.nom" class="mt-1 block text-xs text-red-600">{{ erreurs.nom }}</span>
         </label>
         <label class="etiquette">Prénom
-            <input v-model="valeurs.prenom" class="champ mt-1" required maxlength="255" />
-            <span v-if="erreurs.prenom" class="text-xs text-red-600">{{ erreurs.prenom }}</span>
+            <input v-model="valeurs.prenom" class="champ mt-1.5" required maxlength="255" />
+            <span v-if="erreurs.prenom" class="mt-1 block text-xs text-red-600">{{ erreurs.prenom }}</span>
         </label>
-        <label class="etiquette">E-mail <span class="text-gray-400">(facultatif)</span>
-            <input v-model="valeurs.email" type="email" class="champ mt-1" />
-            <span v-if="erreurs.email" class="text-xs text-red-600">{{ erreurs.email }}</span>
+        <label class="etiquette">E-mail <span class="font-normal text-gray-400">(facultatif)</span>
+            <input v-model="valeurs.email" type="email" class="champ mt-1.5" />
+            <span v-if="erreurs.email" class="mt-1 block text-xs text-red-600">{{ erreurs.email }}</span>
         </label>
-        <label class="etiquette">Date de naissance <span class="text-gray-400">(facultative)</span>
-            <input v-model="valeurs.dateNaissance" type="date" class="champ mt-1" />
+        <label class="etiquette">Date de naissance <span class="font-normal text-gray-400">(facultative)</span>
+            <input v-model="valeurs.dateNaissance" type="date" class="champ mt-1.5" />
         </label>
         <label class="etiquette">Téléphone
-            <input v-model="valeurs.telephone" type="tel" class="champ mt-1" maxlength="30" />
+            <input v-model="valeurs.telephone" type="tel" class="champ mt-1.5" maxlength="30" />
         </label>
         <label class="etiquette">Statut
-            <select v-model="valeurs.statut" class="champ mt-1">
+            <select v-model="valeurs.statut" class="champ mt-1.5">
                 <option v-for="s in STATUTS_ETUDIANT" :key="s">{{ s }}</option>
             </select>
         </label>

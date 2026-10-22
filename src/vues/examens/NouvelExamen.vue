@@ -49,32 +49,52 @@ async function enregistrer() {
 
 <template>
     <div class="max-w-3xl">
-        <RouterLink to="/examens" class="text-sm text-gray-500">← Retour au calendrier INTEC</RouterLink>
-        <h1 class="mt-2 mb-2 text-xl font-bold text-insec">Ouvrir le suivi local</h1>
-        <p class="mb-5 text-sm text-gray-600">L’INTEC fixe l’épreuve et son horaire. Cette fiche sert uniquement au suivi des opérations de l’INSEC.</p>
-        <form v-if="route.query.source === 'intec'" class="carte grid gap-4 p-6 md:grid-cols-2" @submit.prevent="enregistrer">
-            <div class="etiquette md:col-span-2">Épreuve INTEC
-                <p class="champ mt-1 bg-gray-50">{{ ue(f.ueId)?.code }} — {{ ue(f.ueId)?.libelle }}</p>
+        <RouterLink to="/examens" class="lien mb-4 inline-flex items-center gap-2 text-sm"><i class="fa-solid fa-arrow-left text-xs"></i> Retour au calendrier INTEC</RouterLink>
+        <header class="en-tete-page">
+            <div>
+                <p class="surtitre">Examens INTEC</p>
+                <h1 class="titre-page mt-1.5">Ouvrir le suivi local</h1>
+                <p class="sous-titre">L’INTEC fixe l’épreuve et son horaire. Cette fiche sert uniquement au suivi des opérations de l’INSEC.</p>
             </div>
-            <div class="etiquette">Année scolaire
-                <p class="champ mt-1 bg-gray-50">{{ annee(f.anneeId)?.libelle || libelleAnnee }}</p>
+        </header>
+        <form v-if="route.query.source === 'intec'" class="carte overflow-hidden" @submit.prevent="enregistrer">
+            <header class="panneau-entete">
+                <div>
+                    <h2 class="titre-section">Épreuve sélectionnée</h2>
+                    <p class="mt-0.5 text-xs text-gray-500">Informations issues du calendrier officiel INTEC</p>
+                </div>
+                <span class="pastille bg-insec-50 text-insec-700 ring-insec-600/15"><i class="fa-solid fa-lock text-[10px]"></i>Calendrier INTEC</span>
+            </header>
+            <div class="grid gap-5 p-5 sm:p-6 md:grid-cols-2">
+                <div class="etiquette md:col-span-2">Épreuve INTEC
+                    <p class="champ mt-1.5 bg-gray-50 font-semibold text-gray-900">{{ ue(f.ueId)?.code }} — {{ ue(f.ueId)?.libelle }}</p>
+                </div>
+                <div class="etiquette">Année scolaire
+                    <p class="champ mt-1.5 bg-gray-50">{{ annee(f.anneeId)?.libelle || libelleAnnee }}</p>
+                </div>
+                <div class="etiquette">Session INTEC
+                    <p class="champ mt-1.5 bg-gray-50">Normale</p>
+                </div>
+                <div class="etiquette">Date et heure officielles
+                    <p class="champ mt-1.5 bg-gray-50">{{ dateHeureOfficielle }}</p>
+                    <span class="mt-1.5 block text-xs font-normal text-gray-500">Cette date provient du calendrier INTEC et ne peut pas être modifiée ici.</span>
+                    <span v-if="erreurs.dateExamen" class="text-xs text-red-600">{{ erreurs.dateExamen }}</span>
+                </div>
+                <label class="etiquette">Salle / lieu (organisation INSEC)
+                    <input v-model="f.salle" class="champ mt-1.5" maxlength="100" placeholder="À renseigner quand la salle est connue" />
+                </label>
+                <p class="flex items-start gap-3 rounded-2xl border border-insec-100 bg-insec-50/60 p-4 text-sm leading-6 text-insec-950 md:col-span-2">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-insec-100 text-insec-600"><i class="fa-solid fa-circle-info text-xs"></i></span>
+                    <span>Ouvrir ce suivi ne change pas le calendrier de l’INTEC et n’envoie aucun e-mail. La fiche sert à suivre les candidats, les convocations locales, la réception des sujets et le retour des copies.</span>
+                </p>
             </div>
-            <div class="etiquette">Session INTEC
-                <p class="champ mt-1 bg-gray-50">Normale</p>
+            <div class="flex justify-end border-t border-gray-100 bg-gray-50/60 px-5 py-4 sm:px-6">
+                <button class="bouton-action" :disabled="envoi || !suiviValide">Ouvrir le suivi INSEC <i class="fa-solid fa-arrow-right text-xs"></i></button>
             </div>
-            <div class="etiquette">Date et heure officielles
-                <p class="champ mt-1 bg-gray-50">{{ dateHeureOfficielle }}</p>
-                <span class="mt-1 block text-xs text-gray-500">Cette date provient du calendrier INTEC et ne peut pas être modifiée ici.</span>
-                <span v-if="erreurs.dateExamen" class="text-xs text-red-600">{{ erreurs.dateExamen }}</span>
-            </div>
-            <label class="etiquette">Salle / lieu (organisation INSEC)
-                <input v-model="f.salle" class="champ mt-1" maxlength="100" placeholder="À renseigner quand la salle est connue" />
-            </label>
-            <p class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950 md:col-span-2">
-                Ouvrir ce suivi ne change pas le calendrier de l’INTEC et n’envoie aucun e-mail. La fiche sert à suivre les candidats, les convocations locales, la réception des sujets et le retour des copies.
-            </p>
-            <button class="bouton-action md:col-span-2" :disabled="envoi || !suiviValide">Ouvrir le suivi INSEC</button>
         </form>
-        <div v-else class="carte p-6 text-gray-600">Sélectionnez une épreuve depuis le calendrier officiel de l’INTEC.</div>
+        <div v-else class="carte flex flex-col items-center px-6 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-insec-50 text-insec-600 ring-1 ring-insec-100"><i class="fa-solid fa-calendar-check"></i></span>
+            <p class="mt-3 text-sm text-gray-600">Sélectionnez une épreuve depuis le calendrier officiel de l’INTEC.</p>
+        </div>
     </div>
 </template>

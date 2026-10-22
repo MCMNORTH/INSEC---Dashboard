@@ -41,15 +41,35 @@ async function enregistrer() {
 </script>
 
 <template>
-    <div class="max-w-4xl">
-        <RouterLink v-if="idEtudiant" :to="`/etudiants/${idEtudiant}`" class="text-sm text-gray-500">← Retour à la fiche</RouterLink>
-        <h1 class="mt-2 text-xl font-bold text-insec">{{ modification ? 'Modifier l’inscription' : 'Nouvelle inscription' }}</h1>
-        <p class="mb-5 text-gray-600">{{ nomComplet(etudiant) }}</p>
+    <div class="mx-auto max-w-4xl">
+        <RouterLink v-if="idEtudiant" :to="`/etudiants/${idEtudiant}`" class="lien mb-4 inline-flex items-center gap-2 text-sm"><i class="fa-solid fa-arrow-left text-xs"></i> Retour à la fiche</RouterLink>
+        <header class="en-tete-page">
+            <div>
+                <p class="surtitre">{{ nomComplet(etudiant) }}</p>
+                <h1 class="titre-page mt-1.5">{{ modification ? 'Modifier l’inscription' : 'Nouvelle inscription' }}</h1>
+                <p v-if="!modification" class="sous-titre">L’historique des inscriptions précédentes est conservé.</p>
+            </div>
+        </header>
         <Chargement :chargement="chargementInscription || chargementEtudiant" :vide="!etudiant" message-vide="Dossier introuvable.">
-            <form v-if="valeurs" class="carte space-y-5 p-6" @submit.prevent="enregistrer">
-                <ChampsInscription v-model="valeurs" :erreurs="erreurs" :avec-statut="modification" />
-                <p v-if="!modification" class="text-sm text-gray-500">L’historique des inscriptions précédentes est conservé.</p>
-                <button class="bouton-action" :disabled="envoi">Enregistrer l’inscription</button>
+            <form v-if="valeurs" class="space-y-6" @submit.prevent="enregistrer">
+                <section class="carte overflow-hidden">
+                    <header class="panneau-entete">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-insec-50 text-insec-600 ring-1 ring-insec-100"><i class="fa-solid fa-graduation-cap text-sm"></i></span>
+                            <div>
+                                <h2 class="titre-section">Inscription</h2>
+                                <p class="mt-0.5 text-xs text-gray-500">Diplôme, année scolaire et UE suivies.</p>
+                            </div>
+                        </div>
+                    </header>
+                    <div class="p-5 sm:p-6">
+                        <ChampsInscription v-model="valeurs" :erreurs="erreurs" :avec-statut="modification" />
+                    </div>
+                </section>
+                <div class="flex flex-wrap items-center justify-end gap-3">
+                    <RouterLink v-if="idEtudiant" :to="`/etudiants/${idEtudiant}`" class="bouton-secondaire">Annuler</RouterLink>
+                    <button class="bouton-action" :disabled="envoi"><i v-if="envoi" class="fa-solid fa-circle-notch fa-spin"></i>Enregistrer l’inscription</button>
+                </div>
             </form>
         </Chargement>
     </div>

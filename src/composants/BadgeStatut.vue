@@ -1,31 +1,42 @@
 <script setup lang="ts">
 const props = defineProps<{ statut: string }>();
 
-const STYLES: Record<string, string> = {
-    Actif: 'bg-green-100 text-green-700',
-    Suspendu: 'bg-amber-100 text-amber-700',
-    Diplômé: 'bg-blue-100 text-blue-700',
-    Abandon: 'bg-red-100 text-red-700',
-    Soldé: 'bg-green-100 text-green-700',
-    Partiel: 'bg-amber-100 text-amber-700',
-    Impayé: 'bg-red-100 text-red-700',
-    'À chiffrer': 'bg-amber-100 text-amber-700',
-    Annulée: 'bg-gray-100 text-gray-600',
-    'Pris en charge BUMEX': 'bg-blue-100 text-blue-700',
-    Validée: 'bg-green-100 text-green-700',
-    'En attente': 'bg-amber-100 text-amber-700',
-    Rejetée: 'bg-red-100 text-red-700',
-    Envoyé: 'bg-green-100 text-green-700',
-    Échec: 'bg-red-100 text-red-700',
-    Validé: 'bg-green-100 text-green-700',
-    Rejeté: 'bg-red-100 text-red-700',
-    'À vérifier': 'bg-amber-100 text-amber-700',
-    Admissible: 'bg-green-100 text-green-700',
-    Inscrite: 'bg-blue-100 text-blue-700',
-    'En étude': 'bg-amber-100 text-amber-700',
+type Ton = 'succes' | 'attention' | 'danger' | 'info' | 'neutre';
+const TONS: Record<string, Ton> = {
+    Actif: 'succes',
+    Suspendu: 'attention',
+    Diplômé: 'info',
+    Abandon: 'danger',
+    Soldé: 'succes',
+    Partiel: 'attention',
+    Impayé: 'danger',
+    'À chiffrer': 'attention',
+    Annulée: 'neutre',
+    'Pris en charge BUMEX': 'info',
+    Validée: 'succes',
+    'En attente': 'attention',
+    Rejetée: 'danger',
+    Envoyé: 'succes',
+    Échec: 'danger',
+    Validé: 'succes',
+    Rejeté: 'danger',
+    'À vérifier': 'attention',
+    Admissible: 'succes',
+    Inscrite: 'info',
+    'En étude': 'attention',
+};
+const STYLES: Record<Ton, { pastille: string; point: string }> = {
+    succes: { pastille: 'bg-emerald-50 text-emerald-700 ring-emerald-600/15', point: 'bg-emerald-500' },
+    attention: { pastille: 'bg-amber-50 text-amber-800 ring-amber-600/20', point: 'bg-amber-500' },
+    danger: { pastille: 'bg-red-50 text-red-700 ring-red-600/15', point: 'bg-red-500' },
+    info: { pastille: 'bg-insec-50 text-insec-700 ring-insec-600/15', point: 'bg-insec-500' },
+    neutre: { pastille: 'bg-gray-50 text-gray-600 ring-gray-500/15', point: 'bg-gray-400' },
 };
 </script>
 
 <template>
-    <span :class="['inline-block rounded-full px-3 py-1 text-xs font-medium', STYLES[props.statut] ?? 'bg-gray-100 text-gray-700']">{{ props.statut }}</span>
+    <span :class="['pastille', STYLES[TONS[props.statut] ?? 'neutre'].pastille]">
+        <span :class="['h-1.5 w-1.5 rounded-full', STYLES[TONS[props.statut] ?? 'neutre'].point]"></span>
+        {{ props.statut }}
+    </span>
 </template>
