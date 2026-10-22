@@ -1,11 +1,21 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import type { RouteLocationRaw } from 'vue-router';
 import { CALENDRIERS_INTEC, CALENDRIER_INTEC_2026_2027 } from '../../calendrierIntec';
 import { appeler, messageErreur } from '../../api';
 import Chargement from '../../composants/Chargement.vue';
 import { heureNouakchott, heureNouakchottDepuisParis, montant } from '../../format';
 
+interface TacheAFaire {
+    cle: string;
+    niveau: 'danger' | 'warning' | 'info';
+    titre: string;
+    detail: string;
+    lien: string | RouteLocationRaw;
+}
+
 interface Tableau {
+    aFaire: TacheAFaire[];
     annees: { id: string; libelle: string }[];
     anneeId: string | null;
     montantEnRetard: number;
@@ -84,6 +94,30 @@ function heureParis(valeur: string): string {
     }).format(new Date(valeur));
 }
 
+/** Tâches du serveur + épreuves INTEC à J-15 pour lesquelles aucun suivi local n'est encore ouvert. */
+const tachesAFaire = computed<TacheAFaire[]>(() => {
+    const t = tableau.value;
+    if (!t) return [];
+    const calendrier = calendrierIntec.value;
+    const dansQuinzeJours = new Date(Date.now() + 15 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const sansSuivi: TacheAFaire[] = (calendrier ? prochainesEpreuvesOfficielles.value : [])
+        .filter((e) => e.date <= dansQuinzeJours && !t.examensProchains.some((x) => x.ue === `TEC${e.codeUE}`))
+        .map((e) => ({
+            cle: `suivi-${e.diplôme}-${e.codeUE}`,
+            niveau: 'warning',
+            titre: `${e.diplôme} · UE ${e.codeUE} : ouvrir le suivi de l’épreuve`,
+            detail: `Épreuve INTEC le ${e.dateFr} à ${e.heure} (Paris) · ${heureNouakchottDepuisParis(e.date, e.heure)} (Nouakchott).`,
+            lien: lienSuiviIntec(e),
+        }));
+    const ordre = { danger: 0, warning: 1, info: 2 };
+    return [...t.aFaire, ...sansSuivi].sort((a, b) => ordre[a.niveau] - ordre[b.niveau]);
+});
+const STYLE_TACHE = {
+    danger: { pastille: 'bg-red-100 text-red-700', icone: 'fa-circle-exclamation' },
+    warning: { pastille: 'bg-amber-100 text-amber-700', icone: 'fa-triangle-exclamation' },
+    info: { pastille: 'bg-blue-100 text-blue-700', icone: 'fa-circle-info' },
+} as const;
+
 const cartes = (t: Tableau) => [
     {
         libelle: 'Étudiants inscrits à l’INSEC',
@@ -147,6 +181,31 @@ const cartes = (t: Tableau) => [
 
     <Chargement :chargement="chargement && !tableau" :erreur="erreur">
         <template v-if="tableau">
+            <section class="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="a-faire" :class="{ 'opacity-60': chargement }">
+                <header class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-4">
+                    <div>
+                        <h2 id="a-faire" class="font-bold text-insec">À faire aujourd’hui</h2>
+                        <p class="text-xs text-gray-500">Les actions qui demandent votre attention · {{ anneeSelectionnee }}</p>
+                    </div>
+                    <span :class="['rounded-full px-3 py-1 text-xs font-semibold', tachesAFaire.length ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-700']">
+                        {{ tachesAFaire.length ? `${tachesAFaire.length} action${tachesAFaire.length > 1 ? 's' : ''}` : 'Tout est à jour' }}
+                    </span>
+                </header>
+                <ul v-if="tachesAFaire.length" class="divide-y divide-gray-100">
+                    <li v-for="t in tachesAFaire" :key="t.cle" class="flex flex-wrap items-center gap-3 px-5 py-3">
+                        <span :class="['flex h-8 w-8 shrink-0 items-center justify-center rounded-full', STYLE_TACHE[t.niveau].pastille]">
+                            <i :class="['fa-solid text-sm', STYLE_TACHE[t.niveau].icone]"></i>
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <strong class="block text-sm text-gray-900">{{ t.titre }}</strong>
+                            <span class="text-xs text-gray-500">{{ t.detail }}</span>
+                        </span>
+                        <RouterLink :to="t.lien" class="bouton-secondaire whitespace-nowrap">Ouvrir</RouterLink>
+                    </li>
+                </ul>
+                <p v-else class="px-5 py-4 text-sm text-gray-600">Aucun retard de paiement, aucune convocation ni aucun envoi de copies en attente.</p>
+            </section>
+
             <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5" :class="{ 'opacity-60': chargement }">
                 <article v-for="carte in cartes(tableau)" :key="carte.libelle" :class="[carte.fond, 'rounded-2xl border border-white p-5 shadow-sm']">
                     <div class="mb-4 flex items-center justify-between">

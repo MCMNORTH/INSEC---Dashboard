@@ -3,9 +3,24 @@ import { operation } from '../lib/contexte.js';
 import { col, nomComplet, type Doc } from '../lib/donnees.js';
 import { db, Timestamp } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
-import { ANNEE_ACADEMIQUE_PAR_DEFAUT, ANNEES_ACADEMIQUES_VISIBLES, estRecouvrable, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, STATUTS_ETUDIANT } from '../shared/domaine.js';
+import {
+    ANNEE_ACADEMIQUE_PAR_DEFAUT, ANNEES_ACADEMIQUES_VISIBLES, estRecouvrable, formaterMontant, horaireExamen, montantEnRetard, montantNet,
+    ROLES_ADMIN, soldeRestant, STATUTS_ETUDIANT,
+} from '../shared/domaine.js';
 
 const arrondi = (v: number, d = 1) => Math.round(v * 10 ** d) / 10 ** d;
+const JOUR = 24 * 3600 * 1000;
+
+/** Une action concrète à faire, affichée en tête du tableau de bord. */
+export interface TacheAFaire {
+    cle: string;
+    niveau: 'danger' | 'warning' | 'info';
+    titre: string;
+    detail: string;
+    lien: string;
+}
+const ORDRE_NIVEAU = { danger: 0, warning: 1, info: 2 } as const;
+const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 const taux = (valides: number, total: number) => (total ? arrondi((valides / total) * 100) : 0);
 
 export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, async (donnees) => {
@@ -95,7 +110,64 @@ export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, a
     const etudiantsAvecDossierAnnee = new Set(inscriptions.map((i) => i.etudiantId)).size;
     const etudiantsSansInscription = Math.max(0, etudiantsAvecDossierAnnee - etudiantsInscrits);
 
+    // --- À faire aujourd'hui ---
+    const aFaire: TacheAFaire[] = [];
+    const lienFinances = `/finances${anneeId ? `?annee=${anneeId}` : ''}`;
+    const enRetard = inscriptionsChargeEtudiants.filter((i) => montantEnRetard(i as never) > 0);
+    if (enRetard.length) aFaire.push({
+        cle: 'retards', niveau: 'danger', titre: `Relancer ${pluriel(enRetard.length, 'étudiant')} en retard de paiement`,
+        detail: `${formaterMontant(retard)} MRU d’échéances dépassées.`, lien: lienFinances,
+    });
+    const aChiffrer = inscriptions.filter((i) => i.statut === 'active' && estRecouvrable(i as never) && (i.montantDu ?? 0) <= 0);
+    if (aChiffrer.length) aFaire.push({
+        cle: 'a-chiffrer', niveau: 'warning', titre: `Fixer le montant de ${pluriel(aChiffrer.length, 'inscription')}`,
+        detail: 'Inscriptions actives sans montant dû (« À chiffrer »).', lien: lienFinances,
+    });
+    const [enAttenteSnap, piecesSnap, examensPassesSnap] = await Promise.all([
+        col.versements().where('statut', '==', 'En attente').get(),
+        col.pieces().where('statut', '==', 'À vérifier').count().get(),
+        col.examens().where('dateExamen', '>=', Timestamp.fromMillis(Date.now() - 60 * JOUR))
+            .where('dateExamen', '<=', Timestamp.fromMillis(Date.now() - 2 * JOUR)).get(),
+    ]);
+    const enAttente = enAttenteSnap.docs.filter((d) => idsInscriptions.has(d.get('inscriptionId')));
+    if (enAttente.length) aFaire.push({
+        cle: 'versements-en-attente', niveau: 'warning', titre: `Valider ou rejeter ${pluriel(enAttente.length, 'versement')} en attente`,
+        detail: `${formaterMontant(enAttente.reduce((t, d) => t + (d.get('montant') ?? 0), 0))} MRU non comptés dans les soldes.`, lien: lienFinances,
+    });
+    const piecesAVerifier = piecesSnap.data().count;
+    if (piecesAVerifier) aFaire.push({
+        cle: 'pieces', niveau: 'info', titre: `Vérifier ${pluriel(piecesAVerifier, 'pièce')} administrative${piecesAVerifier > 1 ? 's' : ''}`,
+        detail: 'Documents déposés en attente de contrôle.', lien: '/alertes',
+    });
+    const maintenant = Date.now();
+    const prochains = examensSnap.docs.filter((e) => !anneeId || e.get('anneeId') === anneeId);
+    const convocationsEnAttente = await Promise.all(prochains.map((e) =>
+        col.resultats().where('examenId', '==', e.id).where('presence', '==', 'Convoqué').get()
+            .then((r) => r.docs.filter((d) => d.get('convocationEnvoiStatut') !== 'Envoyée').length)));
+    prochains.forEach((e, n) => {
+        const code = ues.get(e.get('ueId'))?.code ?? 'Épreuve';
+        const horaire = horaireExamen(e.get('dateExamen').toDate());
+        const joursRestants = (e.get('dateExamen').toMillis() - maintenant) / JOUR;
+        if (!e.get('sujetsRecusLe') && joursRestants <= 3) aFaire.push({
+            cle: `sujets-${e.id}`, niveau: 'danger', titre: `${code} : sujets INTEC non reçus`,
+            detail: `Épreuve le ${horaire}.`, lien: `/examens/${e.id}`,
+        });
+        if (convocationsEnAttente[n]) aFaire.push({
+            cle: `convocations-${e.id}`, niveau: joursRestants <= 7 ? 'danger' : 'warning',
+            titre: `${code} : envoyer ${pluriel(convocationsEnAttente[n], 'convocation')}`,
+            detail: `Épreuve le ${horaire}.`, lien: `/examens/${e.id}`,
+        });
+    });
+    examensPassesSnap.docs
+        .filter((e) => e.get('statut') !== 'Annulé' && !e.get('copiesEnvoyeesLe') && (!anneeId || e.get('anneeId') === anneeId))
+        .forEach((e) => aFaire.push({
+            cle: `copies-${e.id}`, niveau: 'danger', titre: `${ues.get(e.get('ueId'))?.code ?? 'Épreuve'} : renvoyer les copies à l’INTEC`,
+            detail: `Épreuve passée le ${horaireExamen(e.get('dateExamen').toDate())} ; envoi des copies non enregistré.`, lien: `/examens/${e.id}`,
+        }));
+    aFaire.sort((a, b) => ORDRE_NIVEAU[a.niveau] - ORDRE_NIVEAU[b.niveau]);
+
     return {
+        aFaire,
         annees, anneeId, montantFacture, encaisses, resteARecouvrer, montantEnRetard: retard,
         tauxRecouvrement: montantFacture > 0 ? arrondi((encaisses / montantFacture) * 100) : 0,
         tauxReussite: taux(resultats.filter((r) => r.valide).length, resultats.length),
