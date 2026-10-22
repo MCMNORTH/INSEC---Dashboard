@@ -52,6 +52,16 @@ export function montantDuSelonTarif(codeFormation: string | null | undefined, nb
     return diplome ? TARIFS_UE[diplome].mru * nbUe : null;
 }
 
+/**
+ * Écart entre le montant dû saisi et le tarif (nombre d'UE × tarif du diplôme) :
+ * positif si le montant saisi dépasse le tarif, négatif s'il est inférieur ; null si le diplôme n'a pas de tarif connu.
+ * La remise n'entre pas dans le calcul : elle se saisit à part.
+ */
+export function ecartAuTarif(codeFormation: string | null | undefined, nbUe: number, montantDu: number | null | undefined): number | null {
+    const tarif = montantDuSelonTarif(codeFormation, nbUe);
+    return tarif === null ? null : (montantDu ?? 0) - tarif;
+}
+
 export interface Echeance {
     id: string;
     libelle: string;

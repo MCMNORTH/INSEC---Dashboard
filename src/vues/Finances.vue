@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { diplomeTarife, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE } from '@shared/domaine';
+import {
+    diplomeTarife, ecartAuTarif, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantDuSelonTarif, montantEnRetard, montantNet,
+    soldeRestant, statutPaiement, TARIFS_UE,
+} from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -65,6 +68,20 @@ const STYLE_ECHEANCE: Record<EtatEcheance, { pastille: string; icone: string }> 
     'En retard': { pastille: 'bg-red-50 text-red-600', icone: 'fa-triangle-exclamation' },
     'À venir': { pastille: 'bg-gray-100 text-gray-500', icone: 'fa-calendar' },
 };
+// Comparaison du montant dû saisi avec le tarif (nombre d'UE × tarif du diplôme) ; sans objet pour BUMEX.
+const codeDe = (d: Inscription) => formation(d.formationId)?.code ?? d.formationId;
+const tarifUe = (d: Inscription) => {
+    const diplome = diplomeTarife(codeDe(d));
+    return diplome ? TARIFS_UE[diplome].mru : null;
+};
+const tarifDe = (d: Inscription) => montantDuSelonTarif(codeDe(d), d.ueIds?.length ?? 0);
+const ecartDe = (d: Inscription) => (d.financeur === 'bumex' ? null : ecartAuTarif(codeDe(d), d.ueIds?.length ?? 0, d.montantDu));
+function appliquerTarif() {
+    const tarif = inscription.value ? tarifDe(inscription.value) : null;
+    if (tarif === null) return;
+    situation.montantDu = tarif;
+    ongletDossier.value = 'situation';
+}
 const statutLigne = (d: Inscription) =>
     d.financeur === 'bumex' ? (d.statutBumex === 'reglee' ? 'BUMEX a réglé' : 'À régler par BUMEX') : statutPaiement(d);
 const pourcentagePaye = (d: Inscription) => {
@@ -147,6 +164,21 @@ function annulerVersement(v: Versement) {
     const motif = window.prompt(`Annuler le versement validé de ${montant(v.montant)} MRU (reçu ${v.numeroRecu}) ?\nIl sera retiré du total versé. Indiquez le motif (ex. erreur de saisie, chèque impayé) :`);
     if (motif?.trim()) void executer('annulerVersement', { id: v.id, motif });
 }
+// Règlement par BUMEX d'une inscription qu'il finance (pas de versement étudiant).
+const reglementBumex = reactive({ montant: 0, dateReglement: aujourdhui(), reference: '' });
+watch(inscription, (i) => {
+    if (i?.financeur === 'bumex') Object.assign(reglementBumex, { montant: i.montantBumex ?? montantNet(i), dateReglement: aujourdhui(), reference: '' });
+}, { immediate: true });
+function confirmerReglementBumex() {
+    const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim();
+    if (!window.confirm(`Confirmer que BUMEX a réglé ${montant(reglementBumex.montant)} MRU pour ${nom}, le ${date(reglementBumex.dateReglement)} ?`)) return;
+    void executer('enregistrerReglementBumex', { inscriptionId: inscription.value!.id, regle: true, ...reglementBumex });
+}
+function annulerReglementBumex() {
+    const motif = window.prompt('Annuler le règlement BUMEX enregistré ? Indiquez le motif (ex. virement rejeté, erreur de saisie) :');
+    if (motif?.trim()) void executer('enregistrerReglementBumex', { inscriptionId: inscription.value!.id, regle: false, motif });
+}
+
 const couleurStatut = (statut: string) =>
     statut === 'Validée' ? 'text-gray-900' : statut === 'En attente' ? 'text-amber-700' : 'text-gray-400 line-through';
 
@@ -388,7 +420,14 @@ const totauxFinanciers = computed(() => ({
                                     <td><span class="text-xs text-gray-400">Suivi BUMEX</span></td>
                                 </template>
                                 <template v-else>
-                                    <td class="text-right whitespace-nowrap tabular-nums text-gray-600">{{ montant(montantNet(ligne.dossier)) }} <span class="text-[11px] text-gray-400">MRU</span></td>
+                                    <td class="text-right whitespace-nowrap tabular-nums text-gray-600">
+                                        <span
+                                            v-if="ecartDe(ligne.dossier)"
+                                            class="mr-1.5 inline-flex"
+                                            :title="`Montant dû différent du tarif (${montant(tarifDe(ligne.dossier) ?? 0)} MRU pour ${ligne.dossier.ueIds.length} UE)`"
+                                        ><i class="fa-solid fa-triangle-exclamation text-[11px] text-amber-500"></i></span>
+                                        {{ montant(montantNet(ligne.dossier)) }} <span class="text-[11px] text-gray-400">MRU</span>
+                                    </td>
                                     <td class="text-right whitespace-nowrap tabular-nums text-emerald-700">{{ montant(ligne.dossier.totalVerse ?? 0) }}</td>
                                     <td class="text-right whitespace-nowrap tabular-nums">
                                         <span class="font-semibold text-gray-900">{{ montant(soldeRestant(ligne.dossier)) }}</span>
@@ -461,15 +500,41 @@ const totauxFinanciers = computed(() => ({
                                 </p>
 
                                 <!-- Inscription financée par BUMEX -->
-                                <div v-else-if="inscription.financeur === 'bumex'" class="p-5 sm:p-7">
-                                    <div class="flex items-start gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
-                                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><i class="fa-solid fa-building-columns"></i></span>
-                                        <div class="text-sm text-emerald-900">
-                                            <p class="font-semibold">Inscription prise en charge par BUMEX</p>
-                                            <p class="mt-1">Montant couvert : <strong class="tabular-nums">{{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU</strong> · {{ inscription.statutBumex === 'reglee' ? 'intégralement réglé par BUMEX' : 'paiement de BUMEX à confirmer' }}.</p>
-                                            <p class="mt-2 text-emerald-800/80">Aucun versement ni reçu étudiant ne doit être saisi : le règlement est suivi séparément au titre de BUMEX.</p>
+                                <div v-else-if="inscription.financeur === 'bumex'" class="space-y-5 p-5 sm:p-7">
+                                    <div :class="['flex items-start gap-4 rounded-2xl border p-5', inscription.statutBumex === 'reglee' ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70']">
+                                        <span :class="['flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', inscription.statutBumex === 'reglee' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700']">
+                                            <i :class="['fa-solid', inscription.statutBumex === 'reglee' ? 'fa-circle-check' : 'fa-hourglass-half']"></i>
+                                        </span>
+                                        <div :class="['min-w-0 flex-1 text-sm', inscription.statutBumex === 'reglee' ? 'text-emerald-900' : 'text-amber-900']">
+                                            <p class="font-semibold">{{ inscription.statutBumex === 'reglee' ? 'Réglé par BUMEX' : 'À régler par BUMEX' }}</p>
+                                            <p class="mt-1">
+                                                Montant couvert : <strong class="tabular-nums">{{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU</strong>
+                                                <template v-if="inscription.statutBumex === 'reglee' && inscription.dateReglementBumex"> · réglé le {{ date(inscription.dateReglementBumex) }}</template>
+                                                <template v-if="inscription.referenceBumex"> · réf. {{ inscription.referenceBumex }}</template>
+                                            </p>
+                                            <p v-if="inscription.statutBumex !== 'reglee' && inscription.motifAnnulationBumex" class="mt-1 text-xs">Dernier règlement annulé : {{ inscription.motifAnnulationBumex }}</p>
+                                            <p class="mt-2 text-xs opacity-80">Aucun versement ni reçu étudiant : ce financement est suivi séparément.</p>
                                         </div>
+                                        <button
+                                            v-if="inscription.statutBumex === 'reglee'"
+                                            type="button"
+                                            class="bouton-fantome shrink-0 text-xs text-gray-500 hover:text-red-600"
+                                            :disabled="envoi"
+                                            @click="annulerReglementBumex"
+                                        >Annuler</button>
                                     </div>
+
+                                    <form v-if="inscription.statutBumex !== 'reglee'" class="rounded-2xl bg-gray-50/70 p-5 ring-1 ring-gray-100" @submit.prevent="confirmerReglementBumex">
+                                        <p class="text-sm font-semibold text-gray-900">Enregistrer le règlement de BUMEX</p>
+                                        <p class="mt-0.5 text-xs text-gray-500">À remplir quand BUMEX a effectivement payé cette inscription.</p>
+                                        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                                            <label class="etiquette">Montant réglé (MRU)<input v-model.number="reglementBumex.montant" type="number" min="1" class="champ mt-1.5" required /></label>
+                                            <label class="etiquette">Date du règlement<input v-model="reglementBumex.dateReglement" type="date" :max="aujourdhui()" class="champ mt-1.5" required /></label>
+                                            <label class="etiquette">Référence <span class="text-gray-400">(facultatif)</span><input v-model="reglementBumex.reference" placeholder="Ex. n° de virement" class="champ mt-1.5" maxlength="100" /></label>
+                                        </div>
+                                        <p v-if="erreurs.montant || erreurs.dateReglement" class="mt-2 text-xs text-red-600">{{ erreurs.montant || erreurs.dateReglement }}</p>
+                                        <button class="bouton-principal mt-4" :disabled="envoi"><i class="fa-solid fa-check text-xs"></i>Marquer comme réglé</button>
+                                    </form>
                                 </div>
 
                                 <template v-else>
@@ -495,6 +560,15 @@ const totauxFinanciers = computed(() => ({
                                                     MRU<template v-if="montantEnRetard(inscription) > 0"> · {{ montant(montantEnRetard(inscription)) }} en retard</template>
                                                 </p>
                                             </div>
+                                        </div>
+                                        <div v-if="ecartDe(inscription)" class="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+                                            <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                                            <span class="min-w-0 flex-1">
+                                                Le montant dû ({{ montant(inscription.montantDu) }} MRU) diffère du tarif :
+                                                <strong class="tabular-nums">{{ inscription.ueIds.length }} UE × {{ montant(tarifUe(inscription) ?? 0) }} = {{ montant(tarifDe(inscription) ?? 0) }} MRU</strong>
+                                                {{ ' ' }}<span class="text-amber-800/80">({{ ecartDe(inscription)! > 0 ? '+' : '' }}{{ montant(ecartDe(inscription)!) }})</span>.
+                                            </span>
+                                            <button type="button" class="bouton-secondaire min-h-0 py-1.5 text-xs" @click="appliquerTarif">Utiliser le tarif</button>
                                         </div>
                                         <div class="mt-4 flex items-center gap-3">
                                             <span class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
@@ -678,6 +752,11 @@ const totauxFinanciers = computed(() => ({
                                                 <label class="etiquette">Remise (MRU)<input v-model.number="situation.montantRemise" type="number" min="0" class="champ mt-1.5" required /></label>
                                             </div>
                                             <p v-if="erreurs.montantRemise" class="text-xs text-red-600">{{ erreurs.montantRemise }}</p>
+                                            <p v-if="tarifDe(inscription) !== null" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                                                <span><i class="fa-solid fa-calculator mr-1.5 text-gray-400"></i>Tarif : {{ inscription.ueIds.length }} UE × {{ montant(tarifUe(inscription) ?? 0) }} = <strong class="text-gray-800 tabular-nums">{{ montant(tarifDe(inscription)!) }} MRU</strong></span>
+                                                <button v-if="situation.montantDu !== tarifDe(inscription)" type="button" class="lien" @click="situation.montantDu = tarifDe(inscription)!">Utiliser ce montant</button>
+                                                <span v-else class="text-emerald-700"><i class="fa-solid fa-check mr-1"></i>Conforme au tarif</span>
+                                            </p>
                                             <label class="etiquette">Note financière interne<textarea v-model="situation.noteFinanciere" class="champ mt-1.5" rows="3" maxlength="2000"></textarea></label>
                                             <button class="bouton-principal" :disabled="envoi"><i class="fa-solid fa-check text-xs"></i>Enregistrer</button>
                                         </form>
