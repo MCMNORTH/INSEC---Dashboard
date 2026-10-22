@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant, creerInscription, modifierInscription } from '../src/handlers/etudiants.js';
 import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere } from '../src/handlers/finances.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
-import { montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement } from '../src/shared/domaine.js';
+import { ecartAuTarif, montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
 const etudiant = (email: string) => ({
@@ -104,6 +104,14 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         await appeler(creerInscription, { etudiantId, formationId: 'DSGC', anneeId: '2026-2027', anneeParcours: 1, ueIds: ['TEC211'] }, admin);
         const dsgc = (await liste('inscriptions')).find((i) => i.formationId === 'DSGC')!;
         expect(dsgc.montantDu).toBe(18000);
+    });
+
+    it('mesure l’écart entre le montant dû saisi et le tarif (UE × tarif)', () => {
+        expect(ecartAuTarif('DGC', 2, 32000)).toBe(0);
+        expect(ecartAuTarif('DGC', 2, 40000)).toBe(8000);
+        expect(ecartAuTarif('DSGC', 3, 50000)).toBe(-4000);
+        expect(ecartAuTarif('DGC', 1, 0)).toBe(-16000);
+        expect(ecartAuTarif('LICENCE', 2, 30000)).toBeNull();
     });
 
     it('ne présente jamais un dossier sans montant comme soldé', () => {

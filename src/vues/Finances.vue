@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { diplomeTarife, estRecouvrable, MODES_PAIEMENT, montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE } from '@shared/domaine';
+import {
+    diplomeTarife, ecartAuTarif, estRecouvrable, MODES_PAIEMENT, montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE,
+} from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -58,6 +60,20 @@ watch(anneeEtudiants, (value) => {
 // Filtre rapide de la liste par situation de paiement.
 type FiltrePaiement = 'tous' | 'retard' | 'impayes' | 'partiels' | 'soldes' | 'bumex';
 const filtrePaiement = ref<FiltrePaiement>('tous');
+// Comparaison du montant dû saisi avec le tarif (nombre d'UE × tarif du diplôme) ; sans objet pour BUMEX.
+const codeDe = (d: Inscription) => formation(d.formationId)?.code ?? d.formationId;
+const tarifUe = (d: Inscription) => {
+    const diplome = diplomeTarife(codeDe(d));
+    return diplome ? TARIFS_UE[diplome].mru : null;
+};
+const tarifDe = (d: Inscription) => montantDuSelonTarif(codeDe(d), d.ueIds?.length ?? 0);
+const ecartDe = (d: Inscription) => (d.financeur === 'bumex' ? null : ecartAuTarif(codeDe(d), d.ueIds?.length ?? 0, d.montantDu));
+function appliquerTarif() {
+    const tarif = inscription.value ? tarifDe(inscription.value) : null;
+    if (tarif === null) return;
+    situation.montantDu = tarif;
+    ongletDossier.value = 'situation';
+}
 const statutLigne = (d: Inscription) =>
     d.financeur === 'bumex' ? (d.statutBumex === 'reglee' ? 'BUMEX a réglé' : 'À régler par BUMEX') : statutPaiement(d);
 const pourcentagePaye = (d: Inscription) => {
@@ -381,7 +397,14 @@ const totauxFinanciers = computed(() => ({
                                     <td><span class="text-xs text-gray-400">Suivi BUMEX</span></td>
                                 </template>
                                 <template v-else>
-                                    <td class="text-right whitespace-nowrap tabular-nums text-gray-600">{{ montant(montantNet(ligne.dossier)) }} <span class="text-[11px] text-gray-400">MRU</span></td>
+                                    <td class="text-right whitespace-nowrap tabular-nums text-gray-600">
+                                        <span
+                                            v-if="ecartDe(ligne.dossier)"
+                                            class="mr-1.5 inline-flex"
+                                            :title="`Montant dû différent du tarif (${montant(tarifDe(ligne.dossier) ?? 0)} MRU pour ${ligne.dossier.ueIds.length} UE)`"
+                                        ><i class="fa-solid fa-triangle-exclamation text-[11px] text-amber-500"></i></span>
+                                        {{ montant(montantNet(ligne.dossier)) }} <span class="text-[11px] text-gray-400">MRU</span>
+                                    </td>
                                     <td class="text-right whitespace-nowrap tabular-nums text-emerald-700">{{ montant(ligne.dossier.totalVerse ?? 0) }}</td>
                                     <td class="text-right whitespace-nowrap tabular-nums">
                                         <span class="font-semibold text-gray-900">{{ montant(soldeRestant(ligne.dossier)) }}</span>
@@ -488,6 +511,15 @@ const totauxFinanciers = computed(() => ({
                                                     MRU<template v-if="montantEnRetard(inscription) > 0"> · {{ montant(montantEnRetard(inscription)) }} en retard</template>
                                                 </p>
                                             </div>
+                                        </div>
+                                        <div v-if="ecartDe(inscription)" class="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+                                            <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                                            <span class="min-w-0 flex-1">
+                                                Le montant dû ({{ montant(inscription.montantDu) }} MRU) diffère du tarif :
+                                                <strong class="tabular-nums">{{ inscription.ueIds.length }} UE × {{ montant(tarifUe(inscription) ?? 0) }} = {{ montant(tarifDe(inscription) ?? 0) }} MRU</strong>
+                                                <span class="text-amber-800/80">({{ ecartDe(inscription)! > 0 ? '+' : '' }}{{ montant(ecartDe(inscription)!) }})</span>.
+                                            </span>
+                                            <button type="button" class="bouton-secondaire min-h-0 py-1.5 text-xs" @click="appliquerTarif">Utiliser le tarif</button>
                                         </div>
                                         <div class="mt-4 flex items-center gap-3">
                                             <span class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
@@ -663,6 +695,11 @@ const totauxFinanciers = computed(() => ({
                                                 <label class="etiquette">Remise (MRU)<input v-model.number="situation.montantRemise" type="number" min="0" class="champ mt-1.5" required /></label>
                                             </div>
                                             <p v-if="erreurs.montantRemise" class="text-xs text-red-600">{{ erreurs.montantRemise }}</p>
+                                            <p v-if="tarifDe(inscription) !== null" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                                                <span><i class="fa-solid fa-calculator mr-1.5 text-gray-400"></i>Tarif : {{ inscription.ueIds.length }} UE × {{ montant(tarifUe(inscription) ?? 0) }} = <strong class="text-gray-800 tabular-nums">{{ montant(tarifDe(inscription)!) }} MRU</strong></span>
+                                                <button v-if="situation.montantDu !== tarifDe(inscription)" type="button" class="lien" @click="situation.montantDu = tarifDe(inscription)!">Utiliser ce montant</button>
+                                                <span v-else class="text-emerald-700"><i class="fa-solid fa-check mr-1"></i>Conforme au tarif</span>
+                                            </p>
                                             <label class="etiquette">Note financière interne<textarea v-model="situation.noteFinanciere" class="champ mt-1.5" rows="3" maxlength="2000"></textarea></label>
                                             <button class="bouton-principal" :disabled="envoi"><i class="fa-solid fa-check text-xs"></i>Enregistrer</button>
                                         </form>
