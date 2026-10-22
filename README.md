@@ -14,7 +14,6 @@ L’application fonctionne entièrement sur **Firebase** :
 | Sauvegarde quotidienne à 02:00 | Cloud Scheduler + export Firestore géré |
 | Sondes `/health/live` et `/health/ready` | Hosting → fonction `sante` |
 
-L’ancienne version Laravel est archivée par le tag Git `laravel-archive`.
 
 ## Architecture
 

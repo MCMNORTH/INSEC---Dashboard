@@ -6,4 +6,3 @@
 *.md diff=markdown
 
 /.github export-ignore
-CHANGELOG.md export-ignore
