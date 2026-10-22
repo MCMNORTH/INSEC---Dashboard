@@ -11,6 +11,14 @@ import { dateHeure } from '../format';
 import type { JournalEmail } from '../types';
 
 const statut = ref('');
+
+/** Traduit les erreurs SMTP courantes en consigne compréhensible. */
+function explicationErreur(erreur: string): string {
+    if (/535|Invalid login|authentication/i.test(erreur)) return 'Mot de passe de la messagerie refusé par le serveur : mettez à jour le secret SMTP_PASSWORD. (' + erreur + ')';
+    if (/SMTP_HOST/.test(erreur)) return 'Aucun serveur d’envoi configuré. (' + erreur + ')';
+    if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND/i.test(erreur)) return 'Serveur de messagerie injoignable. (' + erreur + ')';
+    return erreur;
+}
 const page = ref(1);
 const { donnees: journaux, chargement, erreur } = useRequete<JournalEmail>(() =>
     statut.value
@@ -63,7 +71,7 @@ const couleurs: Record<string, string> = { Envoyé: 'bg-green-50 text-green-700'
                         </td>
                         <td class="p-4">
                             <BadgeStatut :statut="j.statut" />
-                            <span v-if="j.erreur" :title="j.erreur" class="ml-2 cursor-help text-red-500"><i class="fa-solid fa-circle-info"></i></span>
+                            <p v-if="j.erreur" class="mt-1 max-w-xs text-xs text-red-600">{{ explicationErreur(j.erreur) }}</p>
                         </td>
                     </tr>
                     <tr v-if="!journaux.length"><td colspan="4" class="p-10 text-center text-gray-400">Aucun e-mail enregistré.</td></tr>
