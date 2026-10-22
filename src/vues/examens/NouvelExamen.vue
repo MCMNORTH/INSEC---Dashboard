@@ -83,7 +83,7 @@ async function enregistrer() {
                 <label class="etiquette">Salle / lieu (organisation INSEC)
                     <input v-model="f.salle" class="champ mt-1.5" maxlength="100" placeholder="À renseigner quand la salle est connue" />
                 </label>
-                <p class="flex items-start gap-3 rounded-2xl border border-insec-100 bg-insec-50/60 p-4 text-sm leading-6 text-insec-950 md:col-span-2">
+                <p class="flex items-start gap-3 rounded-2xl border border-insec-100 bg-insec-50/60 p-4 text-sm leading-6 text-insec-700 md:col-span-2">
                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-insec-100 text-insec-600"><i class="fa-solid fa-circle-info text-xs"></i></span>
                     <span>Ouvrir ce suivi ne change pas le calendrier de l’INTEC et n’envoie aucun e-mail. La fiche sert à suivre les candidats, les convocations locales, la réception des sujets et le retour des copies.</span>
                 </p>

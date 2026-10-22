@@ -156,7 +156,7 @@ const exports = [
             </form>
         </section>
         <section class="carte p-6">
-            <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-800 text-white shadow-sm"><i class="fa-solid fa-file-arrow-down"></i></div>
+            <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-700 text-white shadow-sm"><i class="fa-solid fa-file-arrow-down"></i></div>
             <h2 class="titre-section text-lg">Exporter les données</h2>
             <p class="mt-1 mb-5 text-sm text-gray-500">Les exports utilisent les données actuelles et des colonnes filtrables.</p>
             <div class="space-y-3">

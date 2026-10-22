@@ -40,8 +40,8 @@ const joursAvantEcheance = computed(() => {
                 <h1 class="titre-page mt-1.5">Notre convention avec l’INTEC</h1>
                 <p class="sous-titre">Les engagements du centre, les modalités d’examens et les échéances contractuelles, réunis sur une seule page.</p>
                 <div class="mt-3 flex flex-wrap gap-2">
-                    <span class="pastille bg-white text-gray-700 ring-gray-200"><i class="fa-regular fa-calendar text-[10px] text-insec-500"></i>Prise d’effet : 19 octobre 2024</span>
-                    <span class="pastille bg-white text-gray-700 ring-gray-200"><i class="fa-regular fa-clock text-[10px] text-insec-500"></i>Durée prévue : 3 ans</span>
+                    <span class="pastille bg-surface text-gray-700 ring-gray-200"><i class="fa-regular fa-calendar text-[10px] text-insec-500"></i>Prise d’effet : 19 octobre 2024</span>
+                    <span class="pastille bg-surface text-gray-700 ring-gray-200"><i class="fa-regular fa-clock text-[10px] text-insec-500"></i>Durée prévue : 3 ans</span>
                 </div>
             </div>
             <div class="flex flex-col items-start gap-1.5 sm:items-end">
@@ -77,7 +77,7 @@ const joursAvantEcheance = computed(() => {
             </article>
         </section>
 
-        <section class="rounded-2xl border border-amber-200 bg-linear-to-r from-amber-50 to-white p-5 sm:p-6" aria-labelledby="alerte-renouvellement">
+        <section class="rounded-2xl border border-amber-200 bg-linear-to-r from-amber-50 to-surface p-5 sm:p-6" aria-labelledby="alerte-renouvellement">
             <div class="flex items-start gap-4">
                 <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800"><i class="fa-solid fa-bell"></i></span>
                 <div>
@@ -139,7 +139,7 @@ const joursAvantEcheance = computed(() => {
             </article>
         </section>
 
-        <footer class="flex items-start gap-2.5 rounded-2xl border border-gray-200/80 bg-white/60 px-5 py-4 text-xs leading-5 text-gray-500">
+        <footer class="flex items-start gap-2.5 rounded-2xl border border-gray-200/80 bg-surface/60 px-5 py-4 text-xs leading-5 text-gray-500">
             <i class="fa-solid fa-book-open mt-0.5 text-gray-400"></i>
             Source : convention signée à Paris le 9 avril 2024, prise d’effet prévue le 19 octobre 2024, articles 1 à 10. L’échéance au 18 octobre 2027 est calculée à partir de la durée contractuelle ; confirmez-la avec l’INTEC et vérifiez l’existence d’un avenant avant de vous y fier.
         </footer>

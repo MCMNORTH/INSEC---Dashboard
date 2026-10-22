@@ -133,7 +133,7 @@ const cartes = (t: Tableau) => [
         unite: '',
         detail: 'Inscription active · ' + libelleAnnee(t),
         icone: 'fa-id-card',
-        teinte: 'from-insec-500 to-insec-800',
+        teinte: 'from-insec-500 to-insec-700',
         lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'inscrits' } },
     },
     {
@@ -182,7 +182,7 @@ const cartes = (t: Tableau) => [
             <h1 class="titre-page mt-1.5">{{ salutation }}{{ prenom ? `, ${prenom}` : '' }}</h1>
             <p class="sous-titre">Voici où en est l’année scolaire : actions à mener, inscriptions, examens et paiements.</p>
         </div>
-        <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-white pl-3.5 shadow-xs transition hover:border-gray-300">
+        <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-surface pl-3.5 shadow-xs transition hover:border-gray-300">
             <i class="fa-regular fa-calendar text-sm text-insec-500"></i>
             <span class="sr-only">Année scolaire</span>
             <select v-model="anneeId" class="border-0 bg-transparent py-2.5 pl-2 text-sm font-semibold text-gray-900 focus:ring-0">
@@ -216,7 +216,7 @@ const cartes = (t: Tableau) => [
                 </RouterLink>
             </section>
 
-            <div v-if="tableau.montantEnRetard > 0" class="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-red-200/80 bg-linear-to-r from-red-50 to-white p-4 sm:px-5">
+            <div v-if="tableau.montantEnRetard > 0" class="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-red-200/80 bg-linear-to-r from-red-50 to-surface p-4 sm:px-5">
                 <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"><i class="fa-solid fa-triangle-exclamation"></i></span>
                 <p class="min-w-0 flex-1 text-sm text-red-900"><strong class="font-semibold">{{ montant(tableau.montantEnRetard) }} MRU</strong> de paiements sont en retard.</p>
                 <RouterLink to="/finances" class="bouton-secondaire">Consulter les finances <i class="fa-solid fa-arrow-right text-xs"></i></RouterLink>
@@ -301,8 +301,8 @@ const cartes = (t: Tableau) => [
                     </div>
                     <ul v-else-if="prochainesEpreuvesOfficielles.length" class="divide-y divide-gray-100">
                         <li v-for="e in prochainesEpreuvesOfficielles" :key="e.codeUE" class="flex flex-wrap items-center gap-4 px-5 py-4 sm:px-6">
-                            <span class="flex w-14 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-white text-center ring-1 ring-gray-200">
-                                <span class="w-full bg-insec-900 py-0.5 text-[10px] font-semibold tracking-wider text-white uppercase">{{ e.dateFr.split(' ')[1]?.slice(0, 4) }}</span>
+                            <span class="flex w-14 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-surface text-center ring-1 ring-gray-200">
+                                <span class="w-full bg-insec-600 py-0.5 text-[10px] font-semibold tracking-wider text-white uppercase">{{ e.dateFr.split(' ')[1]?.slice(0, 4) }}</span>
                                 <span class="py-1 font-titre text-lg leading-6 font-bold text-gray-900">{{ e.dateFr.split(' ')[0] }}</span>
                             </span>
                             <span class="min-w-0 flex-1">

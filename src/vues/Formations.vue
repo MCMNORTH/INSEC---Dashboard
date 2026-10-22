@@ -26,14 +26,14 @@ const credits = (f: Formation, annee: number) => uesDe(f, annee).reduce((t, u) =
     </header>
     <div class="space-y-6">
         <section v-for="f in formationsActives" :key="f.id" class="carte overflow-hidden">
-            <header class="relative flex flex-wrap items-start justify-between gap-4 overflow-hidden bg-insec-950 px-6 py-5 text-white">
-                <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_120%_at_0%_0%,rgb(80_101_179/0.45),transparent_60%)]"></div>
+            <header class="relative flex flex-wrap items-start justify-between gap-4 overflow-hidden bg-insec-600 px-6 py-5 text-white">
+                <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_120%_at_0%_0%,rgb(255_255_255/0.16),transparent_60%)]"></div>
                 <div class="relative">
                     <div class="flex items-center gap-3">
-                        <span class="rounded-lg bg-white px-2.5 py-1 font-titre text-sm font-extrabold text-insec-900">{{ f.code }}</span>
+                        <span class="rounded-lg bg-surface px-2.5 py-1 font-titre text-sm font-extrabold text-insec-700">{{ f.code }}</span>
                         <h2 class="font-titre text-lg font-bold">{{ f.libelle }}</h2>
                     </div>
-                    <p class="mt-2 flex flex-wrap gap-2 text-xs text-insec-200">
+                    <p class="mt-2 flex flex-wrap gap-2 text-xs text-white/85">
                         <span class="rounded-full bg-white/10 px-2.5 py-1 ring-1 ring-white/10">{{ f.niveauDiplome }}</span>
                         <span class="rounded-full bg-white/10 px-2.5 py-1 ring-1 ring-white/10">{{ f.dureeAnnees }} ans</span>
                         <span class="rounded-full bg-white/10 px-2.5 py-1 ring-1 ring-white/10">{{ f.creditsTotal }} ECTS</span>
@@ -48,13 +48,13 @@ const credits = (f: Formation, annee: number) => uesDe(f, annee).reduce((t, u) =
                         <span class="pastille bg-insec-50 text-insec-700 ring-insec-600/15">{{ credits(f, a) }} ECTS</span>
                     </h3>
                     <div class="space-y-2">
-                        <article v-for="ue in uesDe(f, a)" :key="ue.id" class="rounded-xl bg-gray-50/70 p-3 ring-1 ring-gray-100 transition hover:bg-white hover:shadow-carte">
+                        <article v-for="ue in uesDe(f, a)" :key="ue.id" class="rounded-xl bg-gray-50/70 p-3 ring-1 ring-gray-100 transition hover:bg-surface hover:shadow-carte">
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <p class="text-[11px] font-bold tracking-wide text-insec-500">{{ ue.code }}</p>
                                     <p class="mt-0.5 text-sm font-medium text-gray-800">{{ ue.libelle }}</p>
                                 </div>
-                                <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-gray-500 ring-1 ring-gray-200">{{ ue.credits }} ECTS</span>
+                                <span class="rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-gray-500 ring-1 ring-gray-200">{{ ue.credits }} ECTS</span>
                             </div>
                         </article>
                     </div>

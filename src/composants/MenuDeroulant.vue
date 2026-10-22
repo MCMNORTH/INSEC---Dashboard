@@ -65,7 +65,7 @@ const fermer = () => (ouvert.value = false);
                 ref="panneau"
                 role="menu"
                 :class="[
-                    'absolute top-full z-50 mt-2 origin-top overflow-hidden rounded-2xl border border-gray-200/80 bg-white/95 p-1.5 shadow-flottant backdrop-blur-xl',
+                    'absolute top-full z-50 mt-2 origin-top overflow-hidden rounded-2xl border border-gray-200/80 bg-surface/95 p-1.5 shadow-flottant backdrop-blur-xl',
                     alignement === 'droite' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
                     largeur,
                 ]"

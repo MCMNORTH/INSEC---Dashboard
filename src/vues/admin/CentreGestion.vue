@@ -51,7 +51,7 @@ const modules = computed(() => {
                 <h1 class="titre-page mt-1.5">Centre de gestion</h1>
                 <p class="sous-titre">Les alertes et les outils de l’équipe INSEC, réunis au même endroit.</p>
             </div>
-            <span class="pastille bg-white text-gray-600 ring-gray-200">
+            <span class="pastille bg-surface text-gray-600 ring-gray-200">
                 <i class="fa-solid fa-layer-group text-[11px] text-insec-500"></i>
                 {{ modules.length }} espaces de gestion
             </span>
@@ -67,7 +67,7 @@ const modules = computed(() => {
                     class="carte group flex min-h-48 flex-col p-6 transition duration-200 hover:-translate-y-0.5 hover:border-insec-200 hover:shadow-flottant"
                 >
                     <div class="flex items-start justify-between gap-4">
-                        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-insec-50 text-insec-600 ring-1 ring-insec-100 transition duration-200 group-hover:bg-insec-900 group-hover:text-white group-hover:ring-insec-900">
+                        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-insec-50 text-insec-600 ring-1 ring-insec-100 transition duration-200 group-hover:bg-insec-600 group-hover:text-white group-hover:ring-insec-600">
                             <i :class="['fa-solid text-lg', espace.icone]"></i>
                         </span>
                         <span v-if="espace.vers === '/alertes' && nonLues" class="pastille bg-red-50 text-red-700 ring-red-600/15">

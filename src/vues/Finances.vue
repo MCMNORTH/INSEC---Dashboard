@@ -252,14 +252,14 @@ const totauxFinanciers = computed(() => ({
                 type="button"
                 role="tab"
                 :aria-selected="onglet === 'etudiants'"
-                :class="['inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition', onglet === 'etudiants' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800']"
+                :class="['inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition', onglet === 'etudiants' ? 'bg-surface text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800']"
                 @click="onglet = 'etudiants'"
             ><i class="fa-solid fa-user-graduate text-xs"></i>Étudiants</button>
             <button
                 type="button"
                 role="tab"
                 :aria-selected="onglet === 'synthese'"
-                :class="['inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition', onglet === 'synthese' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800']"
+                :class="['inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition', onglet === 'synthese' ? 'bg-surface text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800']"
                 @click="onglet = 'synthese'"
             ><i class="fa-solid fa-chart-pie text-xs"></i>Synthèse annuelle</button>
         </div>
@@ -279,7 +279,7 @@ const totauxFinanciers = computed(() => ({
                         </span>
                     </label>
                 </div>
-                <div v-if="retardsAnnee" class="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-red-200/80 bg-linear-to-r from-red-50 to-white p-3 sm:mx-5">
+                <div v-if="retardsAnnee" class="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-red-200/80 bg-linear-to-r from-red-50 to-surface p-3 sm:mx-5">
                     <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"><i class="fa-solid fa-triangle-exclamation text-sm"></i></span>
                     <span class="min-w-0 flex-1 text-sm text-red-900"><strong class="font-semibold">{{ retardsAnnee }} étudiant(s)</strong> en retard de paiement sur cette année.</span>
                     <button type="button" class="bouton-secondaire" :disabled="envoi" @click="relancerTous"><i class="fa-regular fa-paper-plane text-xs"></i>Relancer tous les retards</button>
@@ -315,23 +315,23 @@ const totauxFinanciers = computed(() => ({
             </section>
 
             <aside v-if="selectionne" class="carte overflow-hidden lg:sticky lg:top-24">
-                <div class="relative overflow-hidden bg-insec-950 px-5 pt-5 pb-4 text-white">
-                    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_80%_at_0%_0%,rgb(80_101_179/0.5),transparent_60%)]"></div>
-                    <p class="relative text-[10.5px] font-semibold tracking-[0.16em] text-insec-300 uppercase">Dossier financier</p>
+                <div class="relative overflow-hidden bg-insec-600 px-5 pt-5 pb-4 text-white">
+                    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_80%_at_0%_0%,rgb(255_255_255/0.16),transparent_60%)]"></div>
+                    <p class="relative text-[10.5px] font-semibold tracking-[0.16em] text-white/75 uppercase">Dossier financier</p>
                     <p class="relative mt-1 font-titre text-lg font-bold">{{ selectionne.nom }} {{ selectionne.prenom }}</p>
                     <div class="relative mt-3 flex flex-wrap gap-1.5">
                         <button
                             v-for="d in dossiers"
                             :key="d.id"
                             type="button"
-                            :class="['cursor-pointer rounded-lg px-2.5 py-1 text-xs font-semibold transition', inscription?.id === d.id ? 'bg-white text-insec-900' : 'bg-white/10 text-insec-100 hover:bg-white/20']"
+                            :class="['cursor-pointer rounded-lg px-2.5 py-1 text-xs font-semibold transition', inscription?.id === d.id ? 'bg-white text-[#1d4ed8]' : 'bg-white/10 text-white/90 hover:bg-white/20']"
                             @click="ouvrir(selectionne.id, d.id)"
                         >{{ formation(d.formationId)?.code }} {{ annee(d.anneeId)?.libelle }}</button>
                     </div>
                 </div>
 
                 <div v-if="inscription" class="p-5">
-                    <p :class="['flex items-start gap-2.5 rounded-xl border p-3 text-sm', inscription.financeur === 'bumex' ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900' : 'border-insec-100 bg-insec-50/60 text-insec-900']">
+                    <p :class="['flex items-start gap-2.5 rounded-xl border p-3 text-sm', inscription.financeur === 'bumex' ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900' : 'border-insec-100 bg-insec-50/60 text-insec-700']">
                         <i :class="['fa-solid mt-0.5 text-xs', inscription.financeur === 'bumex' ? 'fa-building-columns text-emerald-600' : 'fa-user text-insec-500']"></i>
                         <span>
                             <template v-if="inscription.financeur === 'bumex'">Cette inscription est prise en charge par BUMEX. Montant couvert : {{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU · {{ inscription.statutBumex === 'reglee' ? 'intégralement réglé par BUMEX' : 'paiement de BUMEX à confirmer' }}.</template>
@@ -518,7 +518,7 @@ const totauxFinanciers = computed(() => ({
                 <article class="carte p-5">
                     <div class="flex items-start justify-between gap-3">
                         <p class="text-[13px] font-medium text-gray-500">Étudiants inscrits · {{ carte?.libelle ?? anneeSynthese }}</p>
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-800 text-white shadow-sm"><i class="fa-solid fa-users text-[13px]"></i></span>
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-700 text-white shadow-sm"><i class="fa-solid fa-users text-[13px]"></i></span>
                     </div>
                     <p class="mt-3 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ carte?.etudiants ?? 0 }}</p>
                     <p class="mt-2.5 text-xs text-gray-500">{{ totauxFinanciers.unites }} UE · {{ carte?.nbEtudiants ?? 0 }} à leur charge · {{ carte?.nbBumex ?? 0 }} BUMEX</p>
@@ -596,7 +596,7 @@ const totauxFinanciers = computed(() => ({
                     </header>
                     <div class="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 sm:p-6">
                         <article class="rounded-xl bg-gray-50/70 p-4 ring-1 ring-gray-100">
-                            <h3 class="flex items-center gap-2 font-semibold text-gray-900"><span class="pastille bg-insec-900 text-white ring-insec-900">DGC</span></h3>
+                            <h3 class="flex items-center gap-2 font-semibold text-gray-900"><span class="pastille bg-insec-600 text-white ring-insec-600">DGC</span></h3>
                             <dl class="mt-3 space-y-2 text-sm">
                                 <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ TARIFS_UE.DGC.intecEuro }} € / UE</dd></div>
                                 <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">Tarif en MRU</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ montant(TARIFS_UE.DGC.mru) }} MRU / UE</dd></div>

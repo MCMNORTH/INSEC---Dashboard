@@ -91,12 +91,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', raccourci));
 <template>
     <Teleport to="body">
         <Transition enter-from-class="opacity-0" leave-to-class="opacity-0" enter-active-class="transition duration-150" leave-active-class="transition duration-100">
-            <div v-if="ouverte" class="fixed inset-0 z-[60] flex items-start justify-center bg-insec-950/40 p-4 pt-[12vh] backdrop-blur-sm" @mousedown.self="ouverte = false">
+            <div v-if="ouverte" class="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 p-4 pt-[12vh] backdrop-blur-sm" @mousedown.self="ouverte = false">
                 <div
                     role="dialog"
                     aria-modal="true"
                     aria-label="Recherche rapide"
-                    class="w-full max-w-xl animate-surgir overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_24px_64px_-12px_rgb(18_23_53/0.35)]"
+                    class="w-full max-w-xl animate-surgir overflow-hidden rounded-2xl border border-gray-200/80 bg-surface shadow-[0_24px_64px_-12px_rgb(18_23_53/0.35)]"
                     @keydown.esc="ouverte = false"
                     @keydown.down.prevent="deplacer(1)"
                     @keydown.up.prevent="deplacer(-1)"
@@ -127,7 +127,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', raccourci));
                                 @mousemove="actif = r.index"
                                 @click="aller(r)"
                             >
-                                <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition', r.index === actif ? 'bg-insec-900 text-white ring-insec-900' : 'bg-white text-gray-500 ring-gray-200']">
+                                <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition', r.index === actif ? 'bg-insec-600 text-white ring-insec-600' : 'bg-surface text-gray-500 ring-gray-200']">
                                     <i :class="['fa-solid text-sm', r.icone]"></i>
                                 </span>
                                 <span class="min-w-0 flex-1">

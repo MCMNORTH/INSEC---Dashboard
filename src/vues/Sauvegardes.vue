@@ -87,7 +87,7 @@ const lienConsole = (s: Sauvegarde) => `https://console.cloud.google.com/storage
                             <a :href="lienConsole(s)" target="_blank" rel="noopener noreferrer" class="bouton-secondaire min-h-9 px-3 text-xs">Cloud Storage <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>
                             <span class="mx-1 hidden h-6 w-px bg-gray-200 sm:block"></span>
                             <button
-                                :class="['bouton min-h-9 border px-3 text-xs', restauration === s.id ? 'border-red-200 bg-red-50 text-red-700' : 'border-red-200 bg-white text-red-600 hover:bg-red-50']"
+                                :class="['bouton min-h-9 border px-3 text-xs', restauration === s.id ? 'border-red-200 bg-red-50 text-red-700' : 'border-red-200 bg-surface text-red-600 hover:bg-red-50']"
                                 @click="restauration = restauration === s.id ? null : s.id"
                             ><i class="fa-solid fa-clock-rotate-left text-[11px]"></i> Restaurer</button>
                         </div>

@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { correspond, initiales, LIBELLES_ROLES, NAVIGATION } from '../navigation';
 import { aRole, deconnexion, session } from '../session';
 import { useAlertesNonLues } from './alertesNonLues';
+import { choixTheme, type ChoixTheme } from '../theme';
+import BoutonTheme from './BoutonTheme.vue';
 import MenuDeroulant from './MenuDeroulant.vue';
 
 defineEmits<{ menu: []; recherche: [] }>();
@@ -24,6 +26,12 @@ const fil = computed(() => {
     return { groupe: null, rubrique: null, page: route.meta.titre ?? null };
 });
 
+const THEMES: { valeur: ChoixTheme; libelle: string; icone: string }[] = [
+    { valeur: 'clair', libelle: 'Clair', icone: 'fa-sun' },
+    { valeur: 'sombre', libelle: 'Sombre', icone: 'fa-moon' },
+    { valeur: 'systeme', libelle: 'Système', icone: 'fa-desktop' },
+];
+
 const estMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 async function quitter() {
@@ -33,7 +41,7 @@ async function quitter() {
 </script>
 
 <template>
-    <header class="sticky top-0 z-30 border-b border-gray-200/70 bg-[#f5f6fb]/80 backdrop-blur-xl supports-[backdrop-filter]:bg-[#f5f6fb]/70">
+    <header class="sticky top-0 z-30 border-b border-gray-200/70 bg-fond/80 backdrop-blur-xl supports-[backdrop-filter]:bg-fond/70">
         <div class="mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:px-6 lg:px-10">
             <button type="button" class="bouton-icone -ml-1 text-gray-600 lg:hidden" aria-label="Ouvrir le menu" @click="$emit('menu')">
                 <i class="fa-solid fa-bars-staggered text-lg"></i>
@@ -59,29 +67,31 @@ async function quitter() {
             <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
                 <button
                     type="button"
-                    class="group hidden h-10 w-64 cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 bg-white/80 px-3 text-sm text-gray-400 shadow-xs transition hover:border-gray-300 hover:text-gray-600 md:flex xl:w-80"
+                    class="group hidden h-10 w-64 cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 bg-surface/80 px-3 text-sm text-gray-400 shadow-xs transition hover:border-gray-300 hover:text-gray-600 lg:flex xl:w-80"
                     @click="$emit('recherche')"
                 >
                     <i class="fa-solid fa-magnifying-glass text-[13px]"></i>
                     <span class="flex-1 text-left">Rechercher…</span>
                     <kbd class="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-sans text-[10.5px] font-medium text-gray-500">{{ estMac ? '⌘' : 'Ctrl' }} K</kbd>
                 </button>
-                <button type="button" class="bouton-icone md:hidden" aria-label="Rechercher" @click="$emit('recherche')">
+                <button type="button" class="bouton-icone lg:hidden" aria-label="Rechercher" @click="$emit('recherche')">
                     <i class="fa-solid fa-magnifying-glass"></i>
                 </button>
 
+                <BoutonTheme />
+
                 <RouterLink to="/alertes" class="bouton-icone relative h-10 w-10" :aria-label="nonLues ? `${nonLues} alerte(s) non lue(s)` : 'Alertes'">
                     <i class="fa-regular fa-bell text-[17px]"></i>
-                    <span v-if="nonLues" class="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e01a2e] px-1 text-[9.5px] font-bold text-white ring-2 ring-[#f5f6fb]">
+                    <span v-if="nonLues" class="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e01a2e] px-1 text-[9.5px] font-bold text-white ring-2 ring-fond">
                         {{ nonLues > 9 ? '9+' : nonLues }}
                     </span>
                 </RouterLink>
 
                 <div class="mx-1 hidden h-6 w-px bg-gray-200 sm:block"></div>
 
-                <MenuDeroulant libelle="Menu du compte" largeur="w-72" classe-declencheur="flex items-center gap-2.5 rounded-xl py-1 pr-2 pl-1 transition hover:bg-white">
+                <MenuDeroulant libelle="Menu du compte" largeur="w-72" classe-declencheur="flex items-center gap-2.5 rounded-xl py-1 pr-2 pl-1 transition hover:bg-surface">
                     <template #declencheur="{ ouvert }">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-insec-600 to-insec-900 text-[11px] font-bold text-white ring-2 ring-white">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-insec-600 to-insec-700 text-[11px] font-bold text-white ring-2 ring-surface">
                             {{ initiales(session.nom) }}
                         </span>
                         <span class="hidden min-w-0 text-left sm:block">
@@ -91,8 +101,8 @@ async function quitter() {
                         <span class="hidden sm:block"><i :class="['fa-solid fa-chevron-down text-[10px] text-gray-400 transition', ouvert && 'rotate-180']"></i></span>
                     </template>
 
-                    <div class="flex items-center gap-3 rounded-xl bg-linear-to-br from-insec-50 to-white p-3 ring-1 ring-insec-100">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-insec-600 to-insec-900 text-xs font-bold text-white">{{ initiales(session.nom) }}</span>
+                    <div class="flex items-center gap-3 rounded-xl bg-linear-to-br from-insec-50 to-surface p-3 ring-1 ring-insec-100">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-insec-600 to-insec-700 text-xs font-bold text-white">{{ initiales(session.nom) }}</span>
                         <span class="min-w-0">
                             <span class="block truncate text-sm font-semibold text-gray-900">{{ session.nom }}</span>
                             <span class="block truncate text-xs text-gray-500">{{ session.email }}</span>
@@ -109,6 +119,26 @@ async function quitter() {
                         <i class="fa-solid fa-magnifying-glass"></i>Recherche rapide
                         <kbd class="ml-auto font-sans text-[11px] text-gray-400">{{ estMac ? '⌘' : 'Ctrl' }} K</kbd>
                     </button>
+                    <div class="my-1.5 h-px bg-gray-100"></div>
+                    <div class="px-3 pt-1 pb-2" @click.stop>
+                        <p class="mb-1.5 text-[11px] font-semibold tracking-[0.1em] text-gray-400 uppercase">Apparence</p>
+                        <div class="grid grid-cols-3 gap-1 rounded-xl bg-gray-100 p-1" role="radiogroup" aria-label="Apparence">
+                            <button
+                                v-for="t in THEMES"
+                                :key="t.valeur"
+                                type="button"
+                                role="radio"
+                                :aria-checked="choixTheme === t.valeur"
+                                :class="[
+                                    'flex cursor-pointer flex-col items-center gap-1 rounded-lg py-1.5 text-[11px] font-medium transition',
+                                    choixTheme === t.valeur ? 'bg-surface text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800',
+                                ]"
+                                @click="choixTheme = t.valeur"
+                            >
+                                <i :class="['fa-solid text-xs', t.icone]"></i>{{ t.libelle }}
+                            </button>
+                        </div>
+                    </div>
                     <div class="my-1.5 h-px bg-gray-100"></div>
                     <button role="menuitem" type="button" class="element-menu danger" @click="quitter">
                         <i class="fa-solid fa-arrow-right-from-bracket"></i>Se déconnecter

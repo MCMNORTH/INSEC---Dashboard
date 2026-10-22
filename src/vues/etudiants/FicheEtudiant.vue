@@ -45,10 +45,10 @@ const progression = (i: Inscription) => {
     <Chargement :chargement="chargement" :vide="!etudiant" message-vide="Étudiant introuvable.">
         <template v-if="etudiant">
             <section class="carte relative overflow-hidden">
-                <div class="pointer-events-none absolute inset-x-0 top-0 h-20 bg-linear-to-r from-insec-900 via-insec-700 to-insec-500"></div>
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-20 bg-linear-to-r from-insec-600 via-insec-700 to-insec-500"></div>
                 <div class="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[radial-gradient(60%_120%_at_100%_0%,rgb(224_26_46/0.25),transparent_70%)]"></div>
                 <div class="relative px-5 pt-10 pb-5 sm:px-7">
-                    <span class="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-insec-500 to-insec-900 font-titre text-2xl font-bold text-white shadow-lg ring-4 ring-white">
+                    <span class="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-insec-500 to-insec-700 font-titre text-2xl font-bold text-white shadow-lg ring-4 ring-surface">
                             {{ `${etudiant.prenom?.[0] ?? ''}${etudiant.nom?.[0] ?? ''}`.toUpperCase() }}
                     </span>
                     <div class="mt-4 flex flex-wrap items-end justify-between gap-4">
@@ -87,7 +87,7 @@ const progression = (i: Inscription) => {
                             <span v-else-if="a.statut === 'suspendue'" class="pastille bg-amber-50 text-amber-800 ring-amber-600/20"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Inscription suspendue</span>
                             <span v-else-if="a.statut === 'annulée'" class="pastille bg-gray-50 text-gray-600 ring-gray-500/15"><span class="h-1.5 w-1.5 rounded-full bg-gray-400"></span>Inscription annulée</span>
                             <span v-else-if="a.statut === 'terminee'" class="pastille bg-insec-50 text-insec-700 ring-insec-600/15"><span class="h-1.5 w-1.5 rounded-full bg-insec-500"></span>Inscription terminée</span>
-                            <span v-else class="pastille bg-white text-gray-500 ring-gray-200">Non inscrit</span>
+                            <span v-else class="pastille bg-surface text-gray-500 ring-gray-200">Non inscrit</span>
                         </div>
                         <div v-if="a.inscriptions.length" class="mt-3 space-y-1">
                             <p v-for="i in a.inscriptions" :key="i.id" class="text-sm text-gray-600">

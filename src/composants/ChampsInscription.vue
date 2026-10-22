@@ -80,7 +80,7 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
             <label
                 v-for="ue in uesProposees"
                 :key="ue.id"
-                class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-xs transition hover:border-gray-300 has-[:checked]:border-insec-400 has-[:checked]:bg-insec-50/60 has-[:checked]:ring-1 has-[:checked]:ring-insec-400/40"
+                class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-surface p-3 text-sm shadow-xs transition hover:border-gray-300 has-[:checked]:border-insec-400 has-[:checked]:bg-insec-50/60 has-[:checked]:ring-1 has-[:checked]:ring-insec-400/40"
             >
                 <input v-model="valeurs.ueIds" type="checkbox" :value="ue.id" class="mt-0.5" />
                 <span class="min-w-0">
