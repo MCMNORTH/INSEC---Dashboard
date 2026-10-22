@@ -517,7 +517,7 @@ const totauxFinanciers = computed(() => ({
                                             <span class="min-w-0 flex-1">
                                                 Le montant dû ({{ montant(inscription.montantDu) }} MRU) diffère du tarif :
                                                 <strong class="tabular-nums">{{ inscription.ueIds.length }} UE × {{ montant(tarifUe(inscription) ?? 0) }} = {{ montant(tarifDe(inscription) ?? 0) }} MRU</strong>
-                                                <span class="text-amber-800/80">({{ ecartDe(inscription)! > 0 ? '+' : '' }}{{ montant(ecartDe(inscription)!) }})</span>.
+                                                {{ ' ' }}<span class="text-amber-800/80">({{ ecartDe(inscription)! > 0 ? '+' : '' }}{{ montant(ecartDe(inscription)!) }})</span>.
                                             </span>
                                             <button type="button" class="bouton-secondaire min-h-0 py-1.5 text-xs" @click="appliquerTarif">Utiliser le tarif</button>
                                         </div>
