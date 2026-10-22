@@ -62,6 +62,9 @@ watch(inscription, (i) => {
 }, { immediate: true });
 const echeance = reactive({ libelle: '', montant: null as number | null, dateEcheance: '' });
 const versement = reactive({ montant: null as number | null, dateVersement: aujourdhui(), statut: 'Validée', modePaiement: 'Espèces', reference: '', note: '' });
+const echeancier = reactive({ nombre: 3, premiereDate: aujourdhui(), intervalleMois: 1, remplacer: false });
+const echeanceEnCours = ref<string | null>(null);
+const echeanceModifiee = reactive({ libelle: '', montant: 0, dateEcheance: '' });
 
 async function executer(operation: string, donnees: object, apres?: () => void) {
     const resultat = await soumettre(() => appeler(operation, donnees));
@@ -74,6 +77,32 @@ const ajouterEcheance = () =>
     executer('ajouterEcheance', { inscriptionId: inscription.value!.id, ...echeance }, () => Object.assign(echeance, { libelle: '', montant: null, dateEcheance: '' }));
 const ajouterVersement = () =>
     executer('ajouterVersement', { inscriptionId: inscription.value!.id, ...versement }, () => Object.assign(versement, { montant: null, reference: '', note: '' }));
+const genererEcheancier = () => executer('genererEcheancier', { inscriptionId: inscription.value!.id, ...echeancier }, () => (echeancier.remplacer = false));
+function editerEcheance(e: { id: string; libelle: string; montant: number; dateEcheance: string }) {
+    echeanceEnCours.value = e.id;
+    Object.assign(echeanceModifiee, { libelle: e.libelle, montant: e.montant, dateEcheance: e.dateEcheance });
+}
+const enregistrerEcheance = () =>
+    executer('modifierEcheance', { inscriptionId: inscription.value!.id, id: echeanceEnCours.value, ...echeanceModifiee }, () => (echeanceEnCours.value = null));
+function supprimerEcheance(e: { id: string; libelle: string }) {
+    if (window.confirm(`Supprimer l’échéance « ${e.libelle} » ?`)) void executer('supprimerEcheance', { inscriptionId: inscription.value!.id, id: e.id });
+}
+function traiterVersement(v: Versement, statut: 'Validée' | 'Rejetée') {
+    if (statut === 'Validée') {
+        if (!window.confirm(`Valider le versement de ${montant(v.montant)} MRU du ${date(v.dateVersement)} ? Il sera ajouté au total versé.`)) return;
+        void executer('traiterVersement', { id: v.id, statut });
+        return;
+    }
+    const motif = window.prompt(`Motif du rejet du versement de ${montant(v.montant)} MRU :`);
+    if (motif?.trim()) void executer('traiterVersement', { id: v.id, statut, motif });
+}
+function annulerVersement(v: Versement) {
+    const motif = window.prompt(`Annuler le versement validé de ${montant(v.montant)} MRU (reçu ${v.numeroRecu}) ?\nIl sera retiré du total versé. Indiquez le motif (ex. erreur de saisie, chèque impayé) :`);
+    if (motif?.trim()) void executer('annulerVersement', { id: v.id, motif });
+}
+const couleurStatut = (statut: string) =>
+    statut === 'Validée' ? 'text-green-400' : statut === 'En attente' ? 'text-amber-400' : 'text-red-300 line-through';
+
 const confirmerVersement = async () => {
     if (versement.statut === 'Validée') {
         const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
@@ -294,9 +323,22 @@ const totauxFinanciers = computed(() => ({
 
                     <div class="mt-4 border-t border-blue-400/30 pt-4">
                         <p class="mb-2 text-xs text-blue-200">Échéancier</p>
-                        <div v-for="e in inscription.echeances" :key="e.id" class="mb-1 flex justify-between rounded bg-white/10 px-2 py-1 text-xs">
-                            <span>{{ e.libelle }} · {{ date(e.dateEcheance) }}</span><strong>{{ montant(e.montant) }}</strong>
-                        </div>
+                        <template v-for="e in inscription.echeances" :key="e.id">
+                            <form v-if="echeanceEnCours === e.id" class="mb-1 grid grid-cols-2 gap-1 rounded bg-white/10 p-2" @submit.prevent="enregistrerEcheance">
+                                <input v-model="echeanceModifiee.libelle" class="rounded text-xs text-gray-900" required maxlength="100" aria-label="Libellé" />
+                                <input v-model.number="echeanceModifiee.montant" type="number" min="1" class="rounded text-xs text-gray-900" required aria-label="Montant" />
+                                <input v-model="echeanceModifiee.dateEcheance" type="date" class="rounded text-xs text-gray-900" required aria-label="Date d’échéance" />
+                                <span class="flex gap-1">
+                                    <button class="flex-1 cursor-pointer rounded bg-amber-500 text-xs" :disabled="envoi">Enregistrer</button>
+                                    <button type="button" class="cursor-pointer rounded bg-white/10 px-2 text-xs" @click="echeanceEnCours = null">Annuler</button>
+                                </span>
+                            </form>
+                            <div v-else class="mb-1 flex items-center justify-between gap-2 rounded bg-white/10 px-2 py-1 text-xs">
+                                <span class="min-w-0 flex-1">{{ e.libelle }} · {{ date(e.dateEcheance) }}</span><strong>{{ montant(e.montant) }}</strong>
+                                <button type="button" class="cursor-pointer text-blue-200 underline" :disabled="envoi" @click="editerEcheance(e)">Modifier</button>
+                                <button type="button" class="cursor-pointer text-red-200 underline" :disabled="envoi" @click="supprimerEcheance(e)">Supprimer</button>
+                            </div>
+                        </template>
                         <p v-if="!inscription.echeances?.length" class="text-xs text-blue-200">Aucune échéance.</p>
                         <form class="mt-2 grid grid-cols-2 gap-2" @submit.prevent="ajouterEcheance">
                             <input v-model="echeance.libelle" placeholder="Ex. 1re tranche" class="rounded text-xs text-gray-900" required maxlength="100" />
@@ -304,6 +346,18 @@ const totauxFinanciers = computed(() => ({
                             <input v-model="echeance.dateEcheance" type="date" class="rounded text-xs text-gray-900" required aria-label="Date d’échéance" />
                             <button class="cursor-pointer rounded bg-white/10 text-xs" :disabled="envoi">+ Échéance</button>
                         </form>
+                        <form class="mt-3 space-y-2 rounded-lg bg-white/5 p-2" @submit.prevent="genererEcheancier">
+                            <p class="text-xs text-blue-200">Générer l’échéancier sur le reste à payer ({{ montant(soldeRestant(inscription)) }} MRU)</p>
+                            <div class="grid grid-cols-3 gap-2">
+                                <label class="text-[10px] text-blue-200">Tranches<input v-model.number="echeancier.nombre" type="number" min="2" max="12" class="mt-1 w-full rounded text-xs text-gray-900" required /></label>
+                                <label class="text-[10px] text-blue-200">1re échéance<input v-model="echeancier.premiereDate" type="date" class="mt-1 w-full rounded text-xs text-gray-900" required /></label>
+                                <label class="text-[10px] text-blue-200">Tous les (mois)<input v-model.number="echeancier.intervalleMois" type="number" min="1" max="6" class="mt-1 w-full rounded text-xs text-gray-900" required /></label>
+                            </div>
+                            <label v-if="inscription.echeances?.length" class="flex items-center gap-2 text-[10px] text-blue-200"><input v-model="echeancier.remplacer" type="checkbox" /> Remplacer l’échéancier existant</label>
+                            <p v-if="erreurs.nombre" class="text-xs text-red-200">{{ erreurs.nombre }}</p>
+                            <button class="w-full cursor-pointer rounded bg-white/10 py-1 text-xs" :disabled="envoi || soldeRestant(inscription) <= 0">Générer l’échéancier</button>
+                        </form>
+                        <p v-if="erreurs.montant" class="mt-1 text-xs text-red-200">{{ erreurs.montant }}</p>
                     </div>
 
                     <div class="mt-4 border-t border-blue-400/30 pt-4">
@@ -313,8 +367,16 @@ const totauxFinanciers = computed(() => ({
                                 <div class="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2 text-xs">
                                     <span>{{ date(v.dateVersement) }}</span>
                                     <span>{{ montant(v.montant) }}</span>
-                                    <span :class="v.statut === 'Validée' ? 'text-green-400' : 'text-amber-400'">{{ v.statut }}</span>
+                                    <span :class="couleurStatut(v.statut)">{{ v.statut }}</span>
                                 </div>
+                                <p v-if="v.motifAnnulation || v.motifRejet" class="px-2 text-[10px] text-red-200">Motif : {{ v.motifAnnulation || v.motifRejet }}</p>
+                                <p class="px-2 text-[10px]">
+                                    <template v-if="v.statut === 'En attente'">
+                                        <button type="button" class="cursor-pointer text-green-300 underline" :disabled="envoi" @click="traiterVersement(v, 'Validée')">Valider</button>
+                                        <button type="button" class="ml-2 cursor-pointer text-red-200 underline" :disabled="envoi" @click="traiterVersement(v, 'Rejetée')">Rejeter</button>
+                                    </template>
+                                    <button v-else-if="v.statut === 'Validée'" type="button" class="cursor-pointer text-red-200 underline" :disabled="envoi" @click="annulerVersement(v)">Annuler ce versement</button>
+                                </p>
                                 <p class="px-2 text-[10px] text-blue-200">
                                     {{ v.numeroRecu }} · {{ v.modePaiement }}<template v-if="v.reference"> · {{ v.reference }}</template>
                                     <button

@@ -11,7 +11,10 @@ export { envoyerEmail } from './handlers/emails.js';
 export { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription, supprimerEtudiant } from './handlers/etudiants.js';
 export { exporterExcel, importerEtudiants } from './handlers/excel.js';
 export { creerExamen, enregistrerPresencesExamen, enregistrerResultat, mettreAJourPreparationExamen } from './handlers/examens.js';
-export { ajouterEcheance, ajouterVersement, confirmerReglementBumex2024, lireTauxEuroMru, modifierSituationFinanciere, modifierTauxEuroMru } from './handlers/finances.js';
+export {
+    ajouterEcheance, ajouterVersement, annulerVersement, confirmerReglementBumex2024, genererEcheancier, lireTauxEuroMru, modifierEcheance,
+    modifierSituationFinanciere, modifierTauxEuroMru, supprimerEcheance, traiterVersement,
+} from './handlers/finances.js';
 export { analyserResultatsHistoriques, importerResultatsHistoriques, telechargerClasseurResultatsHistoriques } from './handlers/resultatsHistoriques.js';
 export { envoyerConvocationsExamen, envoyerDocumentParEmail, genererPdf } from './handlers/pdf.js';
 export { sante } from './handlers/sante.js';

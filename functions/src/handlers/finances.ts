@@ -5,7 +5,10 @@ import { col, exiger, nomComplet, prochainNumero } from '../lib/donnees.js';
 import { mettreEnFileEmail } from '../lib/email.js';
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
-import { formaterMontant, MODES_PAIEMENT, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, STATUTS_VERSEMENT } from '../shared/domaine.js';
+import {
+    decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE,
+    soldeRestant, STATUT_VERSEMENT_ANNULE, STATUTS_VERSEMENT, type Echeance, type SituationFinanciere,
+} from '../shared/domaine.js';
 
 const formaterDate = (iso: string) => iso.split('-').reverse().join('/');
 
@@ -108,21 +111,159 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
     return { id: ref.id, numeroRecu, message };
 });
 
-export const ajouterEcheance = operation('ajouterEcheance', ROLES_FINANCE, async (donnees, acteur) => {
-    const v = valider(
-        z.object({ inscriptionId: s.id(), libelle: s.texte(100), montant: s.entier(1), dateEcheance: s.date() }),
-        donnees,
-    );
+/** Valide ou rejette, une seule fois, un versement « En attente » ; le solde est mis à jour dans la même transaction. */
+export const traiterVersement = operation('traiterVersement', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(z.object({ id: s.id(), statut: s.choix(['Validée', 'Rejetée'] as const), motif: s.texteOptionnel(500) }), donnees);
+    if (v.statut === 'Rejetée' && !v.motif?.trim()) erreurChamp('motif', 'Un motif est obligatoire pour rejeter un versement.');
+    let confirmationMiseEnFile = false;
     await db.runTransaction(async (tx) => {
-        const ref = col.inscriptions().doc(v.inscriptionId);
-        const inscription = await exiger(tx, ref, 'Inscription introuvable.');
-        if (inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : aucun échéancier étudiant ne peut y être enregistré.');
+        const versementRef = col.versements().doc(v.id);
+        const versement = await exiger(tx, versementRef, 'Versement introuvable.');
+        if (versement.statut !== 'En attente') refuser('Seul un versement en attente peut être validé ou rejeté.');
+        const inscriptionRef = col.inscriptions().doc(versement.inscriptionId);
+        const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
+        const etudiant = await exiger(tx, col.etudiants().doc(versement.etudiantId ?? inscription.etudiantId), 'Étudiant introuvable.');
+        if (v.statut === 'Validée' && inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : le versement ne peut pas être validé.');
+        const situation = inscription as unknown as SituationFinanciere;
+        const soldeApresPaiement = v.statut === 'Validée' ? Math.max(soldeRestant(situation) - versement.montant, 0) : null;
+        const avant = { statut: versement.statut };
+        const apres = { statut: v.statut, motifRejet: v.statut === 'Rejetée' ? v.motif!.trim() : null };
+        tx.update(versementRef, { ...apres, ...trace(acteur) });
+        if (v.statut === 'Validée') {
+            tx.update(inscriptionRef, { totalVerse: FieldValue.increment(versement.montant), ...trace(acteur) });
+            const email = String(etudiant.email ?? '').trim();
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                mettreEnFileEmail(tx, {
+                    destinataire: email,
+                    nomDestinataire: nomComplet(etudiant),
+                    type: 'Paiement',
+                    sujet: 'Confirmation de votre paiement INSEC',
+                    titre: 'Paiement validé',
+                    message: 'Votre versement a été validé et enregistré dans votre dossier financier.',
+                    details: {
+                        Reçu: String(versement.numeroRecu ?? '—'),
+                        Montant: `${formaterMontant(versement.montant)} MRU`,
+                        Date: formaterDate(String(versement.dateVersement)),
+                        'Solde restant après paiement': `${formaterMontant(soldeApresPaiement ?? 0)} MRU`,
+                    },
+                });
+                confirmationMiseEnFile = true;
+            }
+        }
+        auditerModele(tx, acteur, 'Versement', v.id, 'updated', avant, apres);
+    });
+    return {
+        message: v.statut === 'Rejetée'
+            ? 'Versement rejeté. Le motif est enregistré et le solde reste inchangé.'
+            : confirmationMiseEnFile
+              ? 'Versement validé et solde actualisé. La confirmation de paiement a été mise en file d’envoi.'
+              : 'Versement validé et solde actualisé. Aucune adresse e-mail valide : aucun e-mail envoyé.',
+    };
+});
+
+/** Annule un versement validé par erreur (motif obligatoire) : il est retiré du total versé, l'historique est conservé. */
+export const annulerVersement = operation('annulerVersement', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(z.object({ id: s.id(), motif: s.texteOptionnel(500) }), donnees);
+    if (!v.motif?.trim()) erreurChamp('motif', 'Indiquez le motif de l’annulation.');
+    await db.runTransaction(async (tx) => {
+        const versementRef = col.versements().doc(v.id);
+        const versement = await exiger(tx, versementRef, 'Versement introuvable.');
+        if (versement.statut !== 'Validée') refuser('Seul un versement validé peut être annulé.');
+        const inscriptionRef = col.inscriptions().doc(versement.inscriptionId);
+        await exiger(tx, inscriptionRef, 'Inscription introuvable.');
+        const apres = { statut: STATUT_VERSEMENT_ANNULE, motifAnnulation: v.motif!.trim(), annulePar: acteur.uid };
+        tx.update(versementRef, { ...apres, annuleLe: FieldValue.serverTimestamp(), ...trace(acteur) });
+        tx.update(inscriptionRef, { totalVerse: FieldValue.increment(-versement.montant), ...trace(acteur) });
+        auditerModele(tx, acteur, 'Versement', v.id, 'updated', { statut: versement.statut }, apres);
+    });
+    return { message: 'Versement annulé : il ne compte plus dans le total versé. Son historique est conservé.' };
+});
+
+/** Lit une inscription à laquelle on peut associer un échéancier étudiant. */
+async function inscriptionEcheancier(tx: FirebaseFirestore.Transaction, inscriptionId: string) {
+    const ref = col.inscriptions().doc(inscriptionId);
+    const inscription = await exiger(tx, ref, 'Inscription introuvable.');
+    if (inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : aucun échéancier étudiant ne peut y être enregistré.');
+    if (inscription.statut === 'annulée') refuser('Cette inscription est annulée : aucun échéancier ne peut y être enregistré.');
+    return { ref, inscription };
+}
+
+/** Le total des échéances ne peut pas dépasser le montant net de l'inscription. */
+function controlerTotalEcheances(echeances: Echeance[], inscription: FirebaseFirestore.DocumentData) {
+    const total = echeances.reduce((t, e) => t + e.montant, 0);
+    const net = montantNet(inscription as SituationFinanciere);
+    if (total > net) erreurChamp('montant', `Le total des échéances (${formaterMontant(total)} MRU) dépasse le montant net de l’inscription (${formaterMontant(net)} MRU).`);
+}
+
+const trier = (echeances: Echeance[]) => [...echeances].sort((a, b) => a.dateEcheance.localeCompare(b.dateEcheance));
+
+export const ajouterEcheance = operation('ajouterEcheance', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(z.object({ inscriptionId: s.id(), libelle: s.texte(100), montant: s.entier(1), dateEcheance: s.date() }), donnees);
+    await db.runTransaction(async (tx) => {
+        const { ref, inscription } = await inscriptionEcheancier(tx, v.inscriptionId);
         const echeance = { id: randomUUID(), libelle: v.libelle, montant: v.montant, dateEcheance: v.dateEcheance };
-        const echeances = [...(inscription.echeances ?? []), echeance].sort((a, b) => a.dateEcheance.localeCompare(b.dateEcheance));
+        const echeances = trier([...(inscription.echeances ?? []), echeance]);
+        controlerTotalEcheances(echeances, inscription);
         tx.update(ref, { echeances, ...trace(acteur) });
         auditerModele(tx, acteur, 'Echeance', echeance.id, 'created', null, { inscriptionId: v.inscriptionId, ...echeance });
     });
     return { message: 'Échéance ajoutée.' };
+});
+
+export const modifierEcheance = operation('modifierEcheance', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(z.object({ inscriptionId: s.id(), id: s.id(), libelle: s.texte(100), montant: s.entier(1), dateEcheance: s.date() }), donnees);
+    await db.runTransaction(async (tx) => {
+        const { ref, inscription } = await inscriptionEcheancier(tx, v.inscriptionId);
+        const existantes: Echeance[] = inscription.echeances ?? [];
+        const avant = existantes.find((e) => e.id === v.id);
+        if (!avant) refuser('Échéance introuvable.');
+        const apres = { id: v.id, libelle: v.libelle, montant: v.montant, dateEcheance: v.dateEcheance };
+        const echeances = trier(existantes.map((e) => (e.id === v.id ? apres : e)));
+        controlerTotalEcheances(echeances, inscription);
+        tx.update(ref, { echeances, ...trace(acteur) });
+        auditerModele(tx, acteur, 'Echeance', v.id, 'updated', { ...avant }, apres);
+    });
+    return { message: 'Échéance modifiée.' };
+});
+
+export const supprimerEcheance = operation('supprimerEcheance', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(z.object({ inscriptionId: s.id(), id: s.id() }), donnees);
+    await db.runTransaction(async (tx) => {
+        const ref = col.inscriptions().doc(v.inscriptionId);
+        const inscription = await exiger(tx, ref, 'Inscription introuvable.');
+        const existantes: Echeance[] = inscription.echeances ?? [];
+        const avant = existantes.find((e) => e.id === v.id);
+        if (!avant) refuser('Échéance introuvable.');
+        tx.update(ref, { echeances: existantes.filter((e) => e.id !== v.id), ...trace(acteur) });
+        auditerModele(tx, acteur, 'Echeance', v.id, 'deleted', { ...avant }, null);
+    });
+    return { message: 'Échéance supprimée.' };
+});
+
+/** Découpe le reste à payer en tranches égales ; remplace l'échéancier existant seulement si on le demande. */
+export const genererEcheancier = operation('genererEcheancier', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(z.object({
+        inscriptionId: s.id(),
+        nombre: s.entier(2, 12),
+        premiereDate: s.date(),
+        intervalleMois: s.entier(1, 6),
+        remplacer: z.boolean().default(false),
+    }), donnees);
+    let nombre = 0;
+    await db.runTransaction(async (tx) => {
+        const { ref, inscription } = await inscriptionEcheancier(tx, v.inscriptionId);
+        const existantes: Echeance[] = inscription.echeances ?? [];
+        if (existantes.length && !v.remplacer) refuser('Un échéancier existe déjà : cochez « Remplacer l’échéancier existant » pour le refaire.');
+        const situation = inscription as unknown as SituationFinanciere;
+        const reste = soldeRestant(situation);
+        if (!estRecouvrable(situation) || reste <= 0) refuser('Il ne reste rien à payer sur cette inscription.');
+        if (reste < v.nombre) erreurChamp('nombre', 'Le reste à payer est trop faible pour autant de tranches.');
+        const echeances = decouperEcheancier(reste, v.nombre, v.premiereDate, v.intervalleMois).map((e) => ({ id: randomUUID(), ...e }));
+        nombre = echeances.length;
+        tx.update(ref, { echeances, ...trace(acteur) });
+        auditerModele(tx, acteur, 'Inscription', v.inscriptionId, 'updated', { echeances: existantes }, { echeances });
+    });
+    return { message: `Échéancier créé : ${nombre} tranches sur le reste à payer.` };
 });
 
 

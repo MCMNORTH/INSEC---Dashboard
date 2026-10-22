@@ -92,6 +92,8 @@ export interface Versement {
     reference: string | null;
     note: string | null;
     numeroRecu: string;
+    motifRejet?: string | null;
+    motifAnnulation?: string | null;
 }
 
 export interface Examen {
