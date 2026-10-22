@@ -15,6 +15,8 @@ export const ROLES_CREABLES = ['admin', 'finance'] as const;
 export const STATUTS_ETUDIANT = ['Actif', 'Suspendu', 'Diplômé', 'Abandon'] as const;
 export const STATUTS_INSCRIPTION = ['active', 'terminée', 'annulée', 'suspendue'] as const;
 export const STATUTS_VERSEMENT = ['Validée', 'En attente', 'Rejetée'] as const;
+/** Statut d'un versement validé puis annulé (erreur de saisie, chèque impayé…) : il ne compte plus dans le total versé. */
+export const STATUT_VERSEMENT_ANNULE = 'Annulée';
 export const MODES_PAIEMENT = ['Espèces', 'Virement', 'Chèque', 'Carte', 'Mobile Money'] as const;
 export const SESSIONS_EXAMEN = ['Normale', 'Rattrapage'] as const;
 export const STATUTS_EXAMEN = ['Planifié', 'Terminé', 'Annulé'] as const;
@@ -106,6 +108,29 @@ export function montantEnRetard(i: SituationFinanciere, aujourdhui: string = dat
 
 export function resultatValide(r: { presence: string; note: number | null; seuilValidation: number }): boolean {
     return r.presence === 'Présent' && r.note !== null && r.note !== undefined && r.note >= r.seuilValidation;
+}
+
+/** Ajoute des mois à une date AAAA-MM-JJ ; le jour est ramené au dernier jour du mois si besoin (31 janv. + 1 mois = 28/29 févr.). */
+export function ajouterMois(dateIso: string, mois: number): string {
+    const [a, m, j] = dateIso.split('-').map(Number);
+    const total = a * 12 + (m - 1) + mois;
+    const annee = Math.floor(total / 12);
+    const moisCible = (total % 12) + 1;
+    const dernierJour = new Date(Date.UTC(annee, moisCible, 0)).getUTCDate();
+    return `${annee}-${String(moisCible).padStart(2, '0')}-${String(Math.min(j, dernierJour)).padStart(2, '0')}`;
+}
+
+/**
+ * Découpe un montant en tranches égales (en MRU entiers, le reste sur la dernière tranche),
+ * espacées de `intervalleMois` à partir de `premiereDate`.
+ */
+export function decouperEcheancier(montant: number, nombre: number, premiereDate: string, intervalleMois = 1): Omit<Echeance, 'id'>[] {
+    const base = Math.floor(montant / nombre);
+    return Array.from({ length: nombre }, (_, k) => ({
+        libelle: `Tranche ${k + 1}/${nombre}`,
+        montant: k === nombre - 1 ? montant - base * (nombre - 1) : base,
+        dateEcheance: ajouterMois(premiereDate, k * intervalleMois),
+    }));
 }
 
 /** Les épreuves INTEC sont fixées à l'heure de Paris ; l'INSEC les organise à Nouakchott (UTC+0, sans heure d'été). */
