@@ -260,70 +260,92 @@ async function enregistrer() {
 </script>
 
 <template>
-    <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+    <RouterLink to="/examens" class="lien mb-4 inline-flex items-center gap-2 text-sm"><i class="fa-solid fa-arrow-left text-xs"></i> Retour aux examens</RouterLink>
+    <header class="en-tete-page">
         <div>
-            <p class="text-sm text-gray-500">Examens · Calendrier officiel</p>
-            <h1 class="text-xl font-bold text-insec">Importer un calendrier INTEC</h1>
-            <p class="mt-1 text-sm text-gray-600">Lecture du PDF, aperçu à vérifier, puis enregistrement séparé des examens locaux.</p>
+            <p class="surtitre">Examens · Calendrier officiel</p>
+            <h1 class="titre-page mt-1.5">Importer un calendrier INTEC</h1>
+            <p class="sous-titre">Lecture du PDF, aperçu à vérifier, puis enregistrement séparé des examens locaux.</p>
         </div>
-        <RouterLink to="/examens" class="bouton-secondaire">← Retour aux examens</RouterLink>
+    </header>
+
+    <div v-if="erreur" role="alert" class="mb-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50/70 p-4 text-sm text-red-800">
+        <i class="fa-solid fa-circle-exclamation mt-0.5 text-red-500"></i><span>{{ erreur }}</span>
+    </div>
+    <div v-if="succes" role="status" class="mb-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-800">
+        <i class="fa-solid fa-circle-check mt-0.5 text-emerald-500"></i><span>{{ succes }}</span>
     </div>
 
-    <div v-if="erreur" role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{{ erreur }}</div>
-    <div v-if="succes" role="status" class="mb-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">{{ succes }}</div>
-
-    <section class="carte mb-5 space-y-5 p-5">
-        <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
-            Téléchargez le PDF depuis la
-            <a :href="SOURCE_INTEC" target="_blank" rel="noopener noreferrer" class="font-semibold underline">page officielle du planning INTEC</a>,
-            puis sélectionnez-le ici. Le fichier est lu dans votre navigateur et n’est pas envoyé à Firebase.
-            Seules les épreuves écrites DGC et DSGC avec une date et une heure précises sont proposées.
+    <section class="carte mb-6 overflow-hidden">
+        <header class="panneau-entete">
+            <div>
+                <h2 class="titre-section">Document officiel</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Le PDF est lu dans votre navigateur</p>
+            </div>
+            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-500 ring-1 ring-red-100"><i class="fa-solid fa-file-pdf"></i></span>
+        </header>
+        <div class="space-y-5 p-5 sm:p-6">
+            <div class="flex items-start gap-3 rounded-2xl border border-insec-100 bg-insec-50/60 p-4 text-sm leading-6 text-insec-950">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-insec-100 text-insec-600"><i class="fa-solid fa-circle-info text-xs"></i></span>
+                <p>
+                    Téléchargez le PDF depuis la
+                    <a :href="SOURCE_INTEC" target="_blank" rel="noopener noreferrer" class="lien font-semibold">page officielle du planning INTEC</a>,
+                    puis sélectionnez-le ici. Le fichier est lu dans votre navigateur et n’est pas envoyé à Firebase.
+                    Seules les épreuves écrites DGC et DSGC avec une date et une heure précises sont proposées.
+                </p>
+            </div>
+            <div class="grid gap-5 md:grid-cols-2">
+                <label class="etiquette">Document officiel PDF
+                    <input type="file" accept="application/pdf,.pdf" class="champ mt-1.5 py-2" @change="choisirFichier" />
+                </label>
+                <label class="etiquette">Lien source officiel
+                    <input v-model="source" type="url" class="champ mt-1.5" placeholder="https://intec.cnam.fr/…" />
+                    <span class="mt-1.5 block text-xs font-normal text-gray-500">La source doit rester sur intec.cnam.fr et sera conservée avec l’année importée.</span>
+                </label>
+            </div>
         </div>
-        <label class="block">
-            <span class="mb-1 block text-sm font-medium text-gray-700">Document officiel PDF</span>
-            <input type="file" accept="application/pdf,.pdf" class="champ w-full" @change="choisirFichier" />
-        </label>
-        <label class="block">
-            <span class="mb-1 block text-sm font-medium text-gray-700">Lien source officiel</span>
-            <input v-model="source" type="url" class="champ w-full" placeholder="https://intec.cnam.fr/…" />
-            <span class="mt-1 block text-xs text-gray-500">La source doit rester sur intec.cnam.fr et sera conservée avec l’année importée.</span>
-        </label>
-        <button type="button" class="bouton-action" :disabled="chargement || !fichier" @click="analyserPdf">
-            {{ chargement ? 'Lecture en cours…' : 'Analyser le PDF et afficher l’aperçu' }}
-        </button>
+        <div class="flex justify-end border-t border-gray-100 bg-gray-50/60 px-5 py-4 sm:px-6">
+            <button type="button" class="bouton-action" :disabled="chargement || !fichier" @click="analyserPdf">
+                <i v-if="chargement" class="fa-solid fa-circle-notch fa-spin"></i>
+                {{ chargement ? 'Lecture en cours…' : 'Analyser le PDF et afficher l’aperçu' }}
+            </button>
+        </div>
     </section>
 
     <section v-if="analyse" class="carte overflow-hidden">
-        <header class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-5">
+        <header class="panneau-entete">
             <div>
-                <h2 class="font-semibold text-insec">Aperçu · année {{ annee }}</h2>
-                <p class="text-sm text-gray-500">{{ examens.length }} épreuve(s) extraites · horaires de Paris</p>
+                <h2 class="titre-section">Aperçu · année {{ annee }}</h2>
+                <p class="mt-0.5 text-xs text-gray-500">{{ examens.length }} épreuve(s) extraites · horaires de Paris</p>
             </div>
-            <a :href="source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Ouvrir la source ↗</a>
+            <a :href="source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Ouvrir la source <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i></a>
         </header>
-        <div v-if="calendrierExistant" class="border-b border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-            Un calendrier {{ annee }} existe déjà. L’enregistrement remplacera ses épreuves.
-            <label class="mt-2 flex items-start gap-2">
-                <input v-model="confirmationRemplacement" type="checkbox" class="mt-1" />
-                <span>Je confirme le remplacement du calendrier existant après vérification de l’aperçu.</span>
-            </label>
+        <div v-if="calendrierExistant" class="flex items-start gap-3 border-b border-amber-200 bg-amber-50/70 px-5 py-4 text-sm text-amber-950 sm:px-6">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600"><i class="fa-solid fa-triangle-exclamation text-xs"></i></span>
+            <div>
+                <p>Un calendrier {{ annee }} existe déjà. L’enregistrement remplacera ses épreuves.</p>
+                <label class="mt-2 flex cursor-pointer items-start gap-2.5">
+                    <input v-model="confirmationRemplacement" type="checkbox" class="mt-0.5" />
+                    <span class="font-medium">Je confirme le remplacement du calendrier existant après vérification de l’aperçu.</span>
+                </label>
+            </div>
         </div>
         <div class="overflow-x-auto">
             <table class="tableau">
-                <thead><tr><th>Date (Paris)</th><th>Heure</th><th>Diplôme</th><th>UE</th><th>Intitulé extrait (modifiable)</th></tr></thead>
+                <thead><tr><th>Date (Paris)</th><th>Heure (Paris)</th><th>Diplôme</th><th>UE</th><th>Intitulé extrait (modifiable)</th></tr></thead>
                 <tbody>
                     <tr v-for="examen in examens" :key="examen.diplome + examen.codeUE">
-                        <td><input v-model="examen.date" type="date" class="champ min-w-40" /></td>
-                        <td><input v-model="examen.heure" type="time" class="champ w-28" /></td>
-                        <td>{{ examen.diplome }}</td>
-                        <td>{{ examen.codeUE }}</td>
-                        <td><input v-model="examen.intitule" type="text" maxlength="160" class="champ min-w-64" /></td>
+                        <td><input v-model="examen.date" type="date" class="champ min-w-40 py-2" /></td>
+                        <td><input v-model="examen.heure" type="time" class="champ w-28 py-2" /></td>
+                        <td><span class="pastille bg-insec-50 text-insec-700 ring-insec-600/15">{{ examen.diplome }}</span></td>
+                        <td class="font-semibold text-gray-900">{{ examen.codeUE }}</td>
+                        <td><input v-model="examen.intitule" type="text" maxlength="160" class="champ min-w-64 py-2" /></td>
                     </tr>
                 </tbody>
             </table>
         </div>
-        <div class="border-t border-gray-100 bg-gray-50 p-5">
-            <p class="mb-3 text-sm text-gray-600">Vérifiez les dates et heures directement dans le PDF avant de confirmer. L’import ne planifie pas d’examens locaux et ne génère aucune convocation.</p>
+        <div class="flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/60 px-5 py-4 sm:px-6">
+            <p class="max-w-2xl text-sm text-gray-600">Vérifiez les dates et heures directement dans le PDF avant de confirmer. L’import ne planifie pas d’examens locaux et ne génère aucune convocation.</p>
             <button type="button" class="bouton-action" :disabled="!pretAEnregistrer" @click="enregistrer">
                 {{ chargement ? 'Enregistrement…' : 'Confirmer et enregistrer le calendrier' }}
             </button>

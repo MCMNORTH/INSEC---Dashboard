@@ -85,28 +85,39 @@ const ko = (octets: number) => `${Math.max(1, Math.round(octets / 1024))} Ko`;
 </script>
 
 <template>
-    <section class="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="documents-financiers">
-        <h2 id="documents-financiers" class="font-semibold text-insec">Documents financiers · {{ libelleAnnee }}</h2>
-        <p class="mt-1 text-sm text-gray-600">Facture de l’INTEC et preuve de paiement de l’INSEC pour l’année scolaire, en PDF (5 Mo maximum).</p>
-        <p v-if="erreur" class="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{{ erreur }}</p>
-        <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <article v-for="r in RUBRIQUES" :key="r.type" class="rounded-lg border border-slate-200 p-4">
-                <h3 class="font-semibold text-gray-900">{{ r.titre }}</h3>
-                <p class="mt-1 text-xs text-gray-500">{{ r.aide }}</p>
-                <p v-if="chargement" class="mt-3 text-sm text-gray-400">Chargement…</p>
-                <ul v-else-if="parType[r.type].length" class="mt-3 divide-y divide-gray-100 text-sm">
-                    <li v-for="d in parType[r.type]" :key="`${d.id}-${d.type}`" class="flex items-center justify-between gap-3 py-2">
+    <section class="carte mb-6 overflow-hidden" aria-labelledby="documents-financiers">
+        <header class="panneau-entete">
+            <div>
+                <h2 id="documents-financiers" class="titre-section">Documents financiers · {{ libelleAnnee }}</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Facture de l’INTEC et preuve de paiement de l’INSEC pour l’année scolaire, en PDF (5 Mo maximum).</p>
+            </div>
+        </header>
+        <p v-if="erreur" role="alert" class="mx-5 mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50/70 p-3 text-sm text-red-800 sm:mx-6"><i class="fa-solid fa-circle-exclamation mt-0.5 text-red-500"></i>{{ erreur }}</p>
+        <div class="grid grid-cols-1 gap-4 p-5 sm:p-6 lg:grid-cols-2">
+            <article v-for="r in RUBRIQUES" :key="r.type" class="flex flex-col rounded-xl p-4 ring-1 ring-gray-200/80">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 ring-1 ring-red-100"><i class="fa-solid fa-file-pdf text-sm"></i></span>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-900">{{ r.titre }}</h3>
+                        <p class="mt-0.5 text-xs text-gray-500">{{ r.aide }}</p>
+                    </div>
+                </div>
+                <p v-if="chargement" class="mt-4 text-sm text-gray-400">Chargement…</p>
+                <ul v-else-if="parType[r.type].length" class="mt-4 divide-y divide-gray-100 rounded-xl bg-gray-50/70 px-3 text-sm ring-1 ring-gray-100">
+                    <li v-for="d in parType[r.type]" :key="`${d.id}-${d.type}`" class="flex items-center justify-between gap-3 py-2.5">
                         <span class="min-w-0">
                             <span class="block truncate font-medium text-gray-800" :title="d.nomOriginal">{{ d.nomOriginal }}</span>
                             <span class="text-xs text-gray-500">{{ ko(d.taille) }}<template v-if="d.deposeLe"> · déposé le {{ date(d.deposeLe) }}</template></span>
                         </span>
-                        <button type="button" class="cursor-pointer whitespace-nowrap text-sm text-blue-700 hover:underline" @click="telechargerDocument(d)">Télécharger</button>
+                        <button type="button" class="bouton-icone" title="Télécharger" :aria-label="`Télécharger ${d.nomOriginal}`" @click="telechargerDocument(d)"><i class="fa-solid fa-download text-sm"></i></button>
                     </li>
                 </ul>
-                <p v-else class="mt-3 text-sm text-gray-500">Aucun document déposé pour cette année.</p>
-                <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <input type="file" accept="application/pdf" multiple class="champ max-w-full flex-1 text-sm" :aria-label="`Choisir ${r.titre}`" @change="choisir(r.type, $event)" />
-                    <button type="button" class="bouton-secondaire whitespace-nowrap" :disabled="envoi !== null || !selection[r.type].length" @click="deposer(r.type)">
+                <p v-else class="mt-4 text-sm text-gray-400">Aucun document déposé pour cette année.</p>
+                <div class="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-3 transition hover:border-insec-300 hover:bg-insec-50/30">
+                    <i class="fa-solid fa-cloud-arrow-up text-insec-400"></i>
+                    <input type="file" accept="application/pdf" multiple class="min-w-0 flex-1 text-xs text-gray-600" :aria-label="`Choisir ${r.titre}`" @change="choisir(r.type, $event)" />
+                    <button type="button" class="bouton-secondaire" :disabled="envoi !== null || !selection[r.type].length" @click="deposer(r.type)">
+                        <i v-if="envoi === r.type" class="fa-solid fa-circle-notch fa-spin"></i>
                         {{ envoi === r.type ? 'Dépôt en cours…' : 'Déposer' }}
                     </button>
                 </div>

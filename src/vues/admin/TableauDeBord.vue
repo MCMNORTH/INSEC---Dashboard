@@ -5,6 +5,7 @@ import { CALENDRIERS_INTEC, CALENDRIER_INTEC_2026_2027 } from '../../calendrierI
 import { appeler, messageErreur } from '../../api';
 import Chargement from '../../composants/Chargement.vue';
 import { heureNouakchott, heureNouakchottDepuisParis, montant } from '../../format';
+import { session } from '../../session';
 
 interface TacheAFaire {
     cle: string;
@@ -113,214 +114,240 @@ const tachesAFaire = computed<TacheAFaire[]>(() => {
     return [...t.aFaire, ...sansSuivi].sort((a, b) => ordre[a.niveau] - ordre[b.niveau]);
 });
 const STYLE_TACHE = {
-    danger: { pastille: 'bg-red-100 text-red-700', icone: 'fa-circle-exclamation' },
-    warning: { pastille: 'bg-amber-100 text-amber-700', icone: 'fa-triangle-exclamation' },
-    info: { pastille: 'bg-blue-100 text-blue-700', icone: 'fa-circle-info' },
+    danger: { pastille: 'bg-red-50 text-red-600 ring-red-100', icone: 'fa-circle-exclamation', barre: 'bg-red-500' },
+    warning: { pastille: 'bg-amber-50 text-amber-600 ring-amber-100', icone: 'fa-triangle-exclamation', barre: 'bg-amber-400' },
+    info: { pastille: 'bg-insec-50 text-insec-600 ring-insec-100', icone: 'fa-circle-info', barre: 'bg-insec-400' },
 } as const;
+
+// Salutation et date à l'heure de Nouakchott (UTC+0 toute l'année).
+const heureLocale = Number(new Intl.DateTimeFormat('fr-FR', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Africa/Nouakchott' }).format(new Date()));
+const salutation = heureLocale >= 18 || heureLocale < 4 ? 'Bonsoir' : 'Bonjour';
+const prenom = computed(() => session.nom.split(' ')[0] ?? '');
+const aujourdHui = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Nouakchott' }).format(new Date());
+const initialesNom = (nom: string) => nom.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
 const cartes = (t: Tableau) => [
     {
-        libelle: 'Étudiants inscrits à l’INSEC',
-        valeur: t.etudiantsInscrits,
-        detail: 'Étudiants avec une inscription active · ' + libelleAnnee(t),
+        libelle: 'Inscrits à l’INSEC',
+        valeur: String(t.etudiantsInscrits),
+        unite: '',
+        detail: 'Inscription active · ' + libelleAnnee(t),
         icone: 'fa-id-card',
-        fond: 'bg-indigo-50',
-        accent: 'text-insec',
+        teinte: 'from-insec-500 to-insec-800',
         lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'inscrits' } },
     },
     {
-        libelle: 'Inscriptions non actives', valeur: t.etudiantsSansInscription,
-        detail: 'Suspendues, annulées ou terminées · ' + libelleAnnee(t), icone: 'fa-user-minus',
-        fond: 'bg-slate-50', accent: 'text-slate-700',
+        libelle: 'Inscriptions non actives',
+        valeur: String(t.etudiantsSansInscription),
+        unite: '',
+        detail: 'Suspendues, annulées ou terminées',
+        icone: 'fa-user-minus',
+        teinte: 'from-slate-400 to-slate-600',
         lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'non-actifs' } },
     },
     {
-        libelle: 'Étudiants suivis cette année',
-        valeur: t.etudiantsAvecDossierAnnee,
-        detail: 'Avec un dossier ' + libelleAnnee(t) + ', actif ou non',
+        libelle: 'Suivis cette année',
+        valeur: String(t.etudiantsAvecDossierAnnee),
+        unite: '',
+        detail: 'Avec un dossier ' + libelleAnnee(t),
         icone: 'fa-users',
-        fond: 'bg-blue-50',
-        accent: 'text-blue-700',
+        teinte: 'from-sky-400 to-sky-600',
         lien: { path: '/etudiants', query: { anneeId: t.anneeId ?? undefined, inscription: 'dossiers-annee' } },
     },
     {
         libelle: 'Prochaines épreuves',
-        valeur: t.examensProchains.length,
-        detail: 'Épreuves suivies à l’INSEC dans les 30 prochains jours',
+        valeur: String(t.examensProchains.length),
+        unite: '',
+        detail: 'Dans les 30 prochains jours',
         icone: 'fa-calendar-days',
-        fond: 'bg-amber-50',
-        accent: 'text-amber-700',
+        teinte: 'from-amber-400 to-orange-500',
         lien: { path: '/examens' },
     },
     {
         libelle: 'Reste à recouvrer',
-        valeur: montant(t.resteARecouvrer) + ' MRU',
-        detail: 'Sur l’année scolaire sélectionnée',
+        valeur: montant(t.resteARecouvrer),
+        unite: 'MRU',
+        detail: 'Sur l’année scolaire choisie',
         icone: 'fa-wallet',
-        fond: 'bg-emerald-50',
-        accent: 'text-emerald-700',
+        teinte: 'from-emerald-400 to-emerald-600',
         lien: { path: '/finances', query: { annee: t.anneeId ?? undefined } },
     },
 ] as const;
 </script>
 
 <template>
-    <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <header class="en-tete-page">
         <div>
-            <p class="text-sm font-medium text-insec">Pilotage INSEC</p>
-            <h1 class="titre-page">Suivi de l’année scolaire</h1>
-            <p class="mt-1 text-sm text-gray-500">Inscriptions confirmées, étudiants au registre et examens à venir.</p>
+            <p class="surtitre first-letter:uppercase">{{ aujourdHui }}</p>
+            <h1 class="titre-page mt-1.5">{{ salutation }}{{ prenom ? `, ${prenom}` : '' }}</h1>
+            <p class="sous-titre">Voici où en est l’année scolaire : actions à mener, inscriptions, examens et paiements.</p>
         </div>
-        <label class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <span class="text-sm text-gray-500">Année scolaire</span>
-            <select v-model="anneeId" class="border-0 py-1 pr-8 text-sm font-semibold text-insec focus:ring-0">
-                <option v-for="a in tableau?.annees ?? []" :key="a.id" :value="a.id">{{ a.libelle }}</option>
+        <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-white pl-3.5 shadow-xs transition hover:border-gray-300">
+            <i class="fa-regular fa-calendar text-sm text-insec-500"></i>
+            <span class="sr-only">Année scolaire</span>
+            <select v-model="anneeId" class="border-0 bg-transparent py-2.5 pl-2 text-sm font-semibold text-gray-900 focus:ring-0">
+                <option v-for="a in tableau?.annees ?? []" :key="a.id" :value="a.id">Année {{ a.libelle }}</option>
             </select>
         </label>
-    </div>
+    </header>
 
     <Chargement :chargement="chargement && !tableau" :erreur="erreur">
         <template v-if="tableau">
-            <section class="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="a-faire" :class="{ 'opacity-60': chargement }">
-                <header class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-4">
-                    <div>
-                        <h2 id="a-faire" class="font-bold text-insec">À faire aujourd’hui</h2>
-                        <p class="text-xs text-gray-500">Les actions qui demandent votre attention · {{ anneeSelectionnee }}</p>
+            <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]" :class="{ 'opacity-60 transition': chargement }" aria-label="Chiffres clés">
+                <RouterLink
+                    v-for="carte in cartes(tableau)"
+                    :key="carte.libelle"
+                    :to="carte.lien"
+                    class="carte group relative overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-flottant"
+                >
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="text-[13px] font-medium text-gray-500">{{ carte.libelle }}</p>
+                        <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-sm', carte.teinte]">
+                            <i :class="['fa-solid text-[13px]', carte.icone]"></i>
+                        </span>
                     </div>
-                    <span :class="['rounded-full px-3 py-1 text-xs font-semibold', tachesAFaire.length ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-700']">
-                        {{ tachesAFaire.length ? `${tachesAFaire.length} action${tachesAFaire.length > 1 ? 's' : ''}` : 'Tout est à jour' }}
-                    </span>
-                </header>
-                <ul v-if="tachesAFaire.length" class="divide-y divide-gray-100">
-                    <li v-for="t in tachesAFaire" :key="t.cle" class="flex flex-wrap items-center gap-3 px-5 py-3">
-                        <span :class="['flex h-8 w-8 shrink-0 items-center justify-center rounded-full', STYLE_TACHE[t.niveau].pastille]">
-                            <i :class="['fa-solid text-sm', STYLE_TACHE[t.niveau].icone]"></i>
-                        </span>
-                        <span class="min-w-0 flex-1">
-                            <strong class="block text-sm text-gray-900">{{ t.titre }}</strong>
-                            <span class="text-xs text-gray-500">{{ t.detail }}</span>
-                        </span>
-                        <RouterLink :to="t.lien" class="bouton-secondaire whitespace-nowrap">Ouvrir</RouterLink>
-                    </li>
-                </ul>
-                <p v-else class="px-5 py-4 text-sm text-gray-600">Aucun retard de paiement, aucune convocation ni aucun envoi de copies en attente.</p>
+                    <p class="mt-3 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">
+                        {{ carte.valeur }}<span v-if="carte.unite" class="ml-1 text-sm font-semibold text-gray-400">{{ carte.unite }}</span>
+                    </p>
+                    <p class="mt-2.5 flex items-center justify-between gap-2 text-xs text-gray-500">
+                        <span>{{ carte.detail }}</span>
+                        <i class="fa-solid fa-arrow-right -translate-x-1 text-[10px] text-insec-500 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100"></i>
+                    </p>
+                </RouterLink>
             </section>
 
-            <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5" :class="{ 'opacity-60': chargement }">
-                <article v-for="carte in cartes(tableau)" :key="carte.libelle" :class="[carte.fond, 'rounded-2xl border border-white p-5 shadow-sm']">
-                    <div class="mb-4 flex items-center justify-between">
-                        <p class="text-sm font-medium text-gray-600">{{ carte.libelle }}</p>
-                        <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/80">
-                            <i :class="['fa-solid', carte.icone, carte.accent]"></i>
-                        </span>
-                    </div>
-                    <p :class="['text-2xl font-bold tracking-tight', carte.accent]">{{ carte.valeur }}</p>
-                    <p class="mt-2 text-xs text-gray-500">{{ carte.detail }}</p>
-                    <RouterLink v-if="carte.lien" :to="carte.lien" class="mt-3 inline-flex text-xs font-semibold text-insec hover:underline">
-                        Voir la liste <i class="fa-solid fa-arrow-right ml-1"></i>
-                    </RouterLink>
-                </article>
-            </section>
-
-            <section class="mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-white">
-                <header class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Calendrier officiel INTEC · {{ anneeSelectionnee }}</p>
-                        <h2 class="mt-1 font-bold text-insec">Prochaines épreuves écrites</h2>
-                        <p class="mt-1 text-xs text-gray-500">Horaires de Paris · distincts des sessions planifiées localement</p>
-                    </div>
-                    <a v-if="calendrierIntec" :href="calendrierIntec.source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Document officiel ↗</a>
-                    <a v-else href="https://intec.cnam.fr/planning-des-examens--1559071.kjsp" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Vérifier les publications INTEC ↗</a>
-                </header>
-                <div v-if="!calendrierIntec" class="px-5 py-5">
-                    <p class="font-semibold text-gray-800">Aucun calendrier {{ anneeSelectionnee }} n’est intégré dans le tableau de bord.</p>
-                    <p class="mt-1 text-sm text-gray-600">Consultez la page officielle de l’INTEC pour vérifier si les dates de cette année ont été publiées.</p>
-                </div>
-                <div v-else-if="prochainesEpreuvesOfficielles.length" class="divide-y divide-gray-100">
-                    <div v-for="e in prochainesEpreuvesOfficielles" :key="e.codeUE" class="flex flex-wrap items-center gap-4 px-5 py-3">
-                        <span class="min-w-32 rounded-lg bg-indigo-50 px-3 py-2 text-center text-sm font-semibold text-insec">
-                            {{ e.dateFr }}<span class="ml-2 text-xs font-normal text-gray-600">{{ e.heure }} (Paris) · {{ heureNouakchottDepuisParis(e.date, e.heure) }} (Nouakchott)</span>
-                        </span>
-                        <span class="min-w-0 flex-1">
-                            <strong class="block text-sm text-gray-900">{{ e.diplôme }} · UE {{ e.codeUE }}</strong>
-                            <span class="text-xs text-gray-500">{{ e.intitule }}</span>
-                        </span>
-                        <RouterLink :to="lienSuiviIntec(e)" class="bouton-secondaire whitespace-nowrap">Ouvrir le suivi</RouterLink>
-                    </div>
-                </div>
-                <p v-else class="px-5 py-4 text-sm text-gray-600">Les épreuves de ce calendrier sont passées. Consultez le document INTEC pour les prochaines dates publiées.</p>
-            </section>
-
-            <div v-if="tableau.montantEnRetard > 0" class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
-                <span><i class="fa-solid fa-triangle-exclamation mr-2"></i><strong>{{ montant(tableau.montantEnRetard) }} MRU</strong> de paiements sont en retard.</span>
-                <RouterLink to="/finances" class="text-sm font-semibold hover:underline">Consulter les finances <i class="fa-solid fa-arrow-right ml-1"></i></RouterLink>
+            <div v-if="tableau.montantEnRetard > 0" class="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-red-200/80 bg-linear-to-r from-red-50 to-white p-4 sm:px-5">
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                <p class="min-w-0 flex-1 text-sm text-red-900"><strong class="font-semibold">{{ montant(tableau.montantEnRetard) }} MRU</strong> de paiements sont en retard.</p>
+                <RouterLink to="/finances" class="bouton-secondaire">Consulter les finances <i class="fa-solid fa-arrow-right text-xs"></i></RouterLink>
             </div>
 
-            <section class="grid grid-cols-1 gap-5 xl:grid-cols-3">
-                <article class="overflow-hidden rounded-2xl border border-gray-200 bg-white xl:col-span-2">
-                    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+            <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <section class="carte overflow-hidden xl:col-span-2" aria-labelledby="a-faire" :class="{ 'opacity-60': chargement }">
+                    <header class="panneau-entete">
                         <div>
-                            <h2 class="font-bold text-insec">Prochains examens</h2>
-                            <p class="mt-1 text-xs text-gray-500">Sessions planifiées dans les 30 prochains jours · heures de Paris et de Nouakchott</p>
+                            <h2 id="a-faire" class="titre-section">À faire aujourd’hui</h2>
+                            <p class="mt-0.5 text-xs text-gray-500">Les actions qui demandent votre attention · {{ anneeSelectionnee }}</p>
                         </div>
-                        <RouterLink to="/examens" class="text-sm font-semibold text-insec hover:underline">Voir les examens <i class="fa-solid fa-arrow-right ml-1"></i></RouterLink>
-                    </header>
-                    <div v-if="tableau.examensProchains.length" class="divide-y divide-gray-100">
-                        <RouterLink v-for="e in tableau.examensProchains" :key="e.id" :to="`/examens/${e.id}`" class="flex items-center gap-4 px-5 py-4 transition hover:bg-gray-50">
-                            <span class="flex min-w-16 flex-col items-center rounded-xl bg-amber-50 px-3 py-2 text-center text-amber-800">
-                                <span class="text-[11px] font-semibold uppercase">{{ dateParis(e.dateExamen).split(' ')[1] }}</span>
-                                <span class="text-lg font-bold leading-5">{{ dateParis(e.dateExamen).split(' ')[0] }}</span>
-                            </span>
-                            <span class="min-w-0 flex-1">
-                                <strong class="block truncate text-sm text-gray-900">{{ e.ue }}</strong>
-                                <span class="mt-1 block text-xs text-gray-500">{{ heureParis(e.dateExamen) }} (Paris) · {{ heureNouakchott(e.dateExamen) }} (Nouakchott) · {{ e.salle || 'Salle à définir' }}</span>
-                            </span>
-                            <i class="fa-solid fa-chevron-right text-xs text-gray-300"></i>
-                        </RouterLink>
-                    </div>
-                    <div v-else class="flex min-h-48 flex-col items-center justify-center px-6 text-center">
-                        <span class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 text-gray-400">
-                            <i class="fa-regular fa-calendar"></i>
+                        <span :class="['pastille', tachesAFaire.length ? 'bg-amber-50 text-amber-800 ring-amber-600/20' : 'bg-emerald-50 text-emerald-700 ring-emerald-600/15']">
+                            <span :class="['h-1.5 w-1.5 rounded-full', tachesAFaire.length ? 'bg-amber-500' : 'bg-emerald-500']"></span>
+                            {{ tachesAFaire.length ? `${tachesAFaire.length} action${tachesAFaire.length > 1 ? 's' : ''}` : 'Tout est à jour' }}
                         </span>
-                        <p class="font-semibold text-gray-800">Aucun examen proche</p>
-                        <p class="mt-1 max-w-sm text-sm text-gray-500">Les examens prévus dans les 30 prochains jours apparaîtront ici.</p>
+                    </header>
+                    <ul v-if="tachesAFaire.length" class="divide-y divide-gray-100">
+                        <li v-for="t in tachesAFaire" :key="t.cle">
+                            <RouterLink :to="t.lien" class="group relative flex items-center gap-4 px-5 py-3.5 transition hover:bg-gray-50/80 sm:px-6">
+                                <span :class="['absolute top-3 bottom-3 left-0 w-[3px] rounded-r-full opacity-0 transition group-hover:opacity-100', STYLE_TACHE[t.niveau].barre]"></span>
+                                <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1', STYLE_TACHE[t.niveau].pastille]">
+                                    <i :class="['fa-solid text-sm', STYLE_TACHE[t.niveau].icone]"></i>
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <strong class="block text-sm font-semibold text-gray-900">{{ t.titre }}</strong>
+                                    <span class="mt-0.5 block text-xs text-gray-500">{{ t.detail }}</span>
+                                </span>
+                                <span class="hidden items-center gap-1.5 text-xs font-semibold text-insec-600 sm:flex">
+                                    Ouvrir <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
+                                </span>
+                            </RouterLink>
+                        </li>
+                    </ul>
+                    <div v-else class="flex flex-col items-center px-6 py-12 text-center">
+                        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100"><i class="fa-solid fa-check"></i></span>
+                        <p class="mt-3 font-semibold text-gray-900">Rien d’urgent</p>
+                        <p class="mt-1 max-w-sm text-sm text-gray-500">Aucun retard de paiement, aucune convocation ni aucun envoi de copies en attente.</p>
                     </div>
-                </article>
+                </section>
 
-                <article class="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                    <header class="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+                <section class="carte overflow-hidden" aria-labelledby="paiements">
+                    <header class="panneau-entete">
                         <div>
-                            <h2 class="font-bold text-insec">Suivi des paiements</h2>
-                            <p class="mt-1 text-xs text-gray-500">Soldes à traiter pour l’année choisie</p>
+                            <h2 id="paiements" class="titre-section">Suivi des paiements</h2>
+                            <p class="mt-0.5 text-xs text-gray-500">Soldes à traiter pour l’année choisie</p>
                         </div>
-                        <RouterLink to="/finances" aria-label="Ouvrir les finances" class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-insec hover:bg-gray-100">
-                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                        </RouterLink>
+                        <RouterLink to="/finances" aria-label="Ouvrir les finances" class="bouton-icone"><i class="fa-solid fa-arrow-up-right-from-square text-sm"></i></RouterLink>
                     </header>
                     <div v-if="tableau.impayes.length" class="divide-y divide-gray-100">
-                        <RouterLink v-for="i in tableau.impayes" :key="i.inscriptionId" :to="{ path: '/finances', query: { etudiant: i.etudiantId, inscription: i.inscriptionId } }" class="block px-5 py-4 transition hover:bg-gray-50">
-                            <div class="flex items-start justify-between gap-3">
-                                <span class="min-w-0">
-                                    <strong class="block truncate text-sm text-gray-900">{{ i.etudiant }}</strong>
-                                    <span class="mt-1 block text-xs text-gray-500">{{ i.formation }}</span>
+                        <RouterLink v-for="i in tableau.impayes" :key="i.inscriptionId" :to="{ path: '/finances', query: { etudiant: i.etudiantId, inscription: i.inscriptionId } }" class="flex items-center gap-3 px-5 py-3.5 transition hover:bg-gray-50/80 sm:px-6">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-insec-50 text-[11px] font-bold text-insec-700 ring-1 ring-insec-100">{{ initialesNom(i.etudiant) }}</span>
+                            <span class="min-w-0 flex-1">
+                                <strong class="block truncate text-sm font-semibold text-gray-900">{{ i.etudiant }}</strong>
+                                <span :class="['block truncate text-xs', i.retard > 0 ? 'text-red-600' : 'text-gray-500']">
+                                    {{ i.retard > 0 ? 'Retard : ' + montant(i.retard) + ' MRU' : i.formation }}
                                 </span>
-                                <strong class="shrink-0 text-sm text-insec">{{ montant(i.solde) }} MRU</strong>
-                            </div>
-                            <span :class="['mt-2 block text-xs', i.retard > 0 ? 'text-red-600' : 'text-gray-500']">
-                                {{ i.retard > 0 ? 'Retard : ' + montant(i.retard) + ' MRU' : 'Paiement à suivre' }}
                             </span>
+                            <strong class="shrink-0 text-sm font-semibold text-gray-900 tabular-nums">{{ montant(i.solde) }} <span class="text-[11px] font-medium text-gray-400">MRU</span></strong>
                         </RouterLink>
                     </div>
-                    <div v-else class="flex min-h-48 flex-col items-center justify-center px-6 text-center">
-                        <span class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
-                            <i class="fa-solid fa-circle-check"></i>
-                        </span>
-                        <p class="font-semibold text-gray-800">Aucun solde à suivre</p>
+                    <div v-else class="flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center">
+                        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100"><i class="fa-solid fa-circle-check"></i></span>
+                        <p class="mt-3 font-semibold text-gray-900">Aucun solde à suivre</p>
                         <p class="mt-1 text-sm text-gray-500">Les paiements en attente apparaîtront ici.</p>
                     </div>
-                </article>
-            </section>
+                </section>
+
+                <section class="carte overflow-hidden xl:col-span-2" aria-labelledby="calendrier-intec">
+                    <header class="panneau-entete">
+                        <div>
+                            <p class="surtitre text-[10.5px]">Calendrier officiel INTEC · {{ anneeSelectionnee }}</p>
+                            <h2 id="calendrier-intec" class="titre-section mt-1">Prochaines épreuves écrites</h2>
+                            <p class="mt-0.5 text-xs text-gray-500">Heures de Paris et de Nouakchott · distinctes des sessions planifiées localement</p>
+                        </div>
+                        <a v-if="calendrierIntec" :href="calendrierIntec.source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Document officiel <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i></a>
+                        <a v-else href="https://intec.cnam.fr/planning-des-examens--1559071.kjsp" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Publications INTEC <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i></a>
+                    </header>
+                    <div v-if="!calendrierIntec" class="px-6 py-8">
+                        <p class="font-semibold text-gray-900">Aucun calendrier {{ anneeSelectionnee }} n’est intégré dans le tableau de bord.</p>
+                        <p class="mt-1 text-sm text-gray-500">Consultez la page officielle de l’INTEC pour vérifier si les dates de cette année ont été publiées.</p>
+                    </div>
+                    <ul v-else-if="prochainesEpreuvesOfficielles.length" class="divide-y divide-gray-100">
+                        <li v-for="e in prochainesEpreuvesOfficielles" :key="e.codeUE" class="flex flex-wrap items-center gap-4 px-5 py-4 sm:px-6">
+                            <span class="flex w-14 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-white text-center ring-1 ring-gray-200">
+                                <span class="w-full bg-insec-900 py-0.5 text-[10px] font-semibold tracking-wider text-white uppercase">{{ e.dateFr.split(' ')[1]?.slice(0, 4) }}</span>
+                                <span class="py-1 font-titre text-lg leading-6 font-bold text-gray-900">{{ e.dateFr.split(' ')[0] }}</span>
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <strong class="block text-sm font-semibold text-gray-900">{{ e.diplôme }} · UE {{ e.codeUE }}</strong>
+                                <span class="block truncate text-xs text-gray-500">{{ e.intitule }}</span>
+                                <span class="mt-1.5 flex flex-wrap gap-1.5">
+                                    <span class="pastille bg-insec-50 text-insec-700 ring-insec-600/15"><i class="fa-regular fa-clock text-[10px]"></i>{{ e.heure }} Paris</span>
+                                    <span class="pastille bg-emerald-50 text-emerald-700 ring-emerald-600/15"><i class="fa-regular fa-clock text-[10px]"></i>{{ heureNouakchottDepuisParis(e.date, e.heure) }} Nouakchott</span>
+                                </span>
+                            </span>
+                            <RouterLink :to="lienSuiviIntec(e)" class="bouton-secondaire">Ouvrir le suivi</RouterLink>
+                        </li>
+                    </ul>
+                    <p v-else class="px-6 py-8 text-sm text-gray-500">Les épreuves de ce calendrier sont passées. Consultez le document INTEC pour les prochaines dates publiées.</p>
+                </section>
+
+                <section class="carte overflow-hidden" aria-labelledby="prochains-examens">
+                    <header class="panneau-entete">
+                        <div>
+                            <h2 id="prochains-examens" class="titre-section">Examens planifiés</h2>
+                            <p class="mt-0.5 text-xs text-gray-500">Sessions suivies dans les 30 prochains jours</p>
+                        </div>
+                        <RouterLink to="/examens" aria-label="Voir les examens" class="bouton-icone"><i class="fa-solid fa-arrow-up-right-from-square text-sm"></i></RouterLink>
+                    </header>
+                    <div v-if="tableau.examensProchains.length" class="divide-y divide-gray-100">
+                        <RouterLink v-for="e in tableau.examensProchains" :key="e.id" :to="`/examens/${e.id}`" class="flex items-center gap-4 px-5 py-3.5 transition hover:bg-gray-50/80 sm:px-6">
+                            <span class="flex w-12 shrink-0 flex-col items-center rounded-xl bg-amber-50 py-1.5 text-center text-amber-800 ring-1 ring-amber-100">
+                                <span class="text-[10px] font-semibold uppercase">{{ dateParis(e.dateExamen).split(' ')[1] }}</span>
+                                <span class="font-titre text-base leading-5 font-bold">{{ dateParis(e.dateExamen).split(' ')[0] }}</span>
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <strong class="block truncate text-sm font-semibold text-gray-900">{{ e.ue }}</strong>
+                                <span class="mt-0.5 block text-xs text-gray-500">{{ heureParis(e.dateExamen) }} Paris · {{ heureNouakchott(e.dateExamen) }} Nouakchott</span>
+                                <span class="block text-xs text-gray-400">{{ e.salle || 'Salle à définir' }}</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-right text-[10px] text-gray-300"></i>
+                        </RouterLink>
+                    </div>
+                    <div v-else class="flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center">
+                        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-50 text-gray-400 ring-1 ring-gray-100"><i class="fa-regular fa-calendar"></i></span>
+                        <p class="mt-3 font-semibold text-gray-900">Aucun examen proche</p>
+                        <p class="mt-1 max-w-xs text-sm text-gray-500">Les examens prévus dans les 30 prochains jours apparaîtront ici.</p>
+                    </div>
+                </section>
+            </div>
         </template>
     </Chargement>
 </template>
-

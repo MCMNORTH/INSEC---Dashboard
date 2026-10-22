@@ -205,140 +205,73 @@ async function importerClasseurConfirme() {
 </script>
 
 <template>
-    <div class="mb-5 flex flex-wrap justify-between gap-3">
+    <header class="en-tete-page">
         <div>
-            <h1 class="text-xl font-bold text-insec">Examens & convocations</h1>
-            <p class="text-sm text-gray-500">Calendrier officiel INTEC, candidats, convocations et retour des copies</p>
+            <p class="surtitre">Calendrier INTEC</p>
+            <h1 class="titre-page mt-1.5">Examens & convocations</h1>
+            <p class="sous-titre">Calendrier officiel INTEC, candidats, convocations et retour des copies</p>
         </div>
-        <div class="flex flex-wrap gap-2">
-            <RouterLink to="/examens/importer-calendrier" class="bouton-secondaire">Importer un calendrier INTEC</RouterLink>
-            
-        </div>
-    </div>
-    <div v-if="erreurCalendrier" role="status" class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Le calendrier enregistré n’a pas pu être chargé : {{ erreurCalendrier }}</div>
-    <div class="carte mb-4 p-3">
-        <select v-model="anneeId" class="champ w-auto" aria-label="Année scolaire">
-            <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
-        </select>
-    </div>
-    <section class="carte mb-5 p-5" aria-labelledby="resultats-historiques">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Résultats · {{ annee(anneeId)?.libelle ?? anneeId }}</p>
-                <h2 id="resultats-historiques" class="mt-1 text-lg font-bold text-insec">Notes par étudiant et par UE</h2>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-900">{{ resultats.length }} résultat(s) historique(s)</span>
-                <button v-if="anneeId === '2024-2025'" class="bouton-secondaire whitespace-nowrap" :disabled="telechargementResultats" @click="telechargerClasseurResultats">{{ telechargementResultats ? 'Préparation du fichier…' : 'Télécharger le classeur Excel' }}</button>
-            </div>
-        </div>
-        <div v-if="statistiquesGroupes.length" class="mt-4 space-y-3">
-            <section v-for="stat in statistiquesGroupes" :key="stat.diplome" class="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                <h3 class="mb-3 text-sm font-semibold text-insec">{{ stat.diplome }} · récapitulatif des résultats</h3>
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <article class="rounded-lg bg-white p-3 shadow-sm"><p class="text-xs text-gray-500">Candidats avec résultats</p><p class="mt-1 text-xl font-bold text-insec">{{ stat.nombreCandidats }}</p></article>
-                    <article class="rounded-lg bg-white p-3 shadow-sm"><p class="text-xs text-gray-500">Résultats enregistrés</p><p class="mt-1 text-xl font-bold text-insec">{{ stat.totalResultats }}</p></article>
-                    <article class="rounded-lg bg-white p-3 shadow-sm"><p class="text-xs text-gray-500">UE la plus évaluée</p><p class="mt-1 font-semibold text-insec">{{ stat.uesPlusEvaluees.map((ue) => ue.code).join(', ') || '—' }}</p><p v-if="stat.nombreMaximumUe" class="text-xs text-gray-500">Maximum : {{ stat.nombreMaximumUe }} résultat(s) par UE</p></article>
-                    <article class="rounded-lg bg-white p-3 shadow-sm"><p class="text-xs text-gray-500">Candidats avec le plus d’UE notées</p><p class="mt-1 text-xl font-bold text-insec">{{ stat.candidatsLesPlusEvalues.length }}</p><p v-if="stat.nombreMaximumCandidat" class="text-xs text-gray-500">{{ stat.nombreMaximumCandidat }} UE notée(s) chacun</p><details v-if="stat.candidatsLesPlusEvalues.length" class="mt-1"><summary class="cursor-pointer text-xs text-insec">Voir les noms</summary><p class="mt-1 text-xs text-gray-600">{{ stat.candidatsLesPlusEvalues.map((candidat) => candidat.nom).join(', ') }}</p></details></article>
-                </div>
-            </section>
-        </div>
-        <div v-if="anneeId === '2024-2025'" class="mt-4 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
-            <label class="etiquette">Classeur Excel de référence
-                <input type="file" accept=".xlsx" class="champ mt-1" @change="lireFichierResultats" />
+        <div class="flex flex-wrap items-center gap-2">
+            <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-white pl-3.5 shadow-xs transition hover:border-gray-300">
+                <i class="fa-regular fa-calendar text-sm text-insec-500"></i>
+                <select v-model="anneeId" class="border-0 bg-transparent py-2.5 pl-2 text-sm font-semibold text-gray-900 focus:ring-0" aria-label="Année scolaire">
+                    <option v-for="a in annees" :key="a.id" :value="a.id">Année {{ a.libelle }}</option>
+                </select>
             </label>
-            <button class="bouton-secondaire" :disabled="!base64Resultats || chargementResultats" @click="analyserClasseur">{{ chargementResultats ? 'Analyse…' : 'Analyser le classeur' }}</button>
-            <button class="bouton-action" :disabled="!apercuResultats || chargementResultats" @click="confirmationImportResultats = true">Importer les résultats</button>
+            <RouterLink to="/examens/importer-calendrier" class="bouton-secondaire"><i class="fa-solid fa-file-import text-xs"></i>Importer un calendrier INTEC</RouterLink>
         </div>
-        <div v-if="anneeId === '2024-2025' && confirmationImportResultats" role="alertdialog" aria-labelledby="confirmation-import-resultats" class="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-4">
-            <p id="confirmation-import-resultats" class="font-semibold text-amber-950">Confirmer l’import de {{ apercuResultats?.total }} résultats historiques ?</p>
-            <p class="mt-1 text-sm text-amber-900">{{ apercuResultats?.ecarts }} écart(s) seront conservés comme alertes. Aucune inscription ne sera créée ; les lignes historiques correspondantes seront remplacées.</p>
-            <div class="mt-3 flex flex-wrap justify-end gap-2">
-                <button class="bouton-secondaire" :disabled="chargementResultats" @click="confirmationImportResultats = false">Annuler</button>
-                <button class="bouton-action" :disabled="chargementResultats" @click="importerClasseurConfirme">{{ chargementResultats ? 'Importation…' : 'Confirmer l’importation' }}</button>
-            </div>
-        </div>
-        <p v-if="anneeId === '2024-2025' && messageImportResultats" role="status" class="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">{{ messageImportResultats }}</p>
-        <p v-if="anneeId === '2024-2025' && erreurResultats" role="alert" class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{{ erreurResultats }}</p>
-        <div v-if="anneeId === '2024-2025' && apercuResultats" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <p class="font-semibold text-amber-950">Aperçu : {{ apercuResultats.total }} résultat(s), {{ apercuResultats.ecarts }} écart(s) à vérifier.</p>
-            <p class="mt-1 text-sm text-amber-900">Les lignes sont copiées du classeur. L’importation ne crée aucune inscription.</p>
-            <div class="mt-3 max-h-80 overflow-auto rounded-lg bg-white">
-                <table class="tableau">
-                    <thead><tr><th>Candidat Excel</th><th>UE</th><th>Note source</th><th>Appréciation</th><th>Écart</th></tr></thead>
-                    <tbody><tr v-for="(r, index) in apercuResultats.lignes" :key="`${r.nomSource}-${r.codeUe}-${index}`">
-                        <td>{{ r.nomSource }}</td><td>{{ r.codeUe }} · {{ r.libelleUe }}</td><td>{{ r.noteSource }}</td><td>{{ appreciationResultat(r) }}</td>
-                        <td><ul v-if="r.ecarts.length" class="list-disc pl-4 text-sm text-amber-900"><li v-for="e in r.ecarts" :key="e">{{ e }}</li></ul><span v-else class="text-green-700">Concordant</span></td>
-                    </tr></tbody>
-                </table>
-            </div>
-        </div>
-        <div v-if="groupesResultats.length" class="mt-4 space-y-5">
-            <section v-for="groupe in groupesResultats" :key="groupe.diplome" class="overflow-hidden rounded-lg border border-gray-200">
-                <header class="flex flex-wrap items-center justify-between gap-2 bg-gray-50 px-4 py-3">
-                    <h3 class="font-semibold text-insec">{{ groupe.diplome }} · résultats par UE</h3>
-                    <span class="text-sm text-gray-500">{{ groupe.candidats.length }} candidat(s) · {{ groupe.colonnes.length }} UE</span>
-                </header>
-                <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">Faites défiler horizontalement pour consulter toutes les unités d’enseignement.</p>
-                <div class="overflow-x-auto">
-                    <table class="tableau min-w-max">
-                        <thead><tr><th class="sticky left-0 top-0 z-20 min-w-52 bg-white">Étudiant</th><th v-for="colonne in groupe.colonnes" :key="colonne.code" class="min-w-44"><span class="block">{{ colonne.code }}</span><span class="text-xs font-normal text-gray-500">{{ colonne.libelle }}</span></th><th class="min-w-56">Écarts à vérifier</th></tr></thead>
-                        <tbody>
-                            <tr v-for="candidat in groupe.candidats" :key="candidat.cle" :class="candidat.ecarts.length ? 'bg-amber-50' : ''">
-                                <th scope="row" :class="['sticky left-0 z-10 min-w-52 font-medium', candidat.ecarts.length ? 'bg-amber-50' : 'bg-white']">{{ candidat.nom }}</th>
-                                <td v-for="colonne in groupe.colonnes" :key="colonne.code" class="align-top">
-                                    <template v-if="candidat.parUe.get(colonne.code)?.length">
-                                        <div v-for="(r, index) in candidat.parUe.get(colonne.code)" :key="r.id" :class="index ? 'mt-2 border-t border-gray-200 pt-2' : ''">
-                                            <strong>{{ r.noteSource }}</strong>
-                                            <span class="mt-1 block text-xs text-gray-600">{{ appreciationResultat(r) }}</span>
-                                        </div>
-                                    </template>
-                                    <span v-else class="text-gray-300" title="Aucun résultat renseigné">—</span>
-                                </td>
-                                <td>
-                                    <span v-if="!candidat.ecarts.length" class="text-sm text-green-700">Aucun écart signalé</span>
-                                    <ul v-else class="list-disc pl-4 text-sm text-amber-900"><li v-for="ecart in candidat.ecarts" :key="ecart">{{ ecart }}</li></ul>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        </div>
-        <p v-else-if="anneeId === '2024-2025'" class="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Aucun résultat n’est encore chargé pour cette année. Sélectionnez le classeur Excel de référence ci-dessus pour afficher les notes par étudiant.</p>
-        <p v-else class="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">Aucun résultat historique n’est enregistré pour {{ annee(anneeId)?.libelle ?? anneeId }}. Les résultats du classeur concernent uniquement 2024–2025.</p>
-    </section>
-    <section class="carte mb-5 overflow-hidden">
-        <header class="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+    </header>
+
+    <div v-if="erreurCalendrier" role="status" class="mb-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600"><i class="fa-solid fa-triangle-exclamation text-xs"></i></span>
+        <span class="pt-1.5">Le calendrier enregistré n’a pas pu être chargé : {{ erreurCalendrier }}</span>
+    </div>
+
+    <section class="carte mb-6 overflow-hidden">
+        <header class="panneau-entete">
             <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Source officielle INTEC</p>
-                <h2 class="mt-1 text-lg font-bold text-insec">Épreuves DGC et DSGC · {{ anneeCalendrierIntec || 'aucune année' }}</h2>
-                <p v-if="calendrierOfficiel" class="mt-1 text-sm text-gray-600">{{ calendrierIntec.length }} épreuves écrites, horaires de Paris. Les dates et horaires sont ceux publiés par l’INTEC. L’INSEC peut ouvrir un suivi local pour gérer les candidats, la salle et les convocations.</p>
+                <p class="surtitre text-[10.5px]">Source officielle INTEC</p>
+                <h2 class="titre-section mt-1">Épreuves DGC et DSGC · {{ anneeCalendrierIntec || 'aucune année' }}</h2>
+                <p v-if="calendrierOfficiel" class="mt-1 max-w-3xl text-xs leading-5 text-gray-500">{{ calendrierIntec.length }} épreuves écrites, horaires de Paris. Les dates et horaires sont ceux publiés par l’INTEC. L’INSEC peut ouvrir un suivi local pour gérer les candidats, la salle et les convocations.</p>
             </div>
-            <a v-if="calendrierOfficiel" :href="calendrierOfficiel.source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Consulter le document INTEC ↗</a>
-            <a v-else href="https://intec.cnam.fr/planning-des-examens--1559071.kjsp" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Vérifier les publications INTEC ↗</a>
+            <a v-if="calendrierOfficiel" :href="calendrierOfficiel.source" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Consulter le document INTEC <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i></a>
+            <a v-else href="https://intec.cnam.fr/planning-des-examens--1559071.kjsp" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Vérifier les publications INTEC <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i></a>
         </header>
-        <div v-if="!calendrierOfficiel" class="px-5 py-5">
-            <p class="font-semibold text-gray-800">Aucun calendrier {{ anneeCalendrierIntec }} n’est intégré dans l’application.</p>
-            <p class="mt-1 text-sm text-gray-600">Consultez la page officielle de l’INTEC pour vérifier si les dates de cette année ont été publiées.</p>
+        <div v-if="!calendrierOfficiel" class="px-6 py-8">
+            <p class="font-semibold text-gray-900">Aucun calendrier {{ anneeCalendrierIntec }} n’est intégré dans l’application.</p>
+            <p class="mt-1 text-sm text-gray-500">Consultez la page officielle de l’INTEC pour vérifier si les dates de cette année ont été publiées.</p>
         </div>
         <div v-else>
             <div class="overflow-x-auto">
                 <table class="tableau">
-                    <thead><tr><th>Date et heure</th><th>Diplôme / UE INTEC</th><th>UE locale</th><th>Suivi INSEC</th></tr></thead>
+                    <thead><tr><th>Date et heure</th><th>Diplôme / UE INTEC</th><th>UE locale</th><th class="text-right">Suivi INSEC</th></tr></thead>
                     <tbody>
                         <tr v-for="e in calendrierIntec" :key="e.codeUE">
-                            <td><strong>{{ e.dateFr }}</strong><br /><span class="text-gray-500">{{ e.heure }} (Paris) · {{ heureNouakchottDepuisParis(e.date, e.heure) }} (Nouakchott)</span></td>
-                            <td><span class="font-semibold">{{ e.diplôme }} · {{ e.codeUE }}</span><br /><span class="text-gray-500">{{ e.intitule }}</span></td>
                             <td>
-                                <span v-if="e.ue" class="font-medium">{{ e.ue.code }} · {{ e.ue.libelle }}</span>
-                                <span v-else class="text-amber-700">UE non trouvée dans le référentiel local</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="flex w-12 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-white text-center ring-1 ring-gray-200">
+                                        <span class="w-full bg-insec-900 py-0.5 text-[9.5px] font-semibold tracking-wider text-white uppercase">{{ e.dateFr.split(' ')[1]?.slice(0, 4) }}</span>
+                                        <span class="py-0.5 font-titre text-base leading-6 font-bold text-gray-900">{{ e.dateFr.split(' ')[0] }}</span>
+                                    </span>
+                                    <span>
+                                        <strong class="block whitespace-nowrap font-semibold text-gray-900">{{ e.dateFr }}</strong>
+                                        <span class="mt-1 flex flex-wrap gap-1.5">
+                                            <span class="pastille bg-insec-50 text-insec-700 ring-insec-600/15"><i class="fa-regular fa-clock text-[10px]"></i>{{ e.heure }} (Paris)</span>
+                                            <span class="pastille bg-emerald-50 text-emerald-700 ring-emerald-600/15"><i class="fa-regular fa-clock text-[10px]"></i>{{ heureNouakchottDepuisParis(e.date, e.heure) }} (Nouakchott)</span>
+                                        </span>
+                                    </span>
+                                </div>
                             </td>
+                            <td><span class="font-semibold text-gray-900">{{ e.diplôme }} · {{ e.codeUE }}</span><span class="block text-xs text-gray-500">{{ e.intitule }}</span></td>
                             <td>
+                                <span v-if="e.ue" class="font-medium text-gray-800">{{ e.ue.code }} · {{ e.ue.libelle }}</span>
+                                <span v-else class="pastille bg-amber-50 text-amber-800 ring-amber-600/20"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>UE non trouvée dans le référentiel local</span>
+                            </td>
+                            <td class="text-right">
                                 <RouterLink
                                     v-if="e.ue && anneeCalendrierIntec"
                                     :to="{ path: '/examens/nouveau', query: { source: 'intec', ue: e.codeUE, annee: anneeCalendrierIntec, dateHeure: e.dateHeure, session: 'Normale' } }"
-                                    class="bouton-secondaire whitespace-nowrap"
+                                    class="bouton-secondaire"
                                 >Suivre l’épreuve</RouterLink>
                                 <span v-else class="text-sm text-gray-400">Indisponible</span>
                             </td>
@@ -346,40 +279,167 @@ async function importerClasseurConfirme() {
                     </tbody>
                 </table>
             </div>
-            <div class="border-t border-gray-100 bg-amber-50/60 px-5 py-3 text-sm text-amber-950">
-                Les dates individuelles des soutenances sont communiquées séparément par l’INTEC. Les informations du calendrier restent sous la responsabilité de l’INTEC ; le suivi local ne permet pas de modifier leur date ou leur horaire.
+            <div class="flex items-start gap-3 border-t border-gray-100 bg-amber-50/50 px-5 py-3.5 text-sm text-amber-950 sm:px-6">
+                <i class="fa-solid fa-circle-info mt-0.5 text-amber-500"></i>
+                <span>Les dates individuelles des soutenances sont communiquées séparément par l’INTEC. Les informations du calendrier restent sous la responsabilité de l’INTEC ; le suivi local ne permet pas de modifier leur date ou leur horaire.</span>
             </div>
         </div>
     </section>
-    <Chargement :chargement="chargement" :erreur="erreur">
-        <div class="overflow-x-auto rounded-xl bg-white shadow">
-            <table class="tableau">
-                <thead><tr><th>Date et heure</th><th>Diplôme / UE</th><th>Session</th><th>Salle</th><th>Convoqués</th><th>Statut</th></tr></thead>
-                <tbody>
-                    <tr v-for="e in affiches" :key="e.id" class="cursor-pointer hover:bg-gray-50" @click="router.push(`/examens/${e.id}`)">
-                        <td>{{ horaireExamen(e.dateExamen) }}</td>
-                        <td><strong>{{ formation(e.formationId)?.code }} · {{ ue(e.ueId)?.code }}</strong><br /><span class="text-gray-500">{{ ue(e.ueId)?.libelle }}</span></td>
-                        <td>{{ e.session }}<br /><span class="text-xs text-gray-500">{{ annee(e.anneeId)?.libelle }}</span></td>
-                        <td>{{ e.salle || '—' }}</td>
-                        <td>{{ e.nbConvoques }}</td>
-                        <td>{{ e.statut === 'Planifié' ? 'À venir · calendrier INTEC' : e.statut }}</td>
-                    </tr>
-                    <tr v-if="!examens.length">
-                        <td colspan="6" class="p-0">
-                            <div class="flex flex-col items-center px-6 py-10 text-center">
-                                <i class="fa-solid fa-calendar-check mb-4 text-2xl text-insec" aria-hidden="true"></i>
-                                <h2 class="font-semibold text-gray-800">{{ anneeId ? 'Aucun examen pour cette année scolaire' : 'Aucun suivi local n’est encore ouvert' }}</h2>
-                                <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-                                    Ouvrez le suivi d’une épreuve du calendrier officiel pour gérer les candidats, les convocations, la réception des sujets, la salle et le retour des copies à l’INTEC.
-                                </p>
-                                <RouterLink to="/examens/importer-calendrier" class="bouton-action mt-5">Consulter le calendrier INTEC</RouterLink>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <Pagination v-model="page" :total="examens.length" :par-page="PAR_PAGE" />
-    </Chargement>
-</template>
 
+    <section class="mb-6">
+        <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+            <div>
+                <h2 class="titre-section">Suivis locaux des épreuves</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Candidats, salle, convocations et retour des copies à l’INTEC</p>
+            </div>
+        </div>
+        <Chargement :chargement="chargement" :erreur="erreur">
+            <div class="carte overflow-x-auto">
+                <table class="tableau">
+                    <thead><tr><th>Date et heure</th><th>Diplôme / UE</th><th>Session</th><th>Salle</th><th>Convoqués</th><th>Statut</th></tr></thead>
+                    <tbody>
+                        <tr v-for="e in affiches" :key="e.id" class="cursor-pointer" @click="router.push(`/examens/${e.id}`)">
+                            <td class="font-medium whitespace-nowrap text-gray-800">{{ horaireExamen(e.dateExamen) }}</td>
+                            <td><strong class="font-semibold text-gray-900">{{ formation(e.formationId)?.code }} · {{ ue(e.ueId)?.code }}</strong><span class="block text-xs text-gray-500">{{ ue(e.ueId)?.libelle }}</span></td>
+                            <td>{{ e.session }}<span class="block text-xs text-gray-500">{{ annee(e.anneeId)?.libelle }}</span></td>
+                            <td>{{ e.salle || '—' }}</td>
+                            <td class="tabular-nums">{{ e.nbConvoques }}</td>
+                            <td>
+                                <span :class="['pastille', e.statut === 'Planifié' ? 'bg-insec-50 text-insec-700 ring-insec-600/15' : 'bg-gray-50 text-gray-600 ring-gray-500/15']">
+                                    <span :class="['h-1.5 w-1.5 rounded-full', e.statut === 'Planifié' ? 'bg-insec-500' : 'bg-gray-400']"></span>
+                                    {{ e.statut === 'Planifié' ? 'À venir · calendrier INTEC' : e.statut }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr v-if="!examens.length" class="hover:bg-transparent">
+                            <td colspan="6" class="p-0">
+                                <div class="flex flex-col items-center px-6 py-12 text-center">
+                                    <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-insec-50 text-insec-600 ring-1 ring-insec-100"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i></span>
+                                    <h2 class="mt-3 font-semibold text-gray-900">{{ anneeId ? 'Aucun examen pour cette année scolaire' : 'Aucun suivi local n’est encore ouvert' }}</h2>
+                                    <p class="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
+                                        Ouvrez le suivi d’une épreuve du calendrier officiel pour gérer les candidats, les convocations, la réception des sujets, la salle et le retour des copies à l’INTEC.
+                                    </p>
+                                    <RouterLink to="/examens/importer-calendrier" class="bouton-action mt-5">Consulter le calendrier INTEC</RouterLink>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <Pagination v-model="page" :total="examens.length" :par-page="PAR_PAGE" />
+        </Chargement>
+    </section>
+
+    <section class="carte overflow-hidden" aria-labelledby="resultats-historiques">
+        <header class="panneau-entete">
+            <div>
+                <p class="surtitre text-[10.5px]">Résultats · {{ annee(anneeId)?.libelle ?? anneeId }}</p>
+                <h2 id="resultats-historiques" class="titre-section mt-1">Notes par étudiant et par UE</h2>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="pastille bg-insec-50 text-insec-700 ring-insec-600/15">{{ resultats.length }} résultat(s) historique(s)</span>
+                <button v-if="anneeId === '2024-2025'" class="bouton-secondaire" :disabled="telechargementResultats" @click="telechargerClasseurResultats">
+                    <i class="fa-solid fa-file-excel text-xs text-emerald-600"></i>{{ telechargementResultats ? 'Préparation du fichier…' : 'Télécharger le classeur Excel' }}
+                </button>
+            </div>
+        </header>
+        <div class="p-5 sm:p-6">
+            <div v-if="statistiquesGroupes.length" class="space-y-4">
+                <section v-for="stat in statistiquesGroupes" :key="stat.diplome" class="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                    <h3 class="mb-3 text-sm font-semibold text-gray-900">{{ stat.diplome }} · récapitulatif des résultats</h3>
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <article class="carte p-4"><p class="text-xs font-medium text-gray-500">Candidats avec résultats</p><p class="mt-1.5 font-titre text-2xl font-bold text-gray-900 tabular-nums">{{ stat.nombreCandidats }}</p></article>
+                        <article class="carte p-4"><p class="text-xs font-medium text-gray-500">Résultats enregistrés</p><p class="mt-1.5 font-titre text-2xl font-bold text-gray-900 tabular-nums">{{ stat.totalResultats }}</p></article>
+                        <article class="carte p-4"><p class="text-xs font-medium text-gray-500">UE la plus évaluée</p><p class="mt-1.5 font-semibold text-gray-900">{{ stat.uesPlusEvaluees.map((ue) => ue.code).join(', ') || '—' }}</p><p v-if="stat.nombreMaximumUe" class="mt-0.5 text-xs text-gray-500">Maximum : {{ stat.nombreMaximumUe }} résultat(s) par UE</p></article>
+                        <article class="carte p-4">
+                            <p class="text-xs font-medium text-gray-500">Candidats avec le plus d’UE notées</p>
+                            <p class="mt-1.5 font-titre text-2xl font-bold text-gray-900 tabular-nums">{{ stat.candidatsLesPlusEvalues.length }}</p>
+                            <p v-if="stat.nombreMaximumCandidat" class="mt-0.5 text-xs text-gray-500">{{ stat.nombreMaximumCandidat }} UE notée(s) chacun</p>
+                            <details v-if="stat.candidatsLesPlusEvalues.length" class="group mt-2">
+                                <summary class="flex items-center gap-1.5 text-xs font-semibold text-insec-600 hover:text-insec-800">Voir les noms <i class="fa-solid fa-chevron-down text-[9px] transition group-open:rotate-180"></i></summary>
+                                <p class="mt-1.5 text-xs leading-5 text-gray-600">{{ stat.candidatsLesPlusEvalues.map((candidat) => candidat.nom).join(', ') }}</p>
+                            </details>
+                        </article>
+                    </div>
+                </section>
+            </div>
+
+            <div v-if="anneeId === '2024-2025'" class="mt-5 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+                <label class="etiquette">Classeur Excel de référence
+                    <input type="file" accept=".xlsx" class="champ mt-1.5 py-2" @change="lireFichierResultats" />
+                </label>
+                <button class="bouton-secondaire" :disabled="!base64Resultats || chargementResultats" @click="analyserClasseur">{{ chargementResultats ? 'Analyse…' : 'Analyser le classeur' }}</button>
+                <button class="bouton-action" :disabled="!apercuResultats || chargementResultats" @click="confirmationImportResultats = true">Importer les résultats</button>
+            </div>
+            <div v-if="anneeId === '2024-2025' && confirmationImportResultats" role="alertdialog" aria-labelledby="confirmation-import-resultats" class="mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600"><i class="fa-solid fa-triangle-exclamation text-xs"></i></span>
+                <div class="min-w-0 flex-1">
+                    <p id="confirmation-import-resultats" class="font-semibold text-amber-950">Confirmer l’import de {{ apercuResultats?.total }} résultats historiques ?</p>
+                    <p class="mt-1 text-sm text-amber-900">{{ apercuResultats?.ecarts }} écart(s) seront conservés comme alertes. Aucune inscription ne sera créée ; les lignes historiques correspondantes seront remplacées.</p>
+                    <div class="mt-3 flex flex-wrap justify-end gap-2">
+                        <button class="bouton-secondaire" :disabled="chargementResultats" @click="confirmationImportResultats = false">Annuler</button>
+                        <button class="bouton-action" :disabled="chargementResultats" @click="importerClasseurConfirme">{{ chargementResultats ? 'Importation…' : 'Confirmer l’importation' }}</button>
+                    </div>
+                </div>
+            </div>
+            <p v-if="anneeId === '2024-2025' && messageImportResultats" role="status" class="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-800">
+                <i class="fa-solid fa-circle-check mt-0.5 text-emerald-500"></i><span>{{ messageImportResultats }}</span>
+            </p>
+            <p v-if="anneeId === '2024-2025' && erreurResultats" role="alert" class="mt-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50/70 p-4 text-sm text-red-800">
+                <i class="fa-solid fa-circle-exclamation mt-0.5 text-red-500"></i><span>{{ erreurResultats }}</span>
+            </p>
+            <div v-if="anneeId === '2024-2025' && apercuResultats" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                <p class="font-semibold text-amber-950">Aperçu : {{ apercuResultats.total }} résultat(s), {{ apercuResultats.ecarts }} écart(s) à vérifier.</p>
+                <p class="mt-1 text-sm text-amber-900">Les lignes sont copiées du classeur. L’importation ne crée aucune inscription.</p>
+                <div class="carte mt-3 max-h-80 overflow-auto">
+                    <table class="tableau">
+                        <thead><tr><th>Candidat Excel</th><th>UE</th><th>Note source</th><th>Appréciation</th><th>Écart</th></tr></thead>
+                        <tbody><tr v-for="(r, index) in apercuResultats.lignes" :key="`${r.nomSource}-${r.codeUe}-${index}`">
+                            <td class="font-medium text-gray-900">{{ r.nomSource }}</td><td>{{ r.codeUe }} · {{ r.libelleUe }}</td><td class="font-semibold tabular-nums">{{ r.noteSource }}</td><td>{{ appreciationResultat(r) }}</td>
+                            <td><ul v-if="r.ecarts.length" class="list-disc pl-4 text-sm text-amber-900"><li v-for="e in r.ecarts" :key="e">{{ e }}</li></ul><span v-else class="pastille bg-emerald-50 text-emerald-700 ring-emerald-600/15"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Concordant</span></td>
+                        </tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-if="groupesResultats.length" class="mt-5 space-y-5">
+                <section v-for="groupe in groupesResultats" :key="groupe.diplome" class="overflow-hidden rounded-2xl border border-gray-200">
+                    <header class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/70 px-4 py-3">
+                        <h3 class="text-sm font-semibold text-gray-900">{{ groupe.diplome }} · résultats par UE</h3>
+                        <span class="text-xs text-gray-500">{{ groupe.candidats.length }} candidat(s) · {{ groupe.colonnes.length }} UE</span>
+                    </header>
+                    <p class="flex items-center gap-2 border-b border-gray-100 px-4 py-2 text-xs text-gray-500"><i class="fa-solid fa-arrows-left-right text-[10px]"></i>Faites défiler horizontalement pour consulter toutes les unités d’enseignement.</p>
+                    <div class="overflow-x-auto">
+                        <table class="tableau min-w-max">
+                            <thead><tr><th class="sticky top-0 left-0 z-20 min-w-52 bg-gray-50">Étudiant</th><th v-for="colonne in groupe.colonnes" :key="colonne.code" class="min-w-44"><span class="block">{{ colonne.code }}</span><span class="text-[11px] font-normal tracking-normal text-gray-400 normal-case">{{ colonne.libelle }}</span></th><th class="min-w-56">Écarts à vérifier</th></tr></thead>
+                            <tbody>
+                                <tr v-for="candidat in groupe.candidats" :key="candidat.cle" :class="candidat.ecarts.length ? 'bg-amber-50/60' : ''">
+                                    <th scope="row" :class="['sticky left-0 z-10 min-w-52 px-4 text-left font-medium text-gray-900', candidat.ecarts.length ? 'bg-amber-50' : 'bg-white']">{{ candidat.nom }}</th>
+                                    <td v-for="colonne in groupe.colonnes" :key="colonne.code" class="align-top">
+                                        <template v-if="candidat.parUe.get(colonne.code)?.length">
+                                            <div v-for="(r, index) in candidat.parUe.get(colonne.code)" :key="r.id" :class="index ? 'mt-2 border-t border-gray-200 pt-2' : ''">
+                                                <strong class="font-semibold text-gray-900 tabular-nums">{{ r.noteSource }}</strong>
+                                                <span class="mt-0.5 block text-xs text-gray-500">{{ appreciationResultat(r) }}</span>
+                                            </div>
+                                        </template>
+                                        <span v-else class="text-gray-300" title="Aucun résultat renseigné">—</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="!candidat.ecarts.length" class="pastille bg-emerald-50 text-emerald-700 ring-emerald-600/15"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Aucun écart signalé</span>
+                                        <ul v-else class="list-disc pl-4 text-sm text-amber-900"><li v-for="ecart in candidat.ecarts" :key="ecart">{{ ecart }}</li></ul>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+            <p v-else-if="anneeId === '2024-2025'" class="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-900">
+                <i class="fa-solid fa-circle-info mt-0.5 text-amber-500"></i><span>Aucun résultat n’est encore chargé pour cette année. Sélectionnez le classeur Excel de référence ci-dessus pour afficher les notes par étudiant.</span>
+            </p>
+            <p v-else class="flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 p-4 text-sm text-gray-600" :class="statistiquesGroupes.length ? 'mt-5' : ''">
+                <i class="fa-solid fa-circle-info mt-0.5 text-gray-400"></i><span>Aucun résultat historique n’est enregistré pour {{ annee(anneeId)?.libelle ?? anneeId }}. Les résultats du classeur concernent uniquement 2024–2025.</span>
+            </p>
+        </div>
+    </section>
+</template>

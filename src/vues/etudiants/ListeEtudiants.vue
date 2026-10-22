@@ -114,42 +114,53 @@ async function supprimer() {
 </script>
 
 <template>
-    <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
+    <header class="en-tete-page">
         <div>
-            <p class="text-sm text-gray-500">Registre INSEC</p>
-            <h1 class="text-xl font-bold text-insec">Étudiants</h1>
-            <p class="mt-1 text-sm text-gray-500">Vérifiez l’inscription à l’INSEC pour chaque année scolaire. L’historique reste sur la fiche de l’étudiant.</p>
+            <p class="surtitre">Registre INSEC</p>
+            <h1 class="titre-page mt-1.5">Étudiants</h1>
+            <p class="sous-titre">Vérifiez l’inscription à l’INSEC pour chaque année scolaire. L’historique reste sur la fiche de l’étudiant.</p>
         </div>
-        <RouterLink to="/etudiants/nouveau" class="bouton-action">+ Nouvel étudiant</RouterLink>
-    </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-white pl-3.5 shadow-xs transition hover:border-gray-300">
+                <i class="fa-regular fa-calendar text-sm text-insec-500"></i>
+                <span class="sr-only">Année scolaire</span>
+                <select v-model="anneeId" class="border-0 bg-transparent py-2.5 pl-2 text-sm font-semibold text-gray-900 focus:ring-0" aria-label="Année scolaire">
+                    <option v-for="a in annees" :key="a.id" :value="a.id">Année {{ a.libelle }}</option>
+                </select>
+            </label>
+            <RouterLink to="/etudiants/nouveau" class="bouton-action"><i class="fa-solid fa-plus text-xs"></i> Nouvel étudiant</RouterLink>
+        </div>
+    </header>
 
-    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <label class="flex items-center gap-2 text-sm text-gray-600">
-            <span>Année scolaire</span>
-            <select v-model="anneeId" class="champ w-auto" aria-label="Année scolaire">
-                <option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option>
-            </select>
-        </label>
-        <p class="text-xs text-gray-500">La liste par défaut ne contient que les dossiers de l’année. L’annuaire conserve les étudiants des années précédentes.</p>
-    </div>
-
-    <section class="mb-5 grid gap-3 sm:grid-cols-3" aria-label="Résumé des inscriptions pour l’année sélectionnée">
-        <article class="carte flex items-center justify-between p-4">
-            <div><p class="text-sm text-gray-500">Inscrits à l’INSEC</p><p class="mt-1 text-2xl font-semibold text-emerald-700">{{ inscritsAnnee }}</p></div>
-            <i class="fa-solid fa-user-check rounded-xl bg-emerald-50 p-3 text-emerald-700" aria-hidden="true"></i>
-        </article>
-        <article class="carte flex items-center justify-between p-4">
-            <div><p class="text-sm text-gray-500">Dossiers annuels à vérifier</p><p class="mt-1 text-2xl font-semibold text-gray-700">{{ dossiersAverifierAnnee }}</p></div>
-            <i class="fa-solid fa-user-minus rounded-xl bg-gray-100 p-3 text-gray-600" aria-hidden="true"></i>
-        </article>
-        <article class="carte flex items-center justify-between p-4">
-            <div><p class="text-sm text-gray-500">Étudiants suivis cette année</p><p class="mt-1 text-2xl font-semibold text-insec">{{ etudiantsAvecDossierAnnee }}</p></div>
-            <i class="fa-solid fa-users rounded-xl bg-blue-50 p-3 text-blue-700" aria-hidden="true"></i>
-        </article>
+    <section class="mb-6 grid gap-4 sm:grid-cols-3" aria-label="Résumé des inscriptions pour l’année sélectionnée">
+        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-5 text-left transition hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'inscrits' && 'ring-2 ring-emerald-500/30']" @click="filtreInscription = 'inscrits'">
+            <div>
+                <p class="text-[13px] font-medium text-gray-500">Inscrits à l’INSEC</p>
+                <p class="mt-2 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ inscritsAnnee }}</p>
+            </div>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-emerald-600 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-user-check text-sm"></i></span>
+        </button>
+        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-5 text-left transition hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'non-actifs' && 'ring-2 ring-amber-500/30']" @click="filtreInscription = 'non-actifs'">
+            <div>
+                <p class="text-[13px] font-medium text-gray-500">Dossiers annuels à vérifier</p>
+                <p class="mt-2 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ dossiersAverifierAnnee }}</p>
+            </div>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-user-clock text-sm"></i></span>
+        </button>
+        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-5 text-left transition hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'dossiers-annee' && 'ring-2 ring-insec-500/30']" @click="filtreInscription = 'dossiers-annee'">
+            <div>
+                <p class="text-[13px] font-medium text-gray-500">Étudiants suivis cette année</p>
+                <p class="mt-2 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ etudiantsAvecDossierAnnee }}</p>
+            </div>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-800 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-users text-sm"></i></span>
+        </button>
     </section>
 
-    <div class="mb-4 flex flex-wrap gap-2">
-        <input v-model="recherche" type="search" placeholder="Rechercher un étudiant…" class="champ min-w-[200px] flex-1" aria-label="Rechercher" />
+    <div class="carte mb-4 flex flex-wrap items-center gap-2 p-3">
+        <div class="relative min-w-[220px] flex-1">
+            <i class="fa-solid fa-magnifying-glass pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-[13px] text-gray-400"></i>
+            <input v-model="recherche" type="search" placeholder="Rechercher un étudiant par nom ou e-mail…" class="champ pl-10" aria-label="Rechercher" />
+        </div>
         <select v-model="formationId" class="champ w-auto" aria-label="Formation pour l’année sélectionnée">
             <option value="">Toutes les formations</option>
             <option v-for="f in formationsActives" :key="f.id" :value="f.id">{{ f.code }} · {{ f.nom }}</option>
@@ -161,68 +172,80 @@ async function supprimer() {
             <option value="annuaire">Annuaire complet · toutes les années</option>
         </select>
     </div>
+    <p class="mb-4 flex items-center gap-2 px-1 text-xs text-gray-500">
+        <i class="fa-solid fa-circle-info text-gray-400"></i>
+        La liste par défaut ne contient que les dossiers de l’année. L’annuaire conserve les étudiants des années précédentes.
+    </p>
 
     <Chargement :chargement="chargement || chargementInscriptions" :erreur="erreur || erreurInscriptions">
         <section v-if="!etudiants.length" class="carte my-2 overflow-hidden">
             <div class="grid gap-6 p-6 sm:grid-cols-[auto_1fr] sm:items-center sm:p-8">
-                <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-insec">
+                <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-insec-500 to-insec-900 text-white shadow-lg">
                     <i class="fa-solid fa-users text-2xl" aria-hidden="true"></i>
                 </div>
                 <div>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-insec">Démarrer le registre</p>
-                    <h2 class="mt-1 text-xl font-bold text-gray-900">Aucun étudiant n’est encore enregistré</h2>
+                    <p class="surtitre">Démarrer le registre</p>
+                    <h2 class="mt-1 font-titre text-xl font-bold text-gray-900">Aucun étudiant n’est encore enregistré</h2>
                     <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
                         Créez le premier dossier et son inscription pour {{ libelleAnnee }}, ou importez votre registre avec le modèle INSEC.
                         Les années suivantes seront ajoutées au même dossier pour conserver tout l’historique.
                     </p>
                     <div class="mt-5 flex flex-wrap gap-3">
-                        <RouterLink to="/etudiants/nouveau" class="bouton-action">+ Créer le premier dossier</RouterLink>
-                        <RouterLink to="/excel" class="bouton border border-gray-200 bg-white text-insec hover:bg-gray-50">
-                            <i class="fa-solid fa-file-arrow-up mr-2" aria-hidden="true"></i>Importer le registre
+                        <RouterLink to="/etudiants/nouveau" class="bouton-action"><i class="fa-solid fa-plus text-xs"></i> Créer le premier dossier</RouterLink>
+                        <RouterLink to="/excel" class="bouton-secondaire">
+                            <i class="fa-solid fa-file-arrow-up text-xs" aria-hidden="true"></i>Importer le registre
                         </RouterLink>
                     </div>
                 </div>
             </div>
-            <div class="border-t border-gray-100 bg-gray-50 px-6 py-3 text-xs text-gray-500 sm:px-8">
+            <div class="border-t border-gray-100 bg-gray-50/70 px-6 py-3 text-xs text-gray-500 sm:px-8">
                 L’import Excel demande le modèle INSEC afin de conserver les liens entre étudiants et inscriptions annuelles.
             </div>
         </section>
-        <section v-else-if="!filtres.length" class="carte my-2 flex flex-col items-center px-6 py-12 text-center">
-            <i class="fa-solid fa-magnifying-glass mb-4 text-2xl text-gray-400" aria-hidden="true"></i>
-            <h2 class="font-semibold text-gray-800">{{ !etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire' ? `Aucun dossier enregistré pour ${libelleAnnee}` : 'Aucun résultat pour ces critères' }}</h2>
+        <section v-else-if="!filtres.length" class="carte my-2 flex flex-col items-center px-6 py-14 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-50 text-gray-400 ring-1 ring-gray-100"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span>
+            <h2 class="mt-3 font-semibold text-gray-900">{{ !etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire' ? `Aucun dossier enregistré pour ${libelleAnnee}` : 'Aucun résultat pour ces critères' }}</h2>
             <p class="mt-1 text-sm text-gray-500">{{ !etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire' ? 'Les étudiants des années précédentes restent dans l’annuaire complet.' : 'Changez l’année scolaire ou effacez la recherche et les filtres.' }}</p>
-            <button v-if="!etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire'" class="mt-4 cursor-pointer text-sm font-semibold text-insec underline" @click="filtreInscription = 'annuaire'">Afficher l’annuaire complet</button>
-            <button v-else class="mt-4 cursor-pointer text-sm font-semibold text-insec underline" @click="effacerFiltres">Effacer la recherche et les filtres</button>
+            <button v-if="!etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire'" class="bouton-secondaire mt-5" @click="filtreInscription = 'annuaire'">Afficher l’annuaire complet</button>
+            <button v-else class="bouton-secondaire mt-5" @click="effacerFiltres">Effacer la recherche et les filtres</button>
         </section>
-        <div v-else class="overflow-x-auto rounded-xl bg-white shadow">
+        <div v-else class="carte overflow-x-auto">
             <table class="tableau">
                 <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation cette année</th><th>Statut pour l’année</th><th>Situation</th><th class="text-right">Actions</th></tr></thead>
                 <tbody>
-                    <tr v-for="e in affiches" :key="e.id" class="cursor-pointer hover:bg-gray-50" @click="router.push(`/etudiants/${e.id}`)">
-                        <td class="font-medium text-gray-800">{{ e.nom }} {{ e.prenom }}</td>
-                        <td class="text-gray-600">{{ e.email }}</td>
+                    <tr v-for="e in affiches" :key="e.id" class="cursor-pointer" @click="router.push(`/etudiants/${e.id}`)">
+                        <td>
+                            <span class="flex items-center gap-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-insec-50 text-[11px] font-bold text-insec-700 ring-1 ring-insec-100">{{ `${e.prenom?.[0] ?? ''}${e.nom?.[0] ?? ''}`.toUpperCase() }}</span>
+                                <span class="font-semibold whitespace-nowrap text-gray-900">{{ e.nom }} {{ e.prenom }}</span>
+                            </span>
+                        </td>
+                        <td class="text-gray-500">{{ e.email }}</td>
                         <td class="text-gray-600">
                             <template v-if="inscriptionsPour(e.id).length">
-                                <span v-for="(i, index) in inscriptionsPour(e.id)" :key="i.id">
-                                    {{ index ? ', ' : '' }}{{ formation(i.formationId)?.code ?? 'Formation inconnue' }}
+                                <span v-for="i in inscriptionsPour(e.id)" :key="i.id" class="mr-1 inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                                    {{ formation(i.formationId)?.code ?? 'Formation inconnue' }}
                                 </span>
                             </template>
-                            <span v-else class="text-gray-400">—</span>
+                            <span v-else class="text-gray-300">—</span>
                         </td>
                         <td>
                             <span
-                                :class="situationInscription(e.id).inscrit
-                                    ? 'inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800'
+                                :class="['pastille', situationInscription(e.id).inscrit
+                                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/15'
                                     : situationInscription(e.id).aDossier
-                                        ? 'inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800'
-                                        : 'inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700'"
-                            >{{ situationInscription(e.id).inscrit ? 'Inscrit à l’INSEC' : situationInscription(e.id).aDossier ? 'Dossier à vérifier' : `Aucun dossier · ${libelleAnnee}` }}</span>
+                                        ? 'bg-amber-50 text-amber-800 ring-amber-600/20'
+                                        : 'bg-gray-50 text-gray-600 ring-gray-500/15']"
+                            >
+                                <span :class="['h-1.5 w-1.5 rounded-full', situationInscription(e.id).inscrit ? 'bg-emerald-500' : situationInscription(e.id).aDossier ? 'bg-amber-500' : 'bg-gray-400']"></span>
+                                {{ situationInscription(e.id).inscrit ? 'Inscrit à l’INSEC' : situationInscription(e.id).aDossier ? 'Dossier à vérifier' : `Aucun dossier · ${libelleAnnee}` }}
+                            </span>
                             <p v-if="situationInscription(e.id).detail" class="mt-1 text-xs text-gray-500">{{ situationInscription(e.id).detail }}</p>
                         </td>
                         <td><BadgeStatut :statut="e.statut" /></td>
                         <td class="text-right whitespace-nowrap" @click.stop>
-                            <RouterLink :to="`/etudiants/${e.id}/modifier`" class="mr-3 text-gray-400 hover:text-blue-600" title="Modifier"><i class="fa-solid fa-pen"></i></RouterLink>
-                            <button class="cursor-pointer text-gray-400 hover:text-red-600" title="Supprimer" @click="aSupprimer = e"><i class="fa-solid fa-trash"></i></button>
+                            <RouterLink :to="`/etudiants/${e.id}/modifier`" class="bouton-icone hover:bg-insec-50 hover:text-insec-700" title="Modifier" aria-label="Modifier"><i class="fa-solid fa-pen text-[13px]"></i></RouterLink>
+                            <button class="bouton-icone hover:bg-red-50 hover:text-red-600" title="Supprimer" aria-label="Supprimer" @click="aSupprimer = e"><i class="fa-solid fa-trash text-[13px]"></i></button>
                         </td>
                     </tr>
                 </tbody>
@@ -239,4 +262,3 @@ async function supprimer() {
         @confirmer="supprimer"
     />
 </template>
-
