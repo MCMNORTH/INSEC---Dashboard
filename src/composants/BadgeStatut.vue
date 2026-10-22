@@ -24,6 +24,10 @@ const TONS: Record<string, Ton> = {
     Admissible: 'succes',
     Inscrite: 'info',
     'En étude': 'attention',
+    Payée: 'succes',
+    Partielle: 'info',
+    'En retard': 'danger',
+    'À venir': 'neutre',
 };
 const STYLES: Record<Ton, { pastille: string; point: string }> = {
     succes: { pastille: 'bg-emerald-50 text-emerald-700 ring-emerald-600/15', point: 'bg-emerald-500' },
