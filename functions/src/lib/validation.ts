@@ -14,7 +14,7 @@ const LIBELLES: Record<string, string> = {
     nombreEtudiants: 'Nombre d’étudiants', dateNaissance: 'Date de naissance', dernierDiplome: 'Dernier diplôme',
     motivation: 'Motivation', noteInterne: 'Note interne', role: 'Rôle', motDePasse: 'Mot de passe',
     etudiantId: 'Dossier étudiant', enseignantId: 'Dossier enseignant', type: 'Type', dateExpiration: 'Date d’expiration',
-    confirmation: 'Confirmation', mode: 'Mode',
+    confirmation: 'Confirmation', mode: 'Mode', dateReglement: 'Date du règlement', motif: 'Motif',
 };
 
 export function valider<S extends z.ZodType>(schema: S, donnees: unknown): z.output<S> {

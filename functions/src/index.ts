@@ -12,7 +12,7 @@ export { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription,
 export { exporterExcel, importerEtudiants } from './handlers/excel.js';
 export { creerExamen, enregistrerPresencesExamen, enregistrerResultat, mettreAJourPreparationExamen } from './handlers/examens.js';
 export {
-    ajouterEcheance, ajouterVersement, annulerVersement, confirmerReglementBumex2024, genererEcheancier, lireTauxEuroMru, modifierEcheance,
+    ajouterEcheance, ajouterVersement, annulerVersement, confirmerReglementBumex2024, enregistrerReglementBumex, genererEcheancier, lireTauxEuroMru, modifierEcheance,
     modifierSituationFinanciere, modifierTauxEuroMru, supprimerEcheance, traiterVersement,
 } from './handlers/finances.js';
 export { relancerPaiement, relancerTousLesRetards } from './handlers/relances.js';
