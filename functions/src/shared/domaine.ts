@@ -106,6 +106,25 @@ export function montantEnRetard(i: SituationFinanciere, aujourdhui: string = dat
     return Math.max(Math.min(exigible, montantNet(i)) - (i.totalVerse ?? 0), 0);
 }
 
+export type EtatEcheance = 'Payée' | 'Partielle' | 'En retard' | 'À venir';
+
+/**
+ * État de chaque échéance : les versements validés (total versé) sont imputés aux échéances
+ * dans l'ordre chronologique. Une échéance échue (avant aujourd'hui) non couverte est « En retard »,
+ * même si elle est en partie payée. Le total des parts en retard est égal à montantEnRetard.
+ */
+export function etatEcheances(i: SituationFinanciere, aujourdhui: string = dateDuJour()): (Echeance & { paye: number; etat: EtatEcheance })[] {
+    let disponible = i.totalVerse ?? 0;
+    return [...(i.echeances ?? [])]
+        .sort((a, b) => a.dateEcheance.localeCompare(b.dateEcheance))
+        .map((e) => {
+            const paye = Math.min(e.montant, Math.max(disponible, 0));
+            disponible -= paye;
+            const etat: EtatEcheance = paye >= e.montant ? 'Payée' : e.dateEcheance < aujourdhui ? 'En retard' : paye > 0 ? 'Partielle' : 'À venir';
+            return { ...e, paye, etat };
+        });
+}
+
 export function resultatValide(r: { presence: string; note: number | null; seuilValidation: number }): boolean {
     return r.presence === 'Présent' && r.note !== null && r.note !== undefined && r.note >= r.seuilValidation;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { diplomeTarife, estRecouvrable, MODES_PAIEMENT, montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE } from '@shared/domaine';
+import { diplomeTarife, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -58,6 +58,13 @@ watch(anneeEtudiants, (value) => {
 // Filtre rapide de la liste par situation de paiement.
 type FiltrePaiement = 'tous' | 'retard' | 'impayes' | 'partiels' | 'soldes' | 'bumex';
 const filtrePaiement = ref<FiltrePaiement>('tous');
+// Apparence de chaque échéance selon son état (versements imputés dans l'ordre des dates).
+const STYLE_ECHEANCE: Record<EtatEcheance, { pastille: string; icone: string }> = {
+    Payée: { pastille: 'bg-emerald-50 text-emerald-600', icone: 'fa-check' },
+    Partielle: { pastille: 'bg-insec-50 text-insec-600', icone: 'fa-circle-half-stroke' },
+    'En retard': { pastille: 'bg-red-50 text-red-600', icone: 'fa-triangle-exclamation' },
+    'À venir': { pastille: 'bg-gray-100 text-gray-500', icone: 'fa-calendar' },
+};
 const statutLigne = (d: Inscription) =>
     d.financeur === 'bumex' ? (d.statutBumex === 'reglee' ? 'BUMEX a réglé' : 'À régler par BUMEX') : statutPaiement(d);
 const pourcentagePaye = (d: Inscription) => {
@@ -604,8 +611,11 @@ const totauxFinanciers = computed(() => ({
                                         <!-- Échéancier -->
                                         <div v-else-if="ongletDossier === 'echeancier'" class="grid gap-5 md:grid-cols-[1fr_300px]">
                                             <div>
+                                                <p v-if="inscription.echeances?.length" class="mb-3 text-xs text-gray-500">
+                                                    {{ etatEcheances(inscription).filter((e) => e.etat === 'Payée').length }} / {{ inscription.echeances.length }} tranche(s) payée(s) · les versements validés sont imputés aux échéances dans l’ordre des dates.
+                                                </p>
                                                 <ul class="space-y-2">
-                                                    <li v-for="e in inscription.echeances" :key="e.id">
+                                                    <li v-for="e in etatEcheances(inscription)" :key="e.id">
                                                         <form v-if="echeanceEnCours === e.id" class="grid gap-2 rounded-2xl bg-insec-50/60 p-3 ring-1 ring-insec-100 sm:grid-cols-[1fr_120px_150px_auto]" @submit.prevent="enregistrerEcheance">
                                                             <input v-model="echeanceModifiee.libelle" class="champ py-2" required maxlength="100" aria-label="Libellé" />
                                                             <input v-model.number="echeanceModifiee.montant" type="number" min="1" class="champ py-2" required aria-label="Montant" />
@@ -616,10 +626,15 @@ const totauxFinanciers = computed(() => ({
                                                             </span>
                                                         </form>
                                                         <div v-else class="group flex items-center gap-3 rounded-2xl px-4 py-3 ring-1 ring-gray-100 transition hover:bg-gray-50">
-                                                            <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs', e.dateEcheance < aujourdhui() ? 'bg-red-50 text-red-600' : 'bg-insec-50 text-insec-600']"><i class="fa-regular fa-calendar"></i></span>
+                                                            <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs', STYLE_ECHEANCE[e.etat].pastille]"><i :class="['fa-solid', STYLE_ECHEANCE[e.etat].icone]"></i></span>
                                                             <span class="min-w-0 flex-1">
-                                                                <span class="block text-sm font-medium text-gray-900">{{ e.libelle }}</span>
-                                                                <span :class="['block text-xs', e.dateEcheance < aujourdhui() ? 'text-red-600' : 'text-gray-500']">{{ date(e.dateEcheance) }}</span>
+                                                                <span class="flex flex-wrap items-center gap-2">
+                                                                    <span class="text-sm font-medium text-gray-900">{{ e.libelle }}</span>
+                                                                    <BadgeStatut :statut="e.etat" />
+                                                                </span>
+                                                                <span :class="['block text-xs', e.etat === 'En retard' ? 'text-red-600' : 'text-gray-500']">
+                                                                    {{ date(e.dateEcheance) }}<template v-if="e.etat === 'Partielle' || (e.etat === 'En retard' && e.paye > 0)"> · {{ montant(e.paye) }} payés, reste {{ montant(e.montant - e.paye) }}</template>
+                                                                </span>
                                                             </span>
                                                             <strong class="text-sm text-gray-900 tabular-nums">{{ montant(e.montant) }} <span class="text-[11px] font-medium text-gray-400">MRU</span></strong>
                                                             <button type="button" class="bouton-icone h-8 w-8" title="Modifier" :disabled="envoi" @click="editerEcheance(e)"><i class="fa-solid fa-pen text-[11px]"></i></button>

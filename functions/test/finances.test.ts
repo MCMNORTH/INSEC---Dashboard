@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant, creerInscription, modifierInscription } from '../src/handlers/etudiants.js';
 import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere } from '../src/handlers/finances.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
-import { montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement } from '../src/shared/domaine.js';
+import { etatEcheances, montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
 const etudiant = (email: string) => ({
@@ -104,6 +104,22 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         await appeler(creerInscription, { etudiantId, formationId: 'DSGC', anneeId: '2026-2027', anneeParcours: 1, ueIds: ['TEC211'] }, admin);
         const dsgc = (await liste('inscriptions')).find((i) => i.formationId === 'DSGC')!;
         expect(dsgc.montantDu).toBe(18000);
+    });
+
+    it('impute les versements aux échéances dans l’ordre chronologique', () => {
+        const echeances = [
+            { id: 'c', libelle: 'T3', montant: 30000, dateEcheance: '2026-12-01' },
+            { id: 'a', libelle: 'T1', montant: 30000, dateEcheance: '2026-10-01' },
+            { id: 'b', libelle: 'T2', montant: 40000, dateEcheance: '2026-11-01' },
+        ];
+        const etat = (totalVerse: number) =>
+            etatEcheances({ montantDu: 100000, montantRemise: 0, totalVerse, echeances }, '2026-11-15').map((e) => [e.id, e.paye, e.etat]);
+        expect(etat(0)).toEqual([['a', 0, 'En retard'], ['b', 0, 'En retard'], ['c', 0, 'À venir']]);
+        expect(etat(50000)).toEqual([['a', 30000, 'Payée'], ['b', 20000, 'En retard'], ['c', 0, 'À venir']]);
+        expect(etat(80000)).toEqual([['a', 30000, 'Payée'], ['b', 40000, 'Payée'], ['c', 10000, 'Partielle']]);
+        expect(etat(120000)).toEqual([['a', 30000, 'Payée'], ['b', 40000, 'Payée'], ['c', 30000, 'Payée']]);
+        // Cohérent avec le montant en retard : 20 000 restants sur T2.
+        expect(montantEnRetard({ montantDu: 100000, montantRemise: 0, totalVerse: 50000, echeances }, '2026-11-15')).toBe(20000);
     });
 
     it('ne présente jamais un dossier sans montant comme soldé', () => {
