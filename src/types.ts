@@ -60,6 +60,9 @@ export interface Inscription {
     financeur?: 'etudiant' | 'bumex';
     montantBumex?: number;
     statutBumex?: 'a_regler' | 'reglee';
+    dateReglementBumex?: string | null;
+    referenceBumex?: string | null;
+    motifAnnulationBumex?: string | null;
     echeances: Echeance[];
     derniereRelanceLe?: string | null;
     nbRelances?: number;
