@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { diplomeTarife, estRecouvrable, MODES_PAIEMENT, montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
-import { computed, onMounted, reactive, ref, watch, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { appeler } from '../api';
 import BadgeStatut from '../composants/BadgeStatut.vue';
@@ -50,8 +50,48 @@ const { donnees: versementsBruts } = useRequete<Versement>(() =>
 const versements = computed(() => [...versementsBruts.value].sort((a, b) => b.dateVersement.localeCompare(a.dateVersement)));
 
 const ouvrir = (etudiant: string, dossier?: string) => router.replace({ query: { onglet: 'etudiants', annee: anneeEtudiants.value, etudiant, ...(dossier ? { inscription: dossier } : {}) } });
+const fermer = () => router.replace({ query: { onglet: 'etudiants', annee: anneeEtudiants.value } });
 watch(anneeEtudiants, (value) => {
     void router.replace({ query: { onglet: 'etudiants', annee: value } });
+});
+
+// Filtre rapide de la liste par situation de paiement.
+type FiltrePaiement = 'tous' | 'retard' | 'impayes' | 'partiels' | 'soldes' | 'bumex';
+const filtrePaiement = ref<FiltrePaiement>('tous');
+const statutLigne = (d: Inscription) =>
+    d.financeur === 'bumex' ? (d.statutBumex === 'reglee' ? 'BUMEX a réglé' : 'À régler par BUMEX') : statutPaiement(d);
+const pourcentagePaye = (d: Inscription) => {
+    const net = montantNet(d);
+    return net > 0 ? Math.min(100, Math.round(((d.totalVerse ?? 0) * 100) / net)) : 100;
+};
+const FILTRES_PAIEMENT: { valeur: FiltrePaiement; libelle: string; garder: (d: Inscription) => boolean }[] = [
+    { valeur: 'tous', libelle: 'Tous', garder: () => true },
+    { valeur: 'retard', libelle: 'En retard', garder: (d) => montantEnRetard(d) > 0 },
+    { valeur: 'impayes', libelle: 'Impayés', garder: (d) => d.financeur !== 'bumex' && statutPaiement(d) === 'Impayé' },
+    { valeur: 'partiels', libelle: 'Partiels', garder: (d) => d.financeur !== 'bumex' && statutPaiement(d) === 'Partiel' },
+    { valeur: 'soldes', libelle: 'Soldés', garder: (d) => d.financeur !== 'bumex' && statutPaiement(d) === 'Soldé' },
+    { valeur: 'bumex', libelle: 'BUMEX', garder: (d) => d.financeur === 'bumex' },
+];
+const compteFiltre = (f: (typeof FILTRES_PAIEMENT)[number]) => lignesEtudiants.value.filter(({ dossier }) => f.garder(dossier)).length;
+const lignesAffichees = computed(() => {
+    const filtre = FILTRES_PAIEMENT.find((f) => f.valeur === filtrePaiement.value)!;
+    return lignesEtudiants.value.filter(({ dossier }) => filtre.garder(dossier));
+});
+
+// Fenêtre du dossier : onglet affiché, fermeture avec Échap, page figée derrière.
+const ongletDossier = ref<'versements' | 'echeancier' | 'situation'>('versements');
+watch(etudiantId, () => (ongletDossier.value = 'versements'));
+function toucheEchap(e: KeyboardEvent) {
+    if (e.key === 'Escape' && selectionne.value && !echeanceEnCours.value) void fermer();
+}
+watch(selectionne, (ouvert) => {
+    document.body.style.overflow = ouvert ? 'hidden' : '';
+    if (ouvert) document.addEventListener('keydown', toucheEchap);
+    else document.removeEventListener('keydown', toucheEchap);
+}, { immediate: true });
+onBeforeUnmount(() => {
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', toucheEchap);
 });
 
 // Formulaires du dossier sélectionné.
@@ -266,244 +306,373 @@ const totauxFinanciers = computed(() => ({
     </header>
 
     <Chargement :chargement="chargement" :erreur="erreur">
-        <div v-if="onglet === 'etudiants'" class="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
-            <section class="carte overflow-hidden lg:col-span-2">
-                <div class="grid gap-3 border-b border-gray-100 p-4 sm:grid-cols-2 sm:p-5">
-                    <label class="etiquette">Année scolaire
-                        <select v-model="anneeEtudiants" class="champ mt-1.5"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
+        <div v-if="onglet === 'etudiants'">
+            <section class="carte overflow-hidden">
+                <div class="flex flex-wrap items-center gap-3 border-b border-gray-100 p-4 sm:px-5">
+                    <label class="flex items-center gap-1 rounded-xl border border-gray-200 bg-surface pl-3.5 shadow-xs">
+                        <i class="fa-regular fa-calendar text-sm text-insec-500"></i>
+                        <span class="sr-only">Année scolaire</span>
+                        <select v-model="anneeEtudiants" class="border-0 bg-transparent py-2.5 pl-2 text-sm font-semibold text-gray-900 focus:ring-0">
+                            <option v-for="a in annees" :key="a.id" :value="a.id">Année {{ a.libelle }}</option>
+                        </select>
                     </label>
-                    <label class="etiquette">Rechercher un étudiant
-                        <span class="relative mt-1.5 block">
-                            <i class="fa-solid fa-magnifying-glass pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-[13px] text-gray-400"></i>
-                            <input v-model="recherche" type="search" placeholder="Nom ou prénom…" class="champ pl-10" aria-label="Rechercher" />
-                        </span>
-                    </label>
+                    <span class="relative min-w-56 flex-1">
+                        <i class="fa-solid fa-magnifying-glass pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-[13px] text-gray-400"></i>
+                        <input v-model="recherche" type="search" placeholder="Rechercher un étudiant…" class="champ pl-10" aria-label="Rechercher un étudiant" />
+                    </span>
+                    <button v-if="retardsAnnee" type="button" class="bouton-secondaire text-red-600" :disabled="envoi" @click="relancerTous">
+                        <i class="fa-regular fa-paper-plane text-xs"></i>Relancer les {{ retardsAnnee }} retard(s)
+                    </button>
                 </div>
-                <div v-if="retardsAnnee" class="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-red-200/80 bg-linear-to-r from-red-50 to-surface p-3 sm:mx-5">
-                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"><i class="fa-solid fa-triangle-exclamation text-sm"></i></span>
-                    <span class="min-w-0 flex-1 text-sm text-red-900"><strong class="font-semibold">{{ retardsAnnee }} étudiant(s)</strong> en retard de paiement sur cette année.</span>
-                    <button type="button" class="bouton-secondaire" :disabled="envoi" @click="relancerTous"><i class="fa-regular fa-paper-plane text-xs"></i>Relancer tous les retards</button>
+
+                <div class="flex gap-1.5 overflow-x-auto border-b border-gray-100 px-4 py-3 sm:px-5" role="tablist" aria-label="Filtrer par situation de paiement">
+                    <button
+                        v-for="f in FILTRES_PAIEMENT"
+                        :key="f.valeur"
+                        type="button"
+                        role="tab"
+                        :aria-selected="filtrePaiement === f.valeur"
+                        :class="[
+                            'inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition',
+                            filtrePaiement === f.valeur ? 'bg-insec-600 text-white shadow-xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900',
+                        ]"
+                        @click="filtrePaiement = f.valeur"
+                    >
+                        {{ f.libelle }}
+                        <span :class="['rounded-full px-1.5 text-[11px] font-semibold tabular-nums', filtrePaiement === f.valeur ? 'bg-white/20' : 'bg-surface text-gray-500']">{{ compteFiltre(f) }}</span>
+                    </button>
                 </div>
-                <div class="mt-2 max-h-[70vh] overflow-auto">
+
+                <div class="overflow-x-auto">
                     <table class="tableau">
-                        <thead class="sticky top-0 z-10"><tr><th>Étudiant</th><th>Financeur</th><th class="text-right">Restant étudiant</th><th>Statut</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Étudiant</th>
+                                <th>Financeur</th>
+                                <th class="text-right">Net à payer</th>
+                                <th class="text-right">Versé</th>
+                                <th class="text-right">Restant</th>
+                                <th class="w-40">Paiement</th>
+                                <th>Statut</th>
+                                <th class="w-8"><span class="sr-only">Ouvrir</span></th>
+                            </tr>
+                        </thead>
                         <tbody>
-                            <tr
-                                v-for="ligne in lignesEtudiants"
-                                :key="ligne.dossier.id"
-                                :class="['cursor-pointer', ligne.dossier.id === inscription?.id ? 'bg-insec-50/70 shadow-[inset_3px_0_0_var(--color-insec-600)]' : '']"
-                                @click="ouvrir(ligne.etudiant.id, ligne.dossier.id)"
-                            >
+                            <tr v-for="ligne in lignesAffichees" :key="ligne.dossier.id" class="group cursor-pointer" @click="ouvrir(ligne.etudiant.id, ligne.dossier.id)">
                                 <td>
-                                    <span class="block font-semibold text-gray-900">{{ ligne.etudiant.nom }} {{ ligne.etudiant.prenom }}</span>
-                                    <span class="block text-xs text-gray-500">{{ formation(ligne.dossier.formationId)?.code }} · {{ ligne.dossier.ueIds.length }} UE</span>
+                                    <span class="flex items-center gap-3">
+                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-insec-50 text-[11px] font-bold text-insec-700 ring-1 ring-insec-100">
+                                            {{ `${ligne.etudiant.nom?.[0] ?? ''}${ligne.etudiant.prenom?.[0] ?? ''}`.toUpperCase() }}
+                                        </span>
+                                        <span class="min-w-0">
+                                            <span class="block font-semibold whitespace-nowrap text-gray-900">{{ ligne.etudiant.nom }} {{ ligne.etudiant.prenom }}</span>
+                                            <span class="block text-xs text-gray-500">{{ formation(ligne.dossier.formationId)?.code }} · {{ ligne.dossier.ueIds.length }} UE</span>
+                                        </span>
+                                    </span>
                                 </td>
-                                <td><BadgeStatut :statut="ligne.dossier.financeur === 'bumex' ? 'Pris en charge par BUMEX' : 'À la charge de l’étudiant'" /></td>
-                                <td class="text-right whitespace-nowrap tabular-nums">
-                                    <template v-if="ligne.dossier.financeur === 'bumex'"><span class="text-gray-300">—</span></template>
-                                    <template v-else><span class="font-semibold text-gray-900">{{ montant(soldeRestant(ligne.dossier)) }}</span> <span class="text-[11px] font-medium text-gray-400">MRU</span></template>
+                                <td class="text-gray-600">
+                                    <span v-if="ligne.dossier.financeur === 'bumex'" class="inline-flex items-center gap-1.5"><i class="fa-solid fa-building-columns text-xs text-emerald-600"></i>BUMEX</span>
+                                    <span v-else class="inline-flex items-center gap-1.5"><i class="fa-solid fa-user text-xs text-gray-400"></i>Étudiant</span>
                                 </td>
-                                <td>
-                                    <BadgeStatut :statut="ligne.dossier.financeur === 'bumex' ? (ligne.dossier.statutBumex === 'reglee' ? 'BUMEX a réglé' : 'À régler par BUMEX') : statutPaiement(ligne.dossier)" />
+                                <template v-if="ligne.dossier.financeur === 'bumex'">
+                                    <td class="text-right whitespace-nowrap tabular-nums text-gray-600">{{ montant(ligne.dossier.montantBumex ?? montantNet(ligne.dossier)) }} <span class="text-[11px] text-gray-400">MRU</span></td>
+                                    <td class="text-right text-gray-300">—</td>
+                                    <td class="text-right text-gray-300">—</td>
+                                    <td><span class="text-xs text-gray-400">Suivi BUMEX</span></td>
+                                </template>
+                                <template v-else>
+                                    <td class="text-right whitespace-nowrap tabular-nums text-gray-600">{{ montant(montantNet(ligne.dossier)) }} <span class="text-[11px] text-gray-400">MRU</span></td>
+                                    <td class="text-right whitespace-nowrap tabular-nums text-emerald-700">{{ montant(ligne.dossier.totalVerse ?? 0) }}</td>
+                                    <td class="text-right whitespace-nowrap tabular-nums">
+                                        <span class="font-semibold text-gray-900">{{ montant(soldeRestant(ligne.dossier)) }}</span>
+                                        <span v-if="montantEnRetard(ligne.dossier) > 0" class="block text-[11px] text-red-600">dont {{ montant(montantEnRetard(ligne.dossier)) }} en retard</span>
+                                    </td>
+                                    <td>
+                                        <span class="flex items-center gap-2">
+                                            <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                                                <span
+                                                    :class="['block h-full rounded-full', pourcentagePaye(ligne.dossier) >= 100 ? 'bg-emerald-500' : montantEnRetard(ligne.dossier) > 0 ? 'bg-red-500' : 'bg-insec-500']"
+                                                    :style="{ width: `${pourcentagePaye(ligne.dossier)}%` }"
+                                                ></span>
+                                            </span>
+                                            <span class="w-9 text-right text-[11px] font-medium text-gray-500 tabular-nums">{{ pourcentagePaye(ligne.dossier) }} %</span>
+                                        </span>
+                                    </td>
+                                </template>
+                                <td><BadgeStatut :statut="statutLigne(ligne.dossier)" /></td>
+                                <td class="text-right"><i class="fa-solid fa-chevron-right text-[11px] text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-insec-500"></i></td>
+                            </tr>
+                            <tr v-if="!lignesAffichees.length">
+                                <td colspan="8" class="py-14 text-center">
+                                    <i class="fa-regular fa-folder-open text-xl text-gray-300"></i>
+                                    <p class="mt-2 text-sm text-gray-500">
+                                        {{ lignesEtudiants.length ? 'Aucun dossier ne correspond à ce filtre.' : `Aucune inscription pour ${annee(anneeEtudiants)?.libelle ?? anneeEtudiants}.` }}
+                                    </p>
                                 </td>
                             </tr>
-                            <tr v-if="!lignesEtudiants.length"><td colspan="4" class="py-12 text-center text-sm text-gray-400">Aucune inscription pour {{ annee(anneeEtudiants)?.libelle ?? anneeEtudiants }}.</td></tr>
                         </tbody>
                     </table>
                 </div>
-                <p class="flex items-center gap-2 border-t border-gray-100 px-5 py-3 text-xs text-gray-400"><i class="fa-regular fa-hand-pointer"></i>Cliquez sur un étudiant pour ouvrir son dossier.</p>
             </section>
 
-            <aside v-if="selectionne" class="carte overflow-hidden lg:sticky lg:top-24">
-                <div class="relative overflow-hidden bg-insec-600 px-5 pt-5 pb-4 text-white">
-                    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_80%_at_0%_0%,rgb(255_255_255/0.16),transparent_60%)]"></div>
-                    <p class="relative text-[10.5px] font-semibold tracking-[0.16em] text-white/75 uppercase">Dossier financier</p>
-                    <p class="relative mt-1 font-titre text-lg font-bold">{{ selectionne.nom }} {{ selectionne.prenom }}</p>
-                    <div class="relative mt-3 flex flex-wrap gap-1.5">
-                        <button
-                            v-for="d in dossiers"
-                            :key="d.id"
-                            type="button"
-                            :class="['cursor-pointer rounded-lg px-2.5 py-1 text-xs font-semibold transition', inscription?.id === d.id ? 'bg-white text-[#1d4ed8]' : 'bg-white/10 text-white/90 hover:bg-white/20']"
-                            @click="ouvrir(selectionne.id, d.id)"
-                        >{{ formation(d.formationId)?.code }} {{ annee(d.anneeId)?.libelle }}</button>
-                    </div>
-                </div>
-
-                <div v-if="inscription" class="p-5">
-                    <p :class="['flex items-start gap-2.5 rounded-xl border p-3 text-sm', inscription.financeur === 'bumex' ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900' : 'border-insec-100 bg-insec-50/60 text-insec-700']">
-                        <i :class="['fa-solid mt-0.5 text-xs', inscription.financeur === 'bumex' ? 'fa-building-columns text-emerald-600' : 'fa-user text-insec-500']"></i>
-                        <span>
-                            <template v-if="inscription.financeur === 'bumex'">Cette inscription est prise en charge par BUMEX. Montant couvert : {{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU · {{ inscription.statutBumex === 'reglee' ? 'intégralement réglé par BUMEX' : 'paiement de BUMEX à confirmer' }}.</template>
-                            <template v-else>Les frais de cette inscription sont à la charge de l’étudiant.</template>
-                        </span>
-                    </p>
-
-                    <template v-if="inscription.financeur !== 'bumex'">
-                        <dl class="mt-4 grid grid-cols-2 gap-3">
-                            <div class="col-span-2 rounded-xl bg-gray-50 p-3 ring-1 ring-gray-100">
-                                <dt class="text-xs text-gray-500">Montant brut</dt>
-                                <dd class="mt-0.5 font-titre text-2xl font-bold text-gray-900 tabular-nums">{{ montant(inscription.montantDu) }} <span class="text-sm font-semibold text-gray-400">MRU</span></dd>
-                                <dd class="mt-1 text-xs text-gray-500">Remise <span class="font-semibold text-amber-700 tabular-nums">- {{ montant(inscription.montantRemise) }}</span> · net <strong class="text-gray-900 tabular-nums">{{ montant(montantNet(inscription)) }} MRU</strong></dd>
-                            </div>
-                            <div class="rounded-xl bg-emerald-50/70 p-3 ring-1 ring-emerald-100">
-                                <dt class="text-xs text-emerald-700">Total versé</dt>
-                                <dd class="mt-0.5 text-lg font-bold text-emerald-700 tabular-nums">{{ montant(inscription.totalVerse) }} <span class="text-[11px] font-semibold">MRU</span></dd>
-                            </div>
-                            <div class="rounded-xl bg-amber-50/70 p-3 ring-1 ring-amber-100">
-                                <dt class="text-xs text-amber-800">Solde restant (calculé)</dt>
-                                <dd class="mt-0.5 text-lg font-bold text-amber-800 tabular-nums">{{ montant(soldeRestant(inscription)) }} <span class="text-[11px] font-semibold">MRU</span></dd>
-                            </div>
-                        </dl>
-
-                        <div v-if="aRole('admin', 'super_admin')" class="mt-4 grid grid-cols-1 gap-2">
-                            <button type="button" class="bouton-principal w-full" @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))">
-                                <i class="fa-solid fa-file-pdf text-xs"></i>Télécharger la facture PDF
-                            </button>
-                            <button
-                                type="button"
-                                class="bouton-secondaire w-full"
-                                :disabled="envoi || !emailEtudiantValide"
-                                @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email ?? '')"
-                            ><i class="fa-regular fa-envelope text-xs"></i>Envoyer la facture par e-mail</button>
-                        </div>
-                        <p v-if="emailEtudiantValide" role="status" class="mt-2 text-xs text-gray-500"><i class="fa-regular fa-envelope mr-1"></i>Destinataire : {{ selectionne.email }}</p>
-                        <p v-else class="mt-2 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 text-xs text-amber-900">
-                            Adresse e-mail absente ou invalide. <RouterLink :to="`/etudiants/${selectionne.id}/modifier`" class="lien">Corriger la fiche étudiant</RouterLink> avant l’envoi.
-                        </p>
-                        <div v-if="montantEnRetard(inscription) > 0" class="mt-3 rounded-xl border border-red-200 bg-red-50/70 p-3 text-sm text-red-800">
-                            <p class="flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-xs text-red-500"></i>En retard : <strong class="tabular-nums">{{ montant(montantEnRetard(inscription)) }} MRU</strong></p>
-                            <button
-                                type="button"
-                                class="bouton-danger mt-2 w-full"
-                                :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
-                                @click="relancer"
-                            >{{ inscription.derniereRelanceLe === aujourdhui() ? 'Déjà relancé aujourd’hui' : 'Relancer par e-mail' }}</button>
-                        </div>
-                        <p v-if="inscription.derniereRelanceLe" class="mt-1.5 text-[11px] text-gray-500">Dernière relance : {{ date(inscription.derniereRelanceLe) }}<template v-if="inscription.nbRelances"> · {{ inscription.nbRelances }} relance(s) au total</template></p>
-
-                        <form class="mt-5 space-y-3 border-t border-gray-100 pt-5" @submit.prevent="majSituation">
-                            <h3 class="titre-section text-sm">Situation financière</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <label class="etiquette">Montant brut <input v-model.number="situation.montantDu" type="number" min="0" class="champ mt-1.5" required /></label>
-                                <label class="etiquette">Remise <input v-model.number="situation.montantRemise" type="number" min="0" class="champ mt-1.5" required /></label>
-                            </div>
-                            <p v-if="erreurs.montantRemise" class="text-xs text-red-600">{{ erreurs.montantRemise }}</p>
-                            <textarea v-model="situation.noteFinanciere" placeholder="Note financière interne" class="champ" rows="2" maxlength="2000"></textarea>
-                            <button class="bouton-secondaire w-full" :disabled="envoi">Mettre à jour</button>
-                        </form>
-
-                        <div class="mt-5 border-t border-gray-100 pt-5">
-                            <h3 class="titre-section mb-3 text-sm">Échéancier</h3>
-                            <ul class="space-y-1.5">
-                                <li v-for="e in inscription.echeances" :key="e.id">
-                                    <form v-if="echeanceEnCours === e.id" class="grid grid-cols-2 gap-2 rounded-xl bg-insec-50/60 p-2.5 ring-1 ring-insec-100" @submit.prevent="enregistrerEcheance">
-                                        <input v-model="echeanceModifiee.libelle" class="champ px-2.5 py-1.5 text-xs" required maxlength="100" aria-label="Libellé" />
-                                        <input v-model.number="echeanceModifiee.montant" type="number" min="1" class="champ px-2.5 py-1.5 text-xs" required aria-label="Montant" />
-                                        <input v-model="echeanceModifiee.dateEcheance" type="date" class="champ px-2.5 py-1.5 text-xs" required aria-label="Date d’échéance" />
-                                        <span class="flex gap-1.5">
-                                            <button class="bouton-principal min-h-0 flex-1 px-2 py-1.5 text-xs" :disabled="envoi">Enregistrer</button>
-                                            <button type="button" class="bouton-fantome min-h-0 px-2 py-1.5 text-xs" @click="echeanceEnCours = null">Annuler</button>
-                                        </span>
-                                    </form>
-                                    <div v-else class="group flex items-center gap-2 rounded-xl px-3 py-2 text-xs ring-1 ring-gray-100 transition hover:bg-gray-50">
-                                        <span class="min-w-0 flex-1"><span class="font-medium text-gray-800">{{ e.libelle }}</span> <span class="text-gray-500">· {{ date(e.dateEcheance) }}</span></span>
-                                        <strong class="text-gray-900 tabular-nums">{{ montant(e.montant) }}</strong>
-                                        <button type="button" class="bouton-icone h-7 w-7" title="Modifier" :disabled="envoi" @click="editerEcheance(e)"><i class="fa-solid fa-pen text-[11px]"></i></button>
-                                        <button type="button" class="bouton-icone h-7 w-7 hover:bg-red-50 hover:text-red-600" title="Supprimer" :disabled="envoi" @click="supprimerEcheance(e)"><i class="fa-solid fa-trash text-[11px]"></i></button>
-                                    </div>
-                                </li>
-                            </ul>
-                            <p v-if="!inscription.echeances?.length" class="text-xs text-gray-400">Aucune échéance.</p>
-                            <form class="mt-3 grid grid-cols-2 gap-2" @submit.prevent="ajouterEcheance">
-                                <input v-model="echeance.libelle" placeholder="Ex. 1re tranche" class="champ px-2.5 py-2 text-xs" required maxlength="100" />
-                                <input v-model.number="echeance.montant" type="number" min="1" placeholder="Montant" class="champ px-2.5 py-2 text-xs" required />
-                                <input v-model="echeance.dateEcheance" type="date" class="champ px-2.5 py-2 text-xs" required aria-label="Date d’échéance" />
-                                <button class="bouton-secondaire min-h-0 py-2 text-xs" :disabled="envoi"><i class="fa-solid fa-plus text-[10px]"></i>Échéance</button>
-                            </form>
-                            <form class="mt-3 space-y-2.5 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-3" @submit.prevent="genererEcheancier">
-                                <p class="text-xs font-medium text-gray-600">Générer l’échéancier sur le reste à payer ({{ montant(soldeRestant(inscription)) }} MRU)</p>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <label class="text-[11px] font-medium text-gray-500">Tranches<input v-model.number="echeancier.nombre" type="number" min="2" max="12" class="champ mt-1 px-2.5 py-1.5 text-xs" required /></label>
-                                    <label class="text-[11px] font-medium text-gray-500">1re échéance<input v-model="echeancier.premiereDate" type="date" class="champ mt-1 px-2 py-1.5 text-xs" required /></label>
-                                    <label class="text-[11px] font-medium text-gray-500">Tous les (mois)<input v-model.number="echeancier.intervalleMois" type="number" min="1" max="6" class="champ mt-1 px-2.5 py-1.5 text-xs" required /></label>
-                                </div>
-                                <label v-if="inscription.echeances?.length" class="flex items-center gap-2 text-xs text-gray-600"><input v-model="echeancier.remplacer" type="checkbox" /> Remplacer l’échéancier existant</label>
-                                <p v-if="erreurs.nombre" class="text-xs text-red-600">{{ erreurs.nombre }}</p>
-                                <button class="bouton-secondaire min-h-0 w-full py-2 text-xs" :disabled="envoi || soldeRestant(inscription) <= 0"><i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>Générer l’échéancier</button>
-                            </form>
-                            <p v-if="erreurs.montant" class="mt-1 text-xs text-red-600">{{ erreurs.montant }}</p>
-                        </div>
-
-                        <div class="mt-5 border-t border-gray-100 pt-5">
-                            <h3 class="titre-section mb-3 text-sm">Versements</h3>
-                            <ul class="mb-4 space-y-2">
-                                <li v-for="v in versements" :key="v.id" class="rounded-xl p-3 ring-1 ring-gray-100">
-                                    <div class="flex items-center justify-between gap-2 text-xs">
-                                        <span class="text-gray-500">{{ date(v.dateVersement) }}</span>
-                                        <strong :class="['tabular-nums', couleurStatut(v.statut)]">{{ montant(v.montant) }} MRU</strong>
-                                        <BadgeStatut :statut="v.statut" />
-                                    </div>
-                                    <p v-if="v.motifAnnulation || v.motifRejet" class="mt-1.5 text-[11px] text-red-600">Motif : {{ v.motifAnnulation || v.motifRejet }}</p>
-                                    <p class="mt-1.5 text-[11px] text-gray-500">
-                                        {{ v.numeroRecu }} · {{ v.modePaiement }}<template v-if="v.reference"> · {{ v.reference }}</template>
-                                    </p>
-                                    <p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-                                        <template v-if="v.statut === 'En attente'">
-                                            <button type="button" class="cursor-pointer font-semibold text-emerald-700 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Validée')">Valider</button>
-                                            <button type="button" class="cursor-pointer font-semibold text-red-600 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Rejetée')">Rejeter</button>
-                                        </template>
-                                        <button v-else-if="v.statut === 'Validée'" type="button" class="cursor-pointer font-medium text-red-600 hover:underline" :disabled="envoi" @click="annulerVersement(v)">Annuler ce versement</button>
+            <!-- Dossier financier : fenêtre centrée -->
+            <Teleport to="body">
+                <Transition enter-from-class="opacity-0" leave-to-class="opacity-0" enter-active-class="transition duration-200" leave-active-class="transition duration-150">
+                    <div v-if="selectionne" class="fixed inset-0 z-[55] flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-6" @mousedown.self="fermer">
+                        <div
+                            role="dialog"
+                            aria-modal="true"
+                            :aria-label="`Dossier financier de ${selectionne.prenom} ${selectionne.nom}`"
+                            class="flex max-h-[94vh] w-full max-w-4xl animate-surgir flex-col overflow-hidden rounded-t-3xl bg-surface shadow-[0_24px_64px_-12px_rgb(0_0_0/0.35)] sm:rounded-3xl"
+                        >
+                            <!-- En-tête : identité, inscriptions, fermeture -->
+                            <header class="flex items-start gap-4 border-b border-gray-100 px-5 pt-5 pb-4 sm:px-7">
+                                <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-insec-600 font-titre text-base font-bold text-white">
+                                    {{ `${selectionne.prenom?.[0] ?? ''}${selectionne.nom?.[0] ?? ''}`.toUpperCase() }}
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[11px] font-semibold tracking-[0.14em] text-insec-600 uppercase">Dossier financier</p>
+                                    <h2 class="truncate font-titre text-xl font-bold text-gray-900">{{ selectionne.prenom }} {{ selectionne.nom }}</h2>
+                                    <div class="mt-2 flex flex-wrap items-center gap-1.5">
                                         <button
-                                            v-if="aRole('admin', 'super_admin')"
-                                            class="lien disabled:cursor-not-allowed disabled:opacity-50"
-                                            :disabled="envoi || v.statut !== 'Validée'"
-                                            :title="v.statut === 'Validée' ? 'Télécharger le reçu PDF' : 'Disponible après validation du versement'"
-                                            @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))"
-                                        >Reçu PDF</button>
-                                        <button
-                                            v-if="aRole('admin', 'super_admin')"
+                                            v-for="d in dossiers"
+                                            :key="d.id"
                                             type="button"
-                                            class="lien disabled:cursor-not-allowed disabled:opacity-50"
-                                            :disabled="envoi || v.statut !== 'Validée' || !emailEtudiantValide"
-                                            title="Envoyer le reçu par e-mail (versement validé)"
-                                            @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')"
-                                        >Envoyer</button>
-                                    </p>
-                                </li>
-                                <li v-if="!versements.length" class="text-xs text-gray-400">Aucun versement.</li>
-                            </ul>
-                            <form class="space-y-2.5 rounded-xl bg-gray-50/70 p-3 ring-1 ring-gray-100" @submit.prevent="confirmerVersement">
-                                <p class="text-xs font-semibold text-gray-700">Ajouter un versement</p>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <input v-model.number="versement.montant" type="number" min="1" placeholder="Montant" class="champ py-2 text-xs" required />
-                                    <input v-model="versement.dateVersement" type="date" class="champ py-2 text-xs" required aria-label="Date du versement" />
+                                            :class="['cursor-pointer rounded-full px-3 py-1 text-xs font-semibold transition', inscription?.id === d.id ? 'bg-insec-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200']"
+                                            @click="ouvrir(selectionne.id, d.id)"
+                                        >{{ formation(d.formationId)?.code }} · {{ annee(d.anneeId)?.libelle }}</button>
+                                        <RouterLink :to="`/etudiants/${selectionne.id}`" class="lien ml-1 text-xs">Fiche étudiant</RouterLink>
+                                    </div>
                                 </div>
-                                <select v-model="versement.statut" class="champ py-2 text-xs" aria-label="Statut"><option>Validée</option><option>En attente</option></select>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <select v-model="versement.modePaiement" class="champ py-2 text-xs" aria-label="Mode de paiement"><option v-for="m in MODES_PAIEMENT" :key="m">{{ m }}</option></select>
-                                    <input v-model="versement.reference" placeholder="Référence (facultatif)" class="champ py-2 text-xs" maxlength="100" />
+                                <button type="button" class="bouton-icone -mt-1 -mr-2 h-10 w-10" aria-label="Fermer le dossier" @click="fermer"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            </header>
+
+                            <div class="min-h-0 flex-1 overflow-y-auto">
+                                <p v-if="!inscription" class="p-7 text-sm text-gray-500">
+                                    Cet étudiant n’a pas encore d’inscription.
+                                    <RouterLink v-if="aRole('admin', 'super_admin')" :to="`/etudiants/${selectionne.id}/inscriptions/nouvelle`" class="lien">Créer une inscription</RouterLink>
+                                </p>
+
+                                <!-- Inscription financée par BUMEX -->
+                                <div v-else-if="inscription.financeur === 'bumex'" class="p-5 sm:p-7">
+                                    <div class="flex items-start gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
+                                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><i class="fa-solid fa-building-columns"></i></span>
+                                        <div class="text-sm text-emerald-900">
+                                            <p class="font-semibold">Inscription prise en charge par BUMEX</p>
+                                            <p class="mt-1">Montant couvert : <strong class="tabular-nums">{{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU</strong> · {{ inscription.statutBumex === 'reglee' ? 'intégralement réglé par BUMEX' : 'paiement de BUMEX à confirmer' }}.</p>
+                                            <p class="mt-2 text-emerald-800/80">Aucun versement ni reçu étudiant ne doit être saisi : le règlement est suivi séparément au titre de BUMEX.</p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <textarea v-model="versement.note" placeholder="Note (facultatif)" class="champ py-2 text-xs" rows="2" maxlength="1000"></textarea>
-                                <button class="bouton-action w-full" :disabled="envoi"><i class="fa-solid fa-plus text-xs"></i>Ajouter le versement</button>
-                            </form>
+
+                                <template v-else>
+                                    <!-- Chiffres clés -->
+                                    <section class="px-5 pt-5 sm:px-7">
+                                        <div class="grid grid-cols-3 gap-3">
+                                            <div class="rounded-2xl bg-gray-50 p-4 ring-1 ring-gray-100">
+                                                <p class="text-xs text-gray-500">Net à payer</p>
+                                                <p class="mt-1 font-titre text-xl font-bold text-gray-900 tabular-nums sm:text-2xl">{{ montant(montantNet(inscription)) }}</p>
+                                                <p class="mt-0.5 text-[11px] text-gray-400">
+                                                    MRU<template v-if="inscription.montantRemise"> · remise {{ montant(inscription.montantRemise) }}</template>
+                                                </p>
+                                            </div>
+                                            <div class="rounded-2xl bg-emerald-50/70 p-4 ring-1 ring-emerald-100">
+                                                <p class="text-xs text-emerald-700">Versé</p>
+                                                <p class="mt-1 font-titre text-xl font-bold text-emerald-700 tabular-nums sm:text-2xl">{{ montant(inscription.totalVerse) }}</p>
+                                                <p class="mt-0.5 text-[11px] text-emerald-700/70">MRU</p>
+                                            </div>
+                                            <div :class="['rounded-2xl p-4 ring-1', montantEnRetard(inscription) > 0 ? 'bg-red-50/70 ring-red-100' : 'bg-amber-50/70 ring-amber-100']">
+                                                <p :class="['text-xs', montantEnRetard(inscription) > 0 ? 'text-red-700' : 'text-amber-800']">Reste à payer</p>
+                                                <p :class="['mt-1 font-titre text-xl font-bold tabular-nums sm:text-2xl', montantEnRetard(inscription) > 0 ? 'text-red-700' : 'text-amber-800']">{{ montant(soldeRestant(inscription)) }}</p>
+                                                <p :class="['mt-0.5 text-[11px]', montantEnRetard(inscription) > 0 ? 'text-red-700/80' : 'text-amber-800/70']">
+                                                    MRU<template v-if="montantEnRetard(inscription) > 0"> · {{ montant(montantEnRetard(inscription)) }} en retard</template>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="mt-4 flex items-center gap-3">
+                                            <span class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                                                <span
+                                                    :class="['block h-full rounded-full transition-all', pourcentagePaye(inscription) >= 100 ? 'bg-emerald-500' : montantEnRetard(inscription) > 0 ? 'bg-red-500' : 'bg-insec-500']"
+                                                    :style="{ width: `${pourcentagePaye(inscription)}%` }"
+                                                ></span>
+                                            </span>
+                                            <span class="text-xs font-semibold text-gray-600 tabular-nums">{{ pourcentagePaye(inscription) }} % payé</span>
+                                            <BadgeStatut :statut="statutPaiement(inscription)" />
+                                        </div>
+
+                                        <!-- Actions -->
+                                        <div class="mt-4 flex flex-wrap items-center gap-2">
+                                            <template v-if="aRole('admin', 'super_admin')">
+                                                <button type="button" class="bouton-secondaire" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))">
+                                                    <i class="fa-solid fa-file-pdf text-xs text-red-500"></i>Facture PDF
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="bouton-secondaire"
+                                                    :disabled="envoi || !emailEtudiantValide"
+                                                    :title="emailEtudiantValide ? `Envoyer à ${selectionne.email}` : 'Adresse e-mail absente ou invalide'"
+                                                    @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email ?? '')"
+                                                ><i class="fa-regular fa-envelope text-xs"></i>Envoyer la facture</button>
+                                            </template>
+                                            <button
+                                                v-if="montantEnRetard(inscription) > 0"
+                                                type="button"
+                                                class="bouton-danger"
+                                                :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
+                                                @click="relancer"
+                                            ><i class="fa-regular fa-bell text-xs"></i>{{ inscription.derniereRelanceLe === aujourdhui() ? 'Déjà relancé aujourd’hui' : 'Relancer par e-mail' }}</button>
+                                        </div>
+                                        <p class="mt-2 text-xs text-gray-500">
+                                            <template v-if="emailEtudiantValide"><i class="fa-regular fa-envelope mr-1"></i>{{ selectionne.email }}</template>
+                                            <template v-else>
+                                                <i class="fa-solid fa-triangle-exclamation mr-1 text-amber-500"></i>Adresse e-mail absente ou invalide :
+                                                <RouterLink :to="`/etudiants/${selectionne.id}/modifier`" class="lien">corriger la fiche</RouterLink>.
+                                            </template>
+                                            <template v-if="inscription.derniereRelanceLe"> · Dernière relance le {{ date(inscription.derniereRelanceLe) }}<template v-if="inscription.nbRelances"> ({{ inscription.nbRelances }} au total)</template></template>
+                                        </p>
+                                    </section>
+
+                                    <!-- Onglets -->
+                                    <div class="sticky top-0 z-10 mt-5 border-b border-gray-100 bg-surface px-5 sm:px-7" role="tablist" aria-label="Sections du dossier">
+                                        <div class="flex gap-5">
+                                            <button
+                                                v-for="o in [
+                                                    { valeur: 'versements', libelle: 'Versements', nombre: versements.length },
+                                                    { valeur: 'echeancier', libelle: 'Échéancier', nombre: inscription.echeances?.length ?? 0 },
+                                                    { valeur: 'situation', libelle: 'Situation', nombre: null },
+                                                ] as const"
+                                                :key="o.valeur"
+                                                type="button"
+                                                role="tab"
+                                                :aria-selected="ongletDossier === o.valeur"
+                                                :class="[
+                                                    '-mb-px flex cursor-pointer items-center gap-2 border-b-2 py-3 text-sm font-semibold transition',
+                                                    ongletDossier === o.valeur ? 'border-insec-600 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800',
+                                                ]"
+                                                @click="ongletDossier = o.valeur"
+                                            >
+                                                {{ o.libelle }}
+                                                <span v-if="o.nombre !== null" class="rounded-full bg-gray-100 px-1.5 text-[11px] text-gray-500 tabular-nums">{{ o.nombre }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="px-5 py-5 sm:px-7">
+                                        <!-- Versements -->
+                                        <div v-if="ongletDossier === 'versements'" class="grid gap-5 md:grid-cols-[1fr_300px]">
+                                            <ul class="space-y-2">
+                                                <li v-for="v in versements" :key="v.id" class="rounded-2xl p-3.5 ring-1 ring-gray-100">
+                                                    <div class="flex items-center gap-3">
+                                                        <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', v.statut === 'Validée' ? 'bg-emerald-50 text-emerald-600' : v.statut === 'En attente' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400']">
+                                                            <i class="fa-solid fa-money-bill-wave text-xs"></i>
+                                                        </span>
+                                                        <span class="min-w-0 flex-1">
+                                                            <strong :class="['block text-sm tabular-nums', couleurStatut(v.statut)]">{{ montant(v.montant) }} MRU</strong>
+                                                            <span class="block truncate text-xs text-gray-500">{{ date(v.dateVersement) }} · {{ v.modePaiement }} · {{ v.numeroRecu }}<template v-if="v.reference"> · {{ v.reference }}</template></span>
+                                                        </span>
+                                                        <BadgeStatut :statut="v.statut" />
+                                                    </div>
+                                                    <p v-if="v.motifAnnulation || v.motifRejet" class="mt-2 text-xs text-red-600">Motif : {{ v.motifAnnulation || v.motifRejet }}</p>
+                                                    <p class="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 pt-2.5 text-xs">
+                                                        <template v-if="v.statut === 'En attente'">
+                                                            <button type="button" class="cursor-pointer font-semibold text-emerald-700 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Validée')">Valider</button>
+                                                            <button type="button" class="cursor-pointer font-semibold text-red-600 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Rejetée')">Rejeter</button>
+                                                        </template>
+                                                        <template v-if="aRole('admin', 'super_admin') && v.statut === 'Validée'">
+                                                            <button type="button" class="lien" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))">Reçu PDF</button>
+                                                            <button type="button" class="lien disabled:cursor-not-allowed disabled:opacity-50" :disabled="envoi || !emailEtudiantValide" @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')">Envoyer le reçu</button>
+                                                        </template>
+                                                        <button v-if="v.statut === 'Validée'" type="button" class="ml-auto cursor-pointer font-medium text-gray-400 hover:text-red-600" :disabled="envoi" @click="annulerVersement(v)">Annuler</button>
+                                                    </p>
+                                                </li>
+                                                <li v-if="!versements.length" class="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">Aucun versement pour l’instant.</li>
+                                            </ul>
+                                            <form class="space-y-2.5 self-start rounded-2xl bg-gray-50/70 p-4 ring-1 ring-gray-100" @submit.prevent="confirmerVersement">
+                                                <p class="text-sm font-semibold text-gray-900">Nouveau versement</p>
+                                                <label class="etiquette">Montant (MRU)<input v-model.number="versement.montant" type="number" min="1" class="champ mt-1" required /></label>
+                                                <label class="etiquette">Date<input v-model="versement.dateVersement" type="date" class="champ mt-1" required /></label>
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <label class="etiquette">Mode<select v-model="versement.modePaiement" class="champ mt-1"><option v-for="m in MODES_PAIEMENT" :key="m">{{ m }}</option></select></label>
+                                                    <label class="etiquette">Statut<select v-model="versement.statut" class="champ mt-1"><option>Validée</option><option>En attente</option></select></label>
+                                                </div>
+                                                <input v-model="versement.reference" placeholder="Référence (facultatif)" class="champ" maxlength="100" aria-label="Référence" />
+                                                <textarea v-model="versement.note" placeholder="Note (facultatif)" class="champ" rows="2" maxlength="1000" aria-label="Note"></textarea>
+                                                <button class="bouton-action w-full" :disabled="envoi"><i class="fa-solid fa-plus text-xs"></i>Enregistrer le versement</button>
+                                            </form>
+                                        </div>
+
+                                        <!-- Échéancier -->
+                                        <div v-else-if="ongletDossier === 'echeancier'" class="grid gap-5 md:grid-cols-[1fr_300px]">
+                                            <div>
+                                                <ul class="space-y-2">
+                                                    <li v-for="e in inscription.echeances" :key="e.id">
+                                                        <form v-if="echeanceEnCours === e.id" class="grid gap-2 rounded-2xl bg-insec-50/60 p-3 ring-1 ring-insec-100 sm:grid-cols-[1fr_120px_150px_auto]" @submit.prevent="enregistrerEcheance">
+                                                            <input v-model="echeanceModifiee.libelle" class="champ py-2" required maxlength="100" aria-label="Libellé" />
+                                                            <input v-model.number="echeanceModifiee.montant" type="number" min="1" class="champ py-2" required aria-label="Montant" />
+                                                            <input v-model="echeanceModifiee.dateEcheance" type="date" class="champ py-2" required aria-label="Date d’échéance" />
+                                                            <span class="flex gap-1.5">
+                                                                <button class="bouton-principal" :disabled="envoi">OK</button>
+                                                                <button type="button" class="bouton-fantome" @click="echeanceEnCours = null">Annuler</button>
+                                                            </span>
+                                                        </form>
+                                                        <div v-else class="group flex items-center gap-3 rounded-2xl px-4 py-3 ring-1 ring-gray-100 transition hover:bg-gray-50">
+                                                            <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs', e.dateEcheance < aujourdhui() ? 'bg-red-50 text-red-600' : 'bg-insec-50 text-insec-600']"><i class="fa-regular fa-calendar"></i></span>
+                                                            <span class="min-w-0 flex-1">
+                                                                <span class="block text-sm font-medium text-gray-900">{{ e.libelle }}</span>
+                                                                <span :class="['block text-xs', e.dateEcheance < aujourdhui() ? 'text-red-600' : 'text-gray-500']">{{ date(e.dateEcheance) }}</span>
+                                                            </span>
+                                                            <strong class="text-sm text-gray-900 tabular-nums">{{ montant(e.montant) }} <span class="text-[11px] font-medium text-gray-400">MRU</span></strong>
+                                                            <button type="button" class="bouton-icone h-8 w-8" title="Modifier" :disabled="envoi" @click="editerEcheance(e)"><i class="fa-solid fa-pen text-[11px]"></i></button>
+                                                            <button type="button" class="bouton-icone h-8 w-8 hover:bg-red-50 hover:text-red-600" title="Supprimer" :disabled="envoi" @click="supprimerEcheance(e)"><i class="fa-solid fa-trash text-[11px]"></i></button>
+                                                        </div>
+                                                    </li>
+                                                    <li v-if="!inscription.echeances?.length" class="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">Aucune échéance. Générez un échéancier ou ajoutez une échéance.</li>
+                                                </ul>
+                                                <p v-if="erreurs.montant" class="mt-2 text-xs text-red-600">{{ erreurs.montant }}</p>
+                                            </div>
+                                            <div class="space-y-4 self-start">
+                                                <form class="space-y-2.5 rounded-2xl bg-gray-50/70 p-4 ring-1 ring-gray-100" @submit.prevent="genererEcheancier">
+                                                    <p class="text-sm font-semibold text-gray-900">Générer un échéancier</p>
+                                                    <p class="text-xs text-gray-500">Répartit le reste à payer ({{ montant(soldeRestant(inscription)) }} MRU).</p>
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        <label class="etiquette">Tranches<input v-model.number="echeancier.nombre" type="number" min="2" max="12" class="champ mt-1" required /></label>
+                                                        <label class="etiquette">Tous les (mois)<input v-model.number="echeancier.intervalleMois" type="number" min="1" max="6" class="champ mt-1" required /></label>
+                                                    </div>
+                                                    <label class="etiquette">1re échéance<input v-model="echeancier.premiereDate" type="date" class="champ mt-1" required /></label>
+                                                    <label v-if="inscription.echeances?.length" class="flex items-center gap-2 text-xs text-gray-600"><input v-model="echeancier.remplacer" type="checkbox" /> Remplacer l’échéancier existant</label>
+                                                    <p v-if="erreurs.nombre" class="text-xs text-red-600">{{ erreurs.nombre }}</p>
+                                                    <button class="bouton-secondaire w-full" :disabled="envoi || soldeRestant(inscription) <= 0"><i class="fa-solid fa-wand-magic-sparkles text-xs"></i>Générer</button>
+                                                </form>
+                                                <form class="space-y-2.5 rounded-2xl p-4 ring-1 ring-gray-100" @submit.prevent="ajouterEcheance">
+                                                    <p class="text-sm font-semibold text-gray-900">Ajouter une échéance</p>
+                                                    <input v-model="echeance.libelle" placeholder="Ex. 1re tranche" class="champ" required maxlength="100" aria-label="Libellé" />
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        <input v-model.number="echeance.montant" type="number" min="1" placeholder="Montant" class="champ" required aria-label="Montant" />
+                                                        <input v-model="echeance.dateEcheance" type="date" class="champ" required aria-label="Date d’échéance" />
+                                                    </div>
+                                                    <button class="bouton-secondaire w-full" :disabled="envoi"><i class="fa-solid fa-plus text-xs"></i>Ajouter</button>
+                                                </form>
+                                            </div>
+                                        </div>
+
+                                        <!-- Situation financière -->
+                                        <form v-else class="max-w-xl space-y-4" @submit.prevent="majSituation">
+                                            <p class="text-sm text-gray-500">Montant facturé et remise accordée pour cette inscription. Le net à payer et le reste sont recalculés automatiquement.</p>
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <label class="etiquette">Montant brut (MRU)<input v-model.number="situation.montantDu" type="number" min="0" class="champ mt-1.5" required /></label>
+                                                <label class="etiquette">Remise (MRU)<input v-model.number="situation.montantRemise" type="number" min="0" class="champ mt-1.5" required /></label>
+                                            </div>
+                                            <p v-if="erreurs.montantRemise" class="text-xs text-red-600">{{ erreurs.montantRemise }}</p>
+                                            <label class="etiquette">Note financière interne<textarea v-model="situation.noteFinanciere" class="champ mt-1.5" rows="3" maxlength="2000"></textarea></label>
+                                            <button class="bouton-principal" :disabled="envoi"><i class="fa-solid fa-check text-xs"></i>Enregistrer</button>
+                                        </form>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
-                    </template>
-                    <div v-else class="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-sm text-emerald-900">
-                        <i class="fa-solid fa-circle-info mt-0.5 text-xs text-emerald-600"></i>
-                        <span>Aucun versement étudiant ni reçu étudiant ne doit être saisi pour cette inscription. Le règlement est suivi séparément au titre de BUMEX.</span>
                     </div>
-                </div>
-                <p v-else class="p-5 text-sm text-gray-500">
-                    Cet étudiant n’a pas encore d’inscription.
-                    <RouterLink v-if="aRole('admin', 'super_admin')" :to="`/etudiants/${selectionne.id}/inscriptions/nouvelle`" class="lien">Créer une inscription</RouterLink>
-                </p>
-            </aside>
-            <aside v-else class="carte hidden flex-col items-center px-6 py-14 text-center lg:flex">
-                <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-insec-50 text-insec-500 ring-1 ring-insec-100"><i class="fa-solid fa-wallet"></i></span>
-                <p class="mt-3 font-semibold text-gray-900">Aucun dossier ouvert</p>
-                <p class="mt-1 max-w-xs text-sm text-gray-500">Choisissez un étudiant dans la liste pour voir ses versements et son échéancier.</p>
-            </aside>
+                </Transition>
+            </Teleport>
         </div>
 
         <div v-else>
