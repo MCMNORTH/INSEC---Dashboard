@@ -6,7 +6,7 @@ import { mettreEnFileEmail } from '../lib/email.js';
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
 import {
-    decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE,
+    dateDuJour, decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE,
     soldeRestant, STATUT_VERSEMENT_ANNULE, STATUTS_VERSEMENT, type Echeance, type SituationFinanciere,
 } from '../shared/domaine.js';
 
@@ -31,6 +31,48 @@ export const confirmerReglementBumex2024 = operation('confirmerReglementBumex202
         }
     });
     return { message: 'Prise en charge BUMEX appliquée aux 11 inscriptions 2024-2025 (41 UE), sans créer de versements individuels.' };
+});
+
+/**
+ * Enregistre (ou annule) le règlement par BUMEX d'une inscription qu'il finance.
+ * Aucun versement ni reçu étudiant n'est créé : le financement BUMEX est suivi à part.
+ */
+export const enregistrerReglementBumex = operation('enregistrerReglementBumex', ROLES_FINANCE, async (donnees, acteur) => {
+    const v = valider(
+        z.object({
+            inscriptionId: s.id(),
+            regle: z.boolean(),
+            montant: s.entier(1).optional(),
+            dateReglement: s.dateOptionnelle(),
+            reference: s.texteOptionnel(100),
+            motif: s.texteOptionnel(500),
+        }),
+        donnees,
+    );
+    if (v.regle) {
+        if (!v.montant) erreurChamp('montant', 'Indiquez le montant réglé par BUMEX.');
+        if (!v.dateReglement) erreurChamp('dateReglement', 'Indiquez la date du règlement.');
+        if (v.dateReglement > dateDuJour()) erreurChamp('dateReglement', 'La date du règlement ne peut pas être dans le futur.');
+    } else if (!v.motif) {
+        erreurChamp('motif', 'Un motif est obligatoire pour annuler un règlement BUMEX.');
+    }
+    await db.runTransaction(async (tx) => {
+        const ref = col.inscriptions().doc(v.inscriptionId);
+        const inscription = await exiger(tx, ref, 'Inscription introuvable.');
+        if (inscription.financeur !== 'bumex') refuser('Cette inscription n’est pas prise en charge par BUMEX.');
+        if (inscription.statut === 'annulée') refuser('Cette inscription est annulée.');
+        if (!v.regle && inscription.statutBumex !== 'reglee') refuser('Aucun règlement BUMEX n’est enregistré sur cette inscription.');
+        const avant = {
+            statutBumex: inscription.statutBumex ?? 'a_regler', montantBumex: inscription.montantBumex ?? null,
+            dateReglementBumex: inscription.dateReglementBumex ?? null, referenceBumex: inscription.referenceBumex ?? null,
+        };
+        const apres = v.regle
+            ? { statutBumex: 'reglee', montantBumex: v.montant, dateReglementBumex: v.dateReglement, referenceBumex: v.reference, motifAnnulationBumex: null }
+            : { statutBumex: 'a_regler', dateReglementBumex: null, referenceBumex: null, motifAnnulationBumex: v.motif };
+        tx.update(ref, { ...apres, ...trace(acteur) });
+        auditerModele(tx, acteur, 'Inscription', v.inscriptionId, 'updated', avant, apres);
+    });
+    return { message: v.regle ? 'Règlement BUMEX enregistré.' : 'Règlement BUMEX annulé : l’inscription est de nouveau à régler par BUMEX.' };
 });
 
 export const modifierSituationFinanciere = operation('modifierSituationFinanciere', ROLES_FINANCE, async (donnees, acteur) => {

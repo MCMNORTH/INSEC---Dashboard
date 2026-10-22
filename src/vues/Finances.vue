@@ -156,6 +156,21 @@ function annulerVersement(v: Versement) {
     const motif = window.prompt(`Annuler le versement validé de ${montant(v.montant)} MRU (reçu ${v.numeroRecu}) ?\nIl sera retiré du total versé. Indiquez le motif (ex. erreur de saisie, chèque impayé) :`);
     if (motif?.trim()) void executer('annulerVersement', { id: v.id, motif });
 }
+// Règlement par BUMEX d'une inscription qu'il finance (pas de versement étudiant).
+const reglementBumex = reactive({ montant: 0, dateReglement: aujourdhui(), reference: '' });
+watch(inscription, (i) => {
+    if (i?.financeur === 'bumex') Object.assign(reglementBumex, { montant: i.montantBumex ?? montantNet(i), dateReglement: aujourdhui(), reference: '' });
+}, { immediate: true });
+function confirmerReglementBumex() {
+    const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim();
+    if (!window.confirm(`Confirmer que BUMEX a réglé ${montant(reglementBumex.montant)} MRU pour ${nom}, le ${date(reglementBumex.dateReglement)} ?`)) return;
+    void executer('enregistrerReglementBumex', { inscriptionId: inscription.value!.id, regle: true, ...reglementBumex });
+}
+function annulerReglementBumex() {
+    const motif = window.prompt('Annuler le règlement BUMEX enregistré ? Indiquez le motif (ex. virement rejeté, erreur de saisie) :');
+    if (motif?.trim()) void executer('enregistrerReglementBumex', { inscriptionId: inscription.value!.id, regle: false, motif });
+}
+
 const couleurStatut = (statut: string) =>
     statut === 'Validée' ? 'text-gray-900' : statut === 'En attente' ? 'text-amber-700' : 'text-gray-400 line-through';
 
@@ -477,15 +492,41 @@ const totauxFinanciers = computed(() => ({
                                 </p>
 
                                 <!-- Inscription financée par BUMEX -->
-                                <div v-else-if="inscription.financeur === 'bumex'" class="p-5 sm:p-7">
-                                    <div class="flex items-start gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
-                                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><i class="fa-solid fa-building-columns"></i></span>
-                                        <div class="text-sm text-emerald-900">
-                                            <p class="font-semibold">Inscription prise en charge par BUMEX</p>
-                                            <p class="mt-1">Montant couvert : <strong class="tabular-nums">{{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU</strong> · {{ inscription.statutBumex === 'reglee' ? 'intégralement réglé par BUMEX' : 'paiement de BUMEX à confirmer' }}.</p>
-                                            <p class="mt-2 text-emerald-800/80">Aucun versement ni reçu étudiant ne doit être saisi : le règlement est suivi séparément au titre de BUMEX.</p>
+                                <div v-else-if="inscription.financeur === 'bumex'" class="space-y-5 p-5 sm:p-7">
+                                    <div :class="['flex items-start gap-4 rounded-2xl border p-5', inscription.statutBumex === 'reglee' ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70']">
+                                        <span :class="['flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', inscription.statutBumex === 'reglee' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700']">
+                                            <i :class="['fa-solid', inscription.statutBumex === 'reglee' ? 'fa-circle-check' : 'fa-hourglass-half']"></i>
+                                        </span>
+                                        <div :class="['min-w-0 flex-1 text-sm', inscription.statutBumex === 'reglee' ? 'text-emerald-900' : 'text-amber-900']">
+                                            <p class="font-semibold">{{ inscription.statutBumex === 'reglee' ? 'Réglé par BUMEX' : 'À régler par BUMEX' }}</p>
+                                            <p class="mt-1">
+                                                Montant couvert : <strong class="tabular-nums">{{ montant(inscription.montantBumex ?? montantNet(inscription)) }} MRU</strong>
+                                                <template v-if="inscription.statutBumex === 'reglee' && inscription.dateReglementBumex"> · réglé le {{ date(inscription.dateReglementBumex) }}</template>
+                                                <template v-if="inscription.referenceBumex"> · réf. {{ inscription.referenceBumex }}</template>
+                                            </p>
+                                            <p v-if="inscription.statutBumex !== 'reglee' && inscription.motifAnnulationBumex" class="mt-1 text-xs">Dernier règlement annulé : {{ inscription.motifAnnulationBumex }}</p>
+                                            <p class="mt-2 text-xs opacity-80">Aucun versement ni reçu étudiant : ce financement est suivi séparément.</p>
                                         </div>
+                                        <button
+                                            v-if="inscription.statutBumex === 'reglee'"
+                                            type="button"
+                                            class="bouton-fantome shrink-0 text-xs text-gray-500 hover:text-red-600"
+                                            :disabled="envoi"
+                                            @click="annulerReglementBumex"
+                                        >Annuler</button>
                                     </div>
+
+                                    <form v-if="inscription.statutBumex !== 'reglee'" class="rounded-2xl bg-gray-50/70 p-5 ring-1 ring-gray-100" @submit.prevent="confirmerReglementBumex">
+                                        <p class="text-sm font-semibold text-gray-900">Enregistrer le règlement de BUMEX</p>
+                                        <p class="mt-0.5 text-xs text-gray-500">À remplir quand BUMEX a effectivement payé cette inscription.</p>
+                                        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                                            <label class="etiquette">Montant réglé (MRU)<input v-model.number="reglementBumex.montant" type="number" min="1" class="champ mt-1.5" required /></label>
+                                            <label class="etiquette">Date du règlement<input v-model="reglementBumex.dateReglement" type="date" :max="aujourdhui()" class="champ mt-1.5" required /></label>
+                                            <label class="etiquette">Référence <span class="text-gray-400">(facultatif)</span><input v-model="reglementBumex.reference" placeholder="Ex. n° de virement" class="champ mt-1.5" maxlength="100" /></label>
+                                        </div>
+                                        <p v-if="erreurs.montant || erreurs.dateReglement" class="mt-2 text-xs text-red-600">{{ erreurs.montant || erreurs.dateReglement }}</p>
+                                        <button class="bouton-principal mt-4" :disabled="envoi"><i class="fa-solid fa-check text-xs"></i>Marquer comme réglé</button>
+                                    </form>
                                 </div>
 
                                 <template v-else>
