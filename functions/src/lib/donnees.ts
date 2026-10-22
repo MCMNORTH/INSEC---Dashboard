@@ -14,6 +14,7 @@ export const col = {
     resultats: () => db.collection('resultats'),
     pieces: () => db.collection('pieces'),
     documentsFinanciers: () => db.collection('documentsFinanciers'),
+    journalEmails: () => db.collection('journalEmails'),
     utilisateurs: () => db.collection('utilisateurs'),
     sauvegardes: () => db.collection('sauvegardes'),
     uniques: () => db.collection('uniques'),

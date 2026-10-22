@@ -15,6 +15,7 @@ export {
     ajouterEcheance, ajouterVersement, annulerVersement, confirmerReglementBumex2024, genererEcheancier, lireTauxEuroMru, modifierEcheance,
     modifierSituationFinanciere, modifierTauxEuroMru, supprimerEcheance, traiterVersement,
 } from './handlers/finances.js';
+export { relancerPaiement, relancerTousLesRetards } from './handlers/relances.js';
 export { analyserResultatsHistoriques, importerResultatsHistoriques, telechargerClasseurResultatsHistoriques } from './handlers/resultatsHistoriques.js';
 export { envoyerConvocationsExamen, envoyerDocumentParEmail, genererPdf } from './handlers/pdf.js';
 export { sante } from './handlers/sante.js';

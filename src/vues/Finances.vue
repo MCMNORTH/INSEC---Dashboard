@@ -103,6 +103,19 @@ function annulerVersement(v: Versement) {
 const couleurStatut = (statut: string) =>
     statut === 'Validée' ? 'text-green-400' : statut === 'En attente' ? 'text-amber-400' : 'text-red-300 line-through';
 
+// Relances de paiement (envoi manuel, une par inscription et par jour au maximum).
+const retardsAnnee = computed(() => lignesEtudiants.value.filter(({ dossier }) => montantEnRetard(dossier) > 0).length);
+function relancer() {
+    const i = inscription.value!;
+    const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim();
+    if (!window.confirm(`Envoyer une relance de paiement à ${nom} (${selectionne.value?.email}) ?\nMontant en retard : ${montant(montantEnRetard(i))} MRU.`)) return;
+    void executer('relancerPaiement', { inscriptionId: i.id });
+}
+function relancerTous() {
+    if (!window.confirm(`Envoyer une relance de paiement à ${retardsAnnee.value} étudiant(s) en retard pour l’année ${anneeEtudiants.value} ?\nUn étudiant déjà relancé aujourd’hui ne recevra pas de second e-mail.`)) return;
+    void executer('relancerTousLesRetards', { anneeId: anneeEtudiants.value });
+}
+
 const confirmerVersement = async () => {
     if (versement.statut === 'Validée') {
         const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
@@ -244,6 +257,10 @@ const totauxFinanciers = computed(() => ({
                         <input v-model="recherche" type="search" placeholder="Nom ou prénom…" class="champ mt-1" aria-label="Rechercher" />
                     </label>
                 </div>
+                <div v-if="retardsAnnee" class="mx-3 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+                    <span><i class="fa-solid fa-triangle-exclamation mr-1"></i>{{ retardsAnnee }} étudiant(s) en retard de paiement sur cette année.</span>
+                    <button type="button" class="bouton-secondaire whitespace-nowrap" :disabled="envoi" @click="relancerTous">Relancer tous les retards</button>
+                </div>
                 <div class="max-h-[70vh] overflow-y-auto">
                     <table class="tableau">
                         <thead class="sticky top-0"><tr><th>Étudiant</th><th>Financeur</th><th>Restant étudiant</th><th>Statut</th></tr></thead>
@@ -309,7 +326,16 @@ const totauxFinanciers = computed(() => ({
                     <p v-else class="mt-2 rounded bg-amber-400/15 p-2 text-xs text-amber-100">
                         Adresse e-mail absente ou invalide. <RouterLink :to="`/etudiants/${selectionne.id}/modifier`" class="underline">Corriger la fiche étudiant</RouterLink> avant l’envoi.
                     </p>
-                    <p v-if="montantEnRetard(inscription) > 0" class="mt-2 rounded bg-red-500/20 p-2 text-xs text-red-200">En retard : {{ montant(montantEnRetard(inscription)) }} MRU</p>
+                    <div v-if="montantEnRetard(inscription) > 0" class="mt-2 rounded bg-red-500/20 p-2 text-xs text-red-200">
+                        <p>En retard : {{ montant(montantEnRetard(inscription)) }} MRU</p>
+                        <button
+                            type="button"
+                            class="mt-2 w-full cursor-pointer rounded border border-red-200/40 px-2 py-1 font-semibold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
+                            @click="relancer"
+                        >{{ inscription.derniereRelanceLe === aujourdhui() ? 'Déjà relancé aujourd’hui' : 'Relancer par e-mail' }}</button>
+                    </div>
+                    <p v-if="inscription.derniereRelanceLe" class="mt-1 text-[10px] text-blue-200">Dernière relance : {{ date(inscription.derniereRelanceLe) }}<template v-if="inscription.nbRelances"> · {{ inscription.nbRelances }} relance(s) au total</template></p>
 
                     <form class="mt-4 space-y-2 border-t border-blue-400/30 pt-4" @submit.prevent="majSituation">
                         <div class="flex gap-2">

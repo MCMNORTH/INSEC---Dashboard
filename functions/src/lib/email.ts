@@ -24,9 +24,13 @@ export interface Email {
     libelleLien?: string | null;
 }
 
-/** Met un e-mail en file d'attente ; le déclencheur `envoyerEmail` l'expédie et met à jour son statut. */
-export function mettreEnFileEmail(ecrivain: Ecrivain, email: Email): void {
-    (ecrivain as FirebaseFirestore.WriteBatch).set(db.collection('journalEmails').doc(), {
+/**
+ * Met un e-mail en file d'attente ; le déclencheur `envoyerEmail` l'expédie et met à jour son statut.
+ * Un identifiant fixe (`id`) empêche d'envoyer deux fois le même message (ex. une relance par jour).
+ */
+export function mettreEnFileEmail(ecrivain: Ecrivain, email: Email, id?: string): void {
+    const ref = id ? db.collection('journalEmails').doc(id) : db.collection('journalEmails').doc();
+    (ecrivain as FirebaseFirestore.WriteBatch).set(ref, {
         destinataire: email.destinataire,
         nomDestinataire: email.nomDestinataire,
         type: email.type,
