@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ANNEE_ACADEMIQUE_PAR_DEFAUT } from '@shared/domaine';
 import { computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { correspond, NAVIGATION } from '../navigation';
@@ -77,14 +76,6 @@ const compacte = computed(() => props.reduite && !props.ouverteMobile);
         </nav>
 
         <footer class="shrink-0 border-t border-gray-100 p-3">
-            <div v-if="!compacte" class="mb-2 rounded-xl bg-gray-50 px-3 py-2.5 ring-1 ring-gray-200/70">
-                <p class="text-[10.5px] font-semibold tracking-[0.14em] text-gray-400 uppercase">Centre associé</p>
-                <p class="mt-0.5 text-xs font-medium text-gray-700">INTEC · CNAM Paris</p>
-                <p class="mt-1.5 flex items-center gap-1.5 text-xs text-gray-500">
-                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                    Année {{ ANNEE_ACADEMIQUE_PAR_DEFAUT }}
-                </p>
-            </div>
             <button
                 type="button"
                 class="hidden h-9 w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-xs font-medium text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 lg:flex"
