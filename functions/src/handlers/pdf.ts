@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import pdfmake from 'pdfmake';
@@ -7,7 +8,7 @@ import { col, exiger, type Doc } from '../lib/donnees.js';
 import { db, FieldValue, FUSEAU } from '../lib/firebase.js';
 import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email.js';
 import { s, valider, z } from '../lib/validation.js';
-import { formaterMontant, horaireExamen, montantNet, numeroFormate, resultatValide, ROLES_ADMIN, soldeRestant, statutPaiement } from '../shared/domaine.js';
+import { etatEcheances, formaterMontant, horaireExamen, montantNet, numeroFormate, resultatValide, ROLES_ADMIN, soldeRestant, statutPaiement } from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
 
 const require = createRequire(import.meta.url);
@@ -53,18 +54,31 @@ const signature = (texte: string, prefixe?: string) => ({
     margin: [0, 40, 0, 0],
 });
 
-async function document(contenu: unknown[], piedDePage: string, orientation: 'portrait' | 'landscape' = 'portrait'): Promise<string> {
+async function document(
+    contenu: unknown[],
+    piedDePage: string | ((page: number, pages: number) => unknown),
+    orientation: 'portrait' | 'landscape' = 'portrait',
+    options: Record<string, unknown> = {},
+): Promise<string> {
     const buffer = await pdfmake
         .createPdf({
             pageOrientation: orientation,
             pageMargins: [40, 50, 40, 60],
             defaultStyle: { font: 'Roboto', fontSize: 10, color: '#202020' },
             content: contenu,
-            footer: { text: piedDePage, fontSize: 8, color: '#777777', margin: [40, 20, 40, 0] },
+            footer: typeof piedDePage === 'string' ? { text: piedDePage, fontSize: 8, color: '#777777', margin: [40, 20, 40, 0] } : piedDePage,
+            ...options,
         })
         .getBuffer();
     return buffer.toString('base64');
 }
+
+// Logo officiel (rogné, 600 px), lu une fois et intégré en data URL : aucun accès réseau ni disque par pdfmake.
+const LOGO = `data:image/png;base64,${readFileSync(new URL('../../assets/logo-insec.png', import.meta.url)).toString('base64')}`;
+const MARINE = '#002057';
+const ROUGE = '#d90014';
+const GRIS = '#6b7280';
+const FILET = '#e5e7eb';
 
 async function contexteInscription(id: string) {
     const inscription = await exiger(null, col.inscriptions().doc(id), 'Inscription introuvable.');
@@ -195,77 +209,235 @@ async function recu(id: string) {
     };
 }
 
+const COULEURS_STATUT: Record<string, string> = {
+    Soldé: '#047857',
+    Partiel: '#b45309',
+    Impayé: ROUGE,
+    'À chiffrer': GRIS,
+    'Pris en charge BUMEX': MARINE,
+    Annulée: GRIS,
+};
+const COULEURS_ECHEANCE: Record<string, string> = { Payée: '#047857', Partielle: '#b45309', 'En retard': ROUGE, 'À venir': GRIS };
+const mru = (valeur: number) => `${formaterMontant(valeur)} MRU`;
+const etiquette = (texte: string) => ({ text: maj(texte), fontSize: 7.5, bold: true, color: GRIS, characterSpacing: 1, margin: [0, 0, 0, 4] });
+const sousTitre = (texte: string) => ({ text: texte, fontSize: 11, bold: true, color: MARINE, margin: [0, 26, 0, 6] });
+const aDroite = (cellule: unknown) => ({ ...(typeof cellule === 'object' && cellule ? cellule : { text: cellule }), alignment: 'right' });
+
+// Tableau épuré : en-tête discret souligné en marine, filets horizontaux fins, aucun trait vertical.
+function tableauEpure(entetes: string[], lignes: unknown[][], largeurs: (string | number)[]) {
+    const derniere = largeurs.length - 1;
+    return {
+        table: {
+            headerRows: 1,
+            widths: largeurs,
+            body: [
+                entetes.map((e, i) => ({ ...etiquette(e), margin: [0, 0, 0, 0], ...(i === derniere ? { alignment: 'right' } : {}) })),
+                ...lignes.map((ligne) => ligne.map((cellule, i) => (i === derniere ? aDroite(cellule) : cellule))),
+            ],
+        },
+        layout: {
+            hLineWidth: (i: number) => (i === 0 ? 0 : i === 1 ? 1 : 0.5),
+            hLineColor: (i: number) => (i === 1 ? MARINE : FILET),
+            vLineWidth: () => 0,
+            paddingLeft: (i: number) => (i === 0 ? 0 : 10),
+            paddingRight: () => 0,
+            paddingTop: () => 8,
+            paddingBottom: () => 8,
+        },
+    };
+}
+
 async function facture(id: string) {
     const { inscription, etudiant, formation, annee } = await contexteInscription(id);
     const versements = (await col.versements().where('inscriptionId', '==', id).get()).docs
         .map((doc) => doc.data())
         .sort((a, b) => String(a.dateVersement).localeCompare(String(b.dateVersement)));
-    const echeances = [...(inscription.echeances ?? [])].sort((a: Doc, b: Doc) => String(a.dateEcheance).localeCompare(String(b.dateEcheance)));
+    const ues = inscription.ueIds?.length ? await db.getAll(...inscription.ueIds.map((u: string) => col.ues().doc(u))) : [];
     const net = montantNet(inscription as never);
+    const remise = Number(inscription.montantRemise ?? 0);
     const montantEncaisse = versements
         .filter((v) => v.statut === 'Validée')
         .reduce((total, v) => total + Number(v.montant ?? 0), 0);
-    const solde = soldeRestant({ ...inscription, totalVerse: montantEncaisse } as never);
-    const statut = statutPaiement({ ...inscription, totalVerse: montantEncaisse } as never);
+    const situation = { ...inscription, totalVerse: montantEncaisse } as never;
+    const solde = soldeRestant(situation);
+    const statut = statutPaiement(situation);
+    const echeances = etatEcheances(situation);
     const mentionStatut = statut === 'Pris en charge BUMEX'
         ? 'Frais pris en charge par BUMEX : aucun montant n’est dû par l’étudiant.'
         : statut === 'Annulée'
             ? 'Inscription annulée : aucun montant n’est dû au titre de cette inscription.'
             : null;
-    const reference = `FACT-${inscription.id.toUpperCase()}`;
-    const lignesVersements = versements.length
-        ? versements.map((v) => [
-              dateFr(String(v.dateVersement)),
-              v.numeroRecu ?? '—',
-              v.statut,
-              `${formaterMontant(v.montant)} MRU`,
-          ])
-        : [[{ text: 'Aucun versement enregistré.', colSpan: 4, alignment: 'center' }, '', '', '']];
-    const contenu = [
-        ...entete(),
-        titre('Facture d’inscription'),
-        encadre([
-            { text: reference, fontSize: 14, bold: true, color: BLEU },
-            `Émise le ${jourFr(new Date())}`,
-            `Année académique : ${annee.libelle}`,
-        ]),
-        grille([
-            [cle('Étudiant'), `${maj(etudiant.nom)} ${etudiant.prenom}`],
-            [cle('E-mail'), etudiant.email ?? 'Non renseigné'],
-            [cle('Formation'), `${formation.code} · ${formation.libelle}`],
-            [cle('Inscription'), inscription.id],
-        ]),
-        grille([
-            ['Frais de formation', `${formaterMontant(inscription.montantDu ?? 0)} MRU`],
-            ['Remise', `− ${formaterMontant(inscription.montantRemise ?? 0)} MRU`],
-            [{ text: 'Montant net dû', bold: true }, { text: `${formaterMontant(net)} MRU`, bold: true }],
-        ], ['Désignation', 'Montant']),
-        { text: 'Échéancier', fontSize: 13, bold: true, color: BLEU, margin: [0, 15, 0, 0] },
-        grille(
-            echeances.length
-                ? echeances.map((e: Doc) => [String(e.libelle ?? 'Échéance'), dateFr(String(e.dateEcheance)), `${formaterMontant(e.montant ?? 0)} MRU`])
-                : [[{ text: 'Aucune échéance définie.', colSpan: 3, alignment: 'center' }, '', '']],
-            ['Échéance', 'Date limite', 'Montant'],
-        ),
-        { text: 'Versements enregistrés', fontSize: 13, bold: true, color: BLEU, margin: [0, 15, 0, 0] },
-        grille(lignesVersements, ['Date', 'Reçu', 'Statut', 'Montant']),
-        {
-            text: [
-                { text: 'Total encaissé (versements validés) : ', bold: true },
-                `${formaterMontant(montantEncaisse)} MRU`,
-                '\n',
-                { text: 'Solde restant : ', bold: true, color: BLEU },
-                { text: `${formaterMontant(solde)} MRU`, bold: true, color: BLEU },
-            ],
-            alignment: 'right',
-            margin: [0, 15, 0, 0],
-        },
-        ...(mentionStatut ? [{ text: mentionStatut, bold: true, alignment: 'right', margin: [0, 6, 0, 0] }] : []),
-        { text: 'Document généré à partir du dossier financier de l’INSEC.', fontSize: 9, color: '#666666', margin: [0, 20, 0, 0] },
+    // Référence courte et lisible : année de début + 8 premiers caractères de l’inscription.
+    const reference = `FAC-${String(inscription.anneeId ?? '').slice(0, 4)}-${inscription.id.slice(0, 8).toUpperCase()}`;
+    const codesUe = ues.map((u) => u.get('code')).filter(Boolean);
+
+    const lignesFacture: unknown[][] = [
+        [
+            {
+                stack: [
+                    { text: `Frais de formation · ${formation.code}`, bold: true },
+                    { text: `${formation.libelle} · année ${annee.libelle}`, fontSize: 8.5, color: GRIS, margin: [0, 2, 0, 0] },
+                    ...(codesUe.length ? [{ text: `${codesUe.length} UE : ${codesUe.join(', ')}`, fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
+                ],
+            },
+            mru(inscription.montantDu ?? 0),
+        ],
+        ...(remise > 0 ? [['Remise accordée', `− ${mru(remise)}`]] : []),
     ];
+
+    const totaux = {
+        columns: [
+            { width: '*', text: '' },
+            {
+                width: 240,
+                table: {
+                    widths: ['*', 'auto'],
+                    body: [
+                        [{ text: 'Total net', color: GRIS, margin: [10, 0, 0, 0] }, { text: mru(net), alignment: 'right', margin: [0, 0, 10, 0] }],
+                        [{ text: 'Déjà réglé', color: GRIS, margin: [10, 0, 0, 4] }, { text: `− ${mru(montantEncaisse)}`, alignment: 'right', margin: [0, 0, 10, 4] }],
+                        [
+                            {
+                                colSpan: 2,
+                                fillColor: MARINE,
+                                margin: [10, 6, 10, 6],
+                                columns: [
+                                    { text: 'Reste à payer', bold: true, color: 'white', margin: [0, 3, 0, 0] },
+                                    { text: mru(solde), bold: true, fontSize: 14, color: 'white', alignment: 'right', width: 'auto' },
+                                ],
+                            },
+                            '',
+                        ],
+                    ],
+                },
+                layout: { defaultBorder: false, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 4, paddingBottom: () => 4 },
+            },
+        ],
+        margin: [0, 16, 0, 0],
+    };
+
+    const contenu = [
+        {
+            columns: [
+                { image: LOGO, width: 118 },
+                {
+                    width: '*',
+                    alignment: 'right',
+                    stack: [
+                        { text: 'FACTURE', fontSize: 24, bold: true, color: MARINE, characterSpacing: 4 },
+                        { text: reference, fontSize: 10, color: GRIS, margin: [0, 4, 0, 10] },
+                        {
+                            columns: [
+                                { width: '*', text: '' },
+                                {
+                                    width: 'auto',
+                                    table: { body: [[{ text: maj(statut), fontSize: 7.5, bold: true, color: 'white', characterSpacing: 1, fillColor: COULEURS_STATUT[statut] ?? GRIS, margin: [6, 2, 6, 1] }]] },
+                                    layout: 'noBorders',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 499, y2: 0, lineWidth: 0.5, lineColor: FILET }], margin: [0, 24, 0, 18] },
+        {
+            columns: [
+                {
+                    width: '*',
+                    stack: [
+                        etiquette('Facturé à'),
+                        { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, bold: true, fontSize: 11 },
+                        { text: etudiant.email ?? 'E-mail non renseigné', color: GRIS, margin: [0, 2, 0, 0] },
+                        { text: `N° INTEC : ${inscription.numeroIntec ?? 'non renseigné'}`, color: GRIS, margin: [0, 2, 0, 0] },
+                    ],
+                },
+                {
+                    width: 'auto',
+                    stack: [
+                        etiquette('Émise le'),
+                        { text: jourFr(new Date()), margin: [0, 0, 0, 10] },
+                        etiquette('Année académique'),
+                        { text: annee.libelle },
+                    ],
+                },
+                {
+                    width: 185,
+                    alignment: 'right',
+                    stack: [
+                        etiquette('Émetteur'),
+                        { text: 'INSEC', bold: true },
+                        { text: 'Centre associé de l’INTEC – CNAM Paris', color: GRIS, margin: [0, 2, 0, 0] },
+                        { text: 'Nouakchott, Mauritanie', color: GRIS, margin: [0, 2, 0, 0] },
+                    ],
+                },
+            ],
+            columnGap: 24,
+            margin: [0, 0, 0, 32],
+        },
+        tableauEpure(['Désignation', 'Montant'], lignesFacture, ['*', 110]),
+        totaux,
+        ...(mentionStatut ? [{ text: mentionStatut, alignment: 'right', color: MARINE, bold: true, fontSize: 9, margin: [0, 8, 0, 0] }] : []),
+        ...(echeances.length
+            ? [
+                  sousTitre('Échéancier'),
+                  tableauEpure(
+                      ['Échéance', 'Date limite', 'État', 'Montant'],
+                      echeances.map((e) => [
+                          String(e.libelle || 'Échéance'),
+                          dateFr(String(e.dateEcheance)),
+                          { text: e.etat, bold: true, color: COULEURS_ECHEANCE[e.etat] ?? GRIS },
+                          mru(e.montant ?? 0),
+                      ]),
+                      ['*', 90, 80, 100],
+                  ),
+              ]
+            : []),
+        ...(versements.length
+            ? [
+                  sousTitre('Versements'),
+                  tableauEpure(
+                      ['Date', 'Reçu', 'Mode', 'Statut', 'Montant'],
+                      versements.map((v) => [
+                          dateFr(String(v.dateVersement)),
+                          v.numeroRecu ?? '—',
+                          v.modePaiement ?? '—',
+                          { text: v.statut, color: v.statut === 'Validée' ? '#047857' : GRIS },
+                          mru(v.montant),
+                      ]),
+                      [70, '*', 80, 70, 100],
+                  ),
+              ]
+            : []),
+        {
+            text: 'Seuls les versements validés sont déduits. Merci de rappeler la référence de la facture lors de chaque règlement.',
+            fontSize: 8.5,
+            color: GRIS,
+            margin: [0, 30, 0, 0],
+        },
+    ];
+    const pied = (page: number, pages: number) => ({
+        columns: [
+            { text: 'INSEC · Centre associé de l’INTEC – CNAM Paris · Nouakchott, Mauritanie', fontSize: 7.5, color: GRIS },
+            { text: `${reference} · ${page}/${pages}`, fontSize: 7.5, color: GRIS, alignment: 'right', width: 'auto' },
+        ],
+        margin: [48, 24, 48, 0],
+    });
+    // Filet d’accent en haut de page, aux couleurs du logo (marine puis rouge).
+    const bandeau = () => ({
+        canvas: [
+            { type: 'rect', x: 0, y: 0, w: 430, h: 5, color: MARINE },
+            { type: 'rect', x: 430, y: 0, w: 166, h: 5, color: ROUGE },
+        ],
+    });
     return {
         nom: `facture-inscription-${id}.pdf`,
-        contenu: await document(contenu, `Facture ${reference} · INSEC Dashboard`),
+        contenu: await document(contenu, pied, 'portrait', {
+            pageSize: 'A4',
+            pageMargins: [48, 56, 48, 64],
+            defaultStyle: { font: 'Roboto', fontSize: 9.5, color: '#111827', lineHeight: 1.15 },
+            background: bandeau,
+            info: { title: `Facture ${reference}`, author: 'INSEC' },
+        }),
     };
 }
 
