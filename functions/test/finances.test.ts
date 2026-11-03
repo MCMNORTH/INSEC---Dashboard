@@ -71,9 +71,26 @@ describe('Suivi financier', () => {
         expect(facture.nom).toBe(`facture-inscription-${inscriptionId}.pdf`);
         expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
         // Deux images intégrées : le logo et le cachet signé.
-        expect(pdf.toString('latin1').match(/\/Subtype \/Image/g)?.length ?? 0).toBeGreaterThanOrEqual(2);        for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
+        expect(pdf.toString('latin1').match(/\/Subtype \/Image/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+        for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
             await attendreErreur(appeler(genererPdf, { type: 'facture', id: inscriptionId }, await acteur(role)), 'permission-denied');
         }
+    });
+
+    it('génère le reçu d’un versement validé, avec logo et cachet, et le refuse pour un versement en attente', async () => {
+        const admin = await acteur('admin');
+        await appeler(modifierSituationFinanciere, { id: inscriptionId, montantDu: 100000, montantRemise: 0 }, finance);
+        const { id, numeroRecu } = await appeler(ajouterVersement, { ...versement, inscriptionId }, finance);
+        const recu = await appeler(genererPdf, { type: 'recu', id }, admin);
+        const pdf = Buffer.from(recu.contenu, 'base64');
+        expect(recu.nom).toBe(`recu-${numeroRecu}.pdf`);
+        expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+        expect(pdf.toString('latin1').match(/\/Subtype \/Image/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+        for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
+            await attendreErreur(appeler(genererPdf, { type: 'recu', id }, await acteur(role)), 'permission-denied');
+        }
+        const enAttente = await appeler(ajouterVersement, { ...versement, inscriptionId, statut: 'En attente' }, finance);
+        await attendreErreur(appeler(genererPdf, { type: 'recu', id: enAttente.id }, admin), 'failed-precondition');
     });
 
     it('refuse une remise supérieure au montant dû', async () => {

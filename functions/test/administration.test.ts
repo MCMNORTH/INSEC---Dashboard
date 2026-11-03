@@ -176,6 +176,9 @@ describe('Administration', () => {
             const html = rendreEmail(email, 'https://dashboard.insec.test/');
             expect(html).toContain('Titre &lt;b&gt;');
             expect(html).toContain('https://dashboard.insec.test/finances');
+            // Logo intégré au message (pièce jointe en ligne) et récapitulatif échappé.
+            expect(html).toContain('src="cid:logo-insec@insec"');
+            expect(rendreEmail({ ...email, details: { Montant: '2 000 <MRU>' } }, 'https://dashboard.insec.test')).toContain('2 000 &lt;MRU&gt;');
         });
 
         it('réserve la restauration au super-administrateur récemment authentifié', async () => {

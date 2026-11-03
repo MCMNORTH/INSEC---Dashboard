@@ -183,34 +183,6 @@ async function convocation(id: string) {
     };
 }
 
-async function recu(id: string) {
-    const versement = await exiger(null, col.versements().doc(id), 'Versement introuvable.');
-    if (versement.statut !== 'Validée') {
-        throw new HttpsError('failed-precondition', 'Un reçu officiel ne peut être généré qu’après validation du versement.');
-    }
-    const { etudiant, formation, annee } = await contexteInscription(versement.inscriptionId);
-    const contenu = [
-        ...entete(),
-        titre('Reçu de paiement'),
-        encadre([
-            { text: versement.numeroRecu ?? 'Reçu provisoire', fontSize: 15, bold: true, color: BLEU },
-            `Date : ${dateFr(versement.dateVersement)} · Statut : ${versement.statut}`,
-        ]),
-        grille([
-            [cle('Étudiant'), `${maj(etudiant.nom)} ${etudiant.prenom}`],
-            [cle('Formation'), `${formation.code} · ${annee.libelle}`],
-            [cle('Montant reçu'), { text: `${formaterMontant(versement.montant)} MRU`, fontSize: 15, bold: true, color: BLEU }],
-            [cle('Mode'), versement.modePaiement],
-            [cle('Référence'), versement.reference ?? '—'],
-        ]),
-        signature('Service financier INSEC', 'Cachet et signature'),
-    ];
-    return {
-        nom: `recu-${versement.numeroRecu}.pdf`,
-        contenu: await document(contenu, `Ce reçu est rattaché à l’inscription n° ${versement.inscriptionId} · INSEC Dashboard`),
-    };
-}
-
 const COULEURS_STATUT: Record<string, string> = {
     Soldé: '#047857',
     Partiel: '#b45309',
@@ -219,11 +191,14 @@ const COULEURS_STATUT: Record<string, string> = {
     'Pris en charge BUMEX': MARINE,
     Annulée: GRIS,
 };
-const COULEURS_ECHEANCE: Record<string, string> = { Payée: '#047857', Partielle: '#b45309', 'En retard': ROUGE, 'À venir': GRIS };
+const VERT = '#047857';
+const COULEURS_ECHEANCE: Record<string, string> = { Payée: VERT, Partielle: '#b45309', 'En retard': ROUGE, 'À venir': GRIS };
 const mru = (valeur: number) => `${formaterMontant(valeur)} MRU`;
 const etiquette = (texte: string) => ({ text: maj(texte), fontSize: 7.5, bold: true, color: GRIS, characterSpacing: 1, margin: [0, 0, 0, 4] });
 const sousTitre = (texte: string) => ({ text: texte, fontSize: 11, bold: true, color: MARINE, margin: [0, 18, 0, 4] });
 const aDroite = (cellule: unknown) => ({ ...(typeof cellule === 'object' && cellule ? cellule : { text: cellule }), alignment: 'right' });
+// Référence courte et lisible de la facture : année de début + 8 premiers caractères de l’inscription.
+const referenceFacture = (inscription: Doc) => `FAC-${String(inscription.anneeId ?? '').slice(0, 4)}-${String(inscription.id).slice(0, 8).toUpperCase()}`;
 
 // Tableau épuré : en-tête discret souligné en marine, filets horizontaux fins, aucun trait vertical.
 function tableauEpure(entetes: string[], lignes: unknown[][], largeurs: (string | number)[]) {
@@ -249,6 +224,221 @@ function tableauEpure(entetes: string[], lignes: unknown[][], largeurs: (string 
     };
 }
 
+// En-tête commun aux documents financiers : logo, titre espacé, référence et pastille de statut.
+function enteteFinancier(titreDocument: string, reference: string, statut: string, couleurStatut: string) {
+    return [
+        {
+            columns: [
+                { image: LOGO, width: 118 },
+                {
+                    width: '*',
+                    alignment: 'right',
+                    stack: [
+                        { text: maj(titreDocument), fontSize: 24, bold: true, color: MARINE, characterSpacing: 4 },
+                        { text: reference, fontSize: 10, color: GRIS, margin: [0, 4, 0, 10] },
+                        {
+                            columns: [
+                                { width: '*', text: '' },
+                                {
+                                    width: 'auto',
+                                    table: { body: [[{ text: maj(statut), fontSize: 7.5, bold: true, color: 'white', characterSpacing: 1, fillColor: couleurStatut, margin: [6, 2, 6, 1] }]] },
+                                    layout: 'noBorders',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 499, y2: 0, lineWidth: 0.5, lineColor: FILET }], margin: [0, 18, 0, 14] },
+    ];
+}
+
+// Trois colonnes : destinataire, dates, émetteur (INSEC).
+function partiesFinancieres(libelleDestinataire: string, etudiant: Doc, inscription: Doc, dates: [string, string][]) {
+    return {
+        columns: [
+            {
+                width: '*',
+                stack: [
+                    etiquette(libelleDestinataire),
+                    { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, bold: true, fontSize: 11 },
+                    { text: etudiant.email ?? 'E-mail non renseigné', color: GRIS, margin: [0, 2, 0, 0] },
+                    { text: `N° INTEC : ${inscription.numeroIntec ?? 'non renseigné'}`, color: GRIS, margin: [0, 2, 0, 0] },
+                ],
+            },
+            {
+                width: 'auto',
+                stack: dates.flatMap(([libelle, valeur], i) => [etiquette(libelle), { text: valeur, margin: [0, 0, 0, i < dates.length - 1 ? 10 : 0] }]),
+            },
+            {
+                width: 185,
+                alignment: 'right',
+                stack: [
+                    etiquette('Émetteur'),
+                    { text: 'INSEC', bold: true },
+                    { text: 'Centre associé de l’INTEC – CNAM Paris', color: GRIS, margin: [0, 2, 0, 0] },
+                    { text: 'Nouakchott, Mauritanie', color: GRIS, margin: [0, 2, 0, 0] },
+                ],
+            },
+        ],
+        columnGap: 24,
+        margin: [0, 0, 0, 24],
+    };
+}
+
+// Encadré de totaux aligné à droite ; la dernière ligne est mise en valeur sur fond marine.
+function totauxFinanciers(lignes: [string, string][], final: [string, string]) {
+    return {
+        columns: [
+            { width: '*', text: '' },
+            {
+                width: 240,
+                table: {
+                    widths: ['*', 'auto'],
+                    body: [
+                        ...lignes.map(([libelle, valeur], i) => [
+                            { text: libelle, color: GRIS, margin: [10, 0, 0, i === lignes.length - 1 ? 4 : 0] },
+                            { text: valeur, alignment: 'right', margin: [0, 0, 10, i === lignes.length - 1 ? 4 : 0] },
+                        ]),
+                        [
+                            {
+                                colSpan: 2,
+                                fillColor: MARINE,
+                                margin: [10, 6, 10, 6],
+                                columns: [
+                                    { text: final[0], bold: true, color: 'white', margin: [0, 3, 0, 0] },
+                                    { text: final[1], bold: true, fontSize: 14, color: 'white', alignment: 'right', width: 'auto' },
+                                ],
+                            },
+                            '',
+                        ],
+                    ],
+                },
+                layout: { defaultBorder: false, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 4, paddingBottom: () => 4 },
+            },
+        ],
+        margin: [0, 12, 0, 0],
+    };
+}
+
+// Mention finale à gauche, cachet et signature de l’INSEC à droite (jamais coupés entre deux pages).
+function blocCachet(mention: string) {
+    return {
+        columns: [
+            { width: '*', text: mention, fontSize: 8.5, color: GRIS, margin: [0, 30, 24, 0] },
+            {
+                width: 130,
+                stack: [
+                    { ...etiquette('Cachet et signature'), alignment: 'center' },
+                    { image: CACHET, width: 120, alignment: 'center', margin: [0, 2, 0, 0] },
+                ],
+            },
+        ],
+        unbreakable: true,
+        margin: [0, 14, 0, 0],
+    };
+}
+
+// Mise en page commune : filet d’accent aux couleurs du logo (marine puis rouge) et pied de page paginé.
+function documentFinancier(contenu: unknown[], reference: string, titreDocument: string) {
+    const pied = (page: number, pages: number) => ({
+        columns: [
+            { text: 'INSEC · Centre associé de l’INTEC – CNAM Paris · Nouakchott, Mauritanie', fontSize: 7.5, color: GRIS },
+            { text: `${reference} · ${page}/${pages}`, fontSize: 7.5, color: GRIS, alignment: 'right', width: 'auto' },
+        ],
+        margin: [48, 24, 48, 0],
+    });
+    const bandeau = () => ({
+        canvas: [
+            { type: 'rect', x: 0, y: 0, w: 430, h: 5, color: MARINE },
+            { type: 'rect', x: 430, y: 0, w: 166, h: 5, color: ROUGE },
+        ],
+    });
+    return document(contenu, pied, 'portrait', {
+        pageSize: 'A4',
+        pageMargins: [48, 56, 48, 64],
+        defaultStyle: { font: 'Roboto', fontSize: 9.5, color: '#111827', lineHeight: 1.15 },
+        background: bandeau,
+        info: { title: `${titreDocument} ${reference}`, author: 'INSEC' },
+    });
+}
+
+async function recu(id: string) {
+    const versement = await exiger(null, col.versements().doc(id), 'Versement introuvable.');
+    if (versement.statut !== 'Validée') {
+        throw new HttpsError('failed-precondition', 'Un reçu officiel ne peut être généré qu’après validation du versement.');
+    }
+    const { inscription, etudiant, formation, annee } = await contexteInscription(versement.inscriptionId);
+    const valides = (await col.versements().where('inscriptionId', '==', versement.inscriptionId).get()).docs
+        .map((doc) => doc.data())
+        .filter((v) => v.statut === 'Validée');
+    const totalVerse = valides.reduce((total, v) => total + Number(v.montant ?? 0), 0);
+    const situation = { ...inscription, totalVerse } as never;
+    const reference = versement.numeroRecu ?? 'Reçu provisoire';
+
+    // Montant reçu, mis en avant dans un encadré teinté.
+    const montantRecu = {
+        table: {
+            widths: ['*'],
+            body: [[{
+                fillColor: '#f3f6fb',
+                margin: [16, 14, 16, 14],
+                columns: [
+                    {
+                        width: '*',
+                        stack: [
+                            etiquette('Montant reçu'),
+                            { text: mru(versement.montant), fontSize: 26, bold: true, color: MARINE, margin: [0, 2, 0, 0] },
+                        ],
+                    },
+                    {
+                        width: 'auto',
+                        alignment: 'right',
+                        stack: [
+                            etiquette('Mode de paiement'),
+                            { text: versement.modePaiement ?? '—', bold: true, margin: [0, 0, 0, 8] },
+                            etiquette('Référence'),
+                            { text: versement.reference || '—' },
+                        ],
+                    },
+                ],
+            }]],
+        },
+        layout: 'noBorders',
+        margin: [0, 0, 0, 22],
+    };
+
+    const contenu = [
+        ...enteteFinancier('Reçu', reference, 'Payé', VERT),
+        partiesFinancieres('Reçu de', etudiant, inscription, [
+            ['Date du paiement', dateFr(String(versement.dateVersement))],
+            ['Année académique', String(annee.libelle)],
+        ]),
+        montantRecu,
+        tableauEpure(['Désignation', 'Montant'], [[
+            {
+                stack: [
+                    { text: `Versement · frais de formation ${formation.code}`, bold: true },
+                    { text: `${formation.libelle} · année ${annee.libelle}`, fontSize: 8.5, color: GRIS, margin: [0, 2, 0, 0] },
+                    { text: `Facture associée : ${referenceFacture(inscription)}`, fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] },
+                ],
+            },
+            mru(versement.montant),
+        ]], ['*', 110]),
+        sousTitre('Situation du dossier'),
+        totauxFinanciers(
+            [['Total net dû', mru(montantNet(inscription as never))], ['Total versé à ce jour', mru(totalVerse)]],
+            ['Reste à payer', mru(soldeRestant(situation))],
+        ),
+        blocCachet('Ce reçu atteste que le paiement ci-dessus a été reçu et validé par l’INSEC. Conservez-le comme justificatif.'),
+    ];
+    return {
+        nom: `recu-${versement.numeroRecu}.pdf`,
+        contenu: await documentFinancier(contenu, reference, 'Reçu'),
+    };
+}
+
 async function facture(id: string) {
     const { inscription, etudiant, formation, annee } = await contexteInscription(id);
     const versements = (await col.versements().where('inscriptionId', '==', id).get()).docs
@@ -269,8 +459,7 @@ async function facture(id: string) {
         : statut === 'Annulée'
             ? 'Inscription annulée : aucun montant n’est dû au titre de cette inscription.'
             : null;
-    // Référence courte et lisible : année de début + 8 premiers caractères de l’inscription.
-    const reference = `FAC-${String(inscription.anneeId ?? '').slice(0, 4)}-${inscription.id.slice(0, 8).toUpperCase()}`;
+    const reference = referenceFacture(inscription);
     const codesUe = ues.map((u) => u.get('code')).filter(Boolean);
 
     const lignesFacture: unknown[][] = [
@@ -287,97 +476,14 @@ async function facture(id: string) {
         ...(remise > 0 ? [['Remise accordée', `− ${mru(remise)}`]] : []),
     ];
 
-    const totaux = {
-        columns: [
-            { width: '*', text: '' },
-            {
-                width: 240,
-                table: {
-                    widths: ['*', 'auto'],
-                    body: [
-                        [{ text: 'Total net', color: GRIS, margin: [10, 0, 0, 0] }, { text: mru(net), alignment: 'right', margin: [0, 0, 10, 0] }],
-                        [{ text: 'Déjà réglé', color: GRIS, margin: [10, 0, 0, 4] }, { text: `− ${mru(montantEncaisse)}`, alignment: 'right', margin: [0, 0, 10, 4] }],
-                        [
-                            {
-                                colSpan: 2,
-                                fillColor: MARINE,
-                                margin: [10, 6, 10, 6],
-                                columns: [
-                                    { text: 'Reste à payer', bold: true, color: 'white', margin: [0, 3, 0, 0] },
-                                    { text: mru(solde), bold: true, fontSize: 14, color: 'white', alignment: 'right', width: 'auto' },
-                                ],
-                            },
-                            '',
-                        ],
-                    ],
-                },
-                layout: { defaultBorder: false, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 4, paddingBottom: () => 4 },
-            },
-        ],
-        margin: [0, 12, 0, 0],
-    };
-
     const contenu = [
-        {
-            columns: [
-                { image: LOGO, width: 118 },
-                {
-                    width: '*',
-                    alignment: 'right',
-                    stack: [
-                        { text: 'FACTURE', fontSize: 24, bold: true, color: MARINE, characterSpacing: 4 },
-                        { text: reference, fontSize: 10, color: GRIS, margin: [0, 4, 0, 10] },
-                        {
-                            columns: [
-                                { width: '*', text: '' },
-                                {
-                                    width: 'auto',
-                                    table: { body: [[{ text: maj(statut), fontSize: 7.5, bold: true, color: 'white', characterSpacing: 1, fillColor: COULEURS_STATUT[statut] ?? GRIS, margin: [6, 2, 6, 1] }]] },
-                                    layout: 'noBorders',
-                                },
-                            ],
-                        },
-                    ],
-                },
-            ],
-        },
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 499, y2: 0, lineWidth: 0.5, lineColor: FILET }], margin: [0, 18, 0, 14] },
-        {
-            columns: [
-                {
-                    width: '*',
-                    stack: [
-                        etiquette('Facturé à'),
-                        { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, bold: true, fontSize: 11 },
-                        { text: etudiant.email ?? 'E-mail non renseigné', color: GRIS, margin: [0, 2, 0, 0] },
-                        { text: `N° INTEC : ${inscription.numeroIntec ?? 'non renseigné'}`, color: GRIS, margin: [0, 2, 0, 0] },
-                    ],
-                },
-                {
-                    width: 'auto',
-                    stack: [
-                        etiquette('Émise le'),
-                        { text: jourFr(new Date()), margin: [0, 0, 0, 10] },
-                        etiquette('Année académique'),
-                        { text: annee.libelle },
-                    ],
-                },
-                {
-                    width: 185,
-                    alignment: 'right',
-                    stack: [
-                        etiquette('Émetteur'),
-                        { text: 'INSEC', bold: true },
-                        { text: 'Centre associé de l’INTEC – CNAM Paris', color: GRIS, margin: [0, 2, 0, 0] },
-                        { text: 'Nouakchott, Mauritanie', color: GRIS, margin: [0, 2, 0, 0] },
-                    ],
-                },
-            ],
-            columnGap: 24,
-            margin: [0, 0, 0, 24],
-        },
+        ...enteteFinancier('Facture', reference, statut, COULEURS_STATUT[statut] ?? GRIS),
+        partiesFinancieres('Facturé à', etudiant, inscription, [
+            ['Émise le', jourFr(new Date())],
+            ['Année académique', String(annee.libelle)],
+        ]),
         tableauEpure(['Désignation', 'Montant'], lignesFacture, ['*', 110]),
-        totaux,
+        totauxFinanciers([['Total net', mru(net)], ['Déjà réglé', `− ${mru(montantEncaisse)}`]], ['Reste à payer', mru(solde)]),
         ...(mentionStatut ? [{ text: mentionStatut, alignment: 'right', color: MARINE, bold: true, fontSize: 9, margin: [0, 8, 0, 0] }] : []),
         ...(echeances.length
             ? [
@@ -403,57 +509,18 @@ async function facture(id: string) {
                           dateFr(String(v.dateVersement)),
                           v.numeroRecu ?? '—',
                           v.modePaiement ?? '—',
-                          { text: v.statut, color: v.statut === 'Validée' ? '#047857' : GRIS },
+                          { text: v.statut, color: v.statut === 'Validée' ? VERT : GRIS },
                           mru(v.montant),
                       ]),
                       [70, '*', 80, 70, 100],
                   ),
               ]
             : []),
-        {
-            columns: [
-                {
-                    width: '*',
-                    text: 'Seuls les versements validés sont déduits. Merci de rappeler la référence de la facture lors de chaque règlement.',
-                    fontSize: 8.5,
-                    color: GRIS,
-                    margin: [0, 30, 24, 0],
-                },
-                {
-                    width: 130,
-                    stack: [
-                        { ...etiquette('Cachet et signature'), alignment: 'center' },
-                        { image: CACHET, width: 120, alignment: 'center', margin: [0, 2, 0, 0] },
-                    ],
-                },
-            ],
-            unbreakable: true,
-            margin: [0, 14, 0, 0],
-        },
+        blocCachet('Seuls les versements validés sont déduits. Merci de rappeler la référence de la facture lors de chaque règlement.'),
     ];
-    const pied = (page: number, pages: number) => ({
-        columns: [
-            { text: 'INSEC · Centre associé de l’INTEC – CNAM Paris · Nouakchott, Mauritanie', fontSize: 7.5, color: GRIS },
-            { text: `${reference} · ${page}/${pages}`, fontSize: 7.5, color: GRIS, alignment: 'right', width: 'auto' },
-        ],
-        margin: [48, 24, 48, 0],
-    });
-    // Filet d’accent en haut de page, aux couleurs du logo (marine puis rouge).
-    const bandeau = () => ({
-        canvas: [
-            { type: 'rect', x: 0, y: 0, w: 430, h: 5, color: MARINE },
-            { type: 'rect', x: 430, y: 0, w: 166, h: 5, color: ROUGE },
-        ],
-    });
     return {
         nom: `facture-inscription-${id}.pdf`,
-        contenu: await document(contenu, pied, 'portrait', {
-            pageSize: 'A4',
-            pageMargins: [48, 56, 48, 64],
-            defaultStyle: { font: 'Roboto', fontSize: 9.5, color: '#111827', lineHeight: 1.15 },
-            background: bandeau,
-            info: { title: `Facture ${reference}`, author: 'INSEC' },
-        }),
+        contenu: await documentFinancier(contenu, reference, 'Facture'),
     };
 }
 

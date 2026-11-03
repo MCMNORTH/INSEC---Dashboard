@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
-import { col, exiger, nomComplet, prochainNumero } from '../lib/donnees.js';
+import { col, exiger, nomComplet, prochainNumero, type Doc } from '../lib/donnees.js';
 import { mettreEnFileEmail } from '../lib/email.js';
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
@@ -13,6 +13,11 @@ import {
 const formaterDate = (iso: string) => iso.split('-').reverse().join('/');
 
 /** Enregistre la prise en charge BUMEX sans fabriquer de versement ou reçu étudiant. */
+// Texte de l'e-mail de confirmation de paiement (versement enregistré validé ou validé ensuite).
+const messagePaiement = (etudiant: Doc) =>
+    `Bonjour ${String(etudiant.prenom ?? '').trim() || nomComplet(etudiant)}, nous confirmons la bonne réception de votre paiement. `
+    + 'Il a été validé et enregistré dans votre dossier financier. Merci pour votre règlement.';
+
 export const confirmerReglementBumex2024 = operation('confirmerReglementBumex2024', ROLES_ADMIN, async (_donnees, acteur) => {
     const refs = await col.inscriptions().where('anneeId', '==', '2024-2025').where('formationId', '==', 'DGC').get();
     if (refs.size !== 11 || refs.docs.reduce((n, d) => n + ((d.get('ueIds') as string[] | undefined)?.length ?? 0), 0) !== 41) {
@@ -137,8 +142,8 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
                     type: 'Paiement',
                     sujet: 'Confirmation de votre paiement INSEC',
                     titre: 'Paiement validé',
-                    message: 'Votre versement a été validé et enregistré dans votre dossier financier.',
-                    details: { Reçu: numeroRecu, Montant: `${formaterMontant(v.montant)} MRU`, Date: formaterDate(v.dateVersement) },
+                    message: messagePaiement(etudiant),
+                    details: { Reçu: numeroRecu, Montant: `${formaterMontant(v.montant)} MRU`, Date: formaterDate(v.dateVersement), Mode: v.modePaiement },
                 });
                 confirmationMiseEnFile = true;
             }
@@ -181,11 +186,12 @@ export const traiterVersement = operation('traiterVersement', ROLES_FINANCE, asy
                     type: 'Paiement',
                     sujet: 'Confirmation de votre paiement INSEC',
                     titre: 'Paiement validé',
-                    message: 'Votre versement a été validé et enregistré dans votre dossier financier.',
+                    message: messagePaiement(etudiant),
                     details: {
                         Reçu: String(versement.numeroRecu ?? '—'),
                         Montant: `${formaterMontant(versement.montant)} MRU`,
                         Date: formaterDate(String(versement.dateVersement)),
+                        Mode: String(versement.modePaiement ?? '—'),
                         'Solde restant après paiement': `${formaterMontant(soldeApresPaiement ?? 0)} MRU`,
                     },
                 });

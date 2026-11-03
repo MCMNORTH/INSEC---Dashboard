@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import nodemailer, { type Transporter } from 'nodemailer';
 import type { Ecrivain } from './audit.js';
@@ -50,17 +51,54 @@ export function mettreEnFileEmail(ecrivain: Ecrivain, email: Email, id?: string)
 const echapper = (v: string) =>
     v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
+// Logo officiel joint à chaque e-mail et affiché via son identifiant (cid) : visible même quand les images distantes sont bloquées.
+const CID_LOGO = 'logo-insec@insec';
+const LOGO_EMAIL: PieceJointeEmail & { cid: string } = {
+    filename: 'insec.png',
+    content: readFileSync(new URL('../../assets/logo-insec.png', import.meta.url)),
+    contentType: 'image/png',
+    cid: CID_LOGO,
+};
+
+// Mêmes couleurs que les documents PDF (logo INSEC).
+const MARINE = '#002057';
+const ROUGE = '#d90014';
+const POLICE = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
 export function rendreEmail(email: Email, baseUrl: string): string {
-    const details = Object.entries(email.details ?? {})
+    const lignes = Object.entries(email.details ?? {});
+    const details = lignes
         .map(
-            ([cle, valeur]) =>
-                `<tr><td style="padding:9px 12px;color:#777">${echapper(cle)}</td><td style="padding:9px 12px;text-align:right;font-weight:bold">${echapper(String(valeur))}</td></tr>`,
+            ([cle, valeur], i) =>
+                `<tr><td style="padding:12px 16px;font-size:14px;color:#6b7280;${i ? 'border-top:1px solid #e5e7eb;' : ''}">${echapper(cle)}</td>`
+                + `<td align="right" style="padding:12px 16px;font-size:14px;font-weight:600;color:#111827;${i ? 'border-top:1px solid #e5e7eb;' : ''}">${echapper(String(valeur))}</td></tr>`,
         )
         .join('');
     const lien = email.lien
-        ? `<p style="margin-top:25px"><a href="${echapper(baseUrl.replace(/\/$/, '') + email.lien)}" style="background:#1E2761;color:#fff;text-decoration:none;padding:12px 18px;border-radius:7px">${echapper(email.libelleLien || 'Consulter')}</a></p>`
+        ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px"><tr><td style="background:${MARINE};border-radius:10px">`
+          + `<a href="${echapper(baseUrl.replace(/\/$/, '') + email.lien)}" style="display:inline-block;padding:13px 22px;font-family:${POLICE};font-size:14px;font-weight:600;color:#ffffff;text-decoration:none">${echapper(email.libelleLien || 'Consulter')}</a>`
+          + '</td></tr></table>'
         : '';
-    return `<!DOCTYPE html><html lang="fr"><body style="margin:0;background:#f4f5f7;font-family:Arial,sans-serif;color:#293241"><table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:30px 15px"><table width="600" style="max-width:600px;background:#fff;border-radius:12px;overflow:hidden"><tr><td style="background:#1E2761;color:#fff;padding:22px 30px"><strong style="font-size:22px">INSEC</strong><span style="color:#D4AF37;margin-left:10px">Centre associé INTEC CNAM</span></td></tr><tr><td style="padding:30px"><h1 style="font-size:22px;color:#1E2761;margin-top:0">${echapper(email.titre)}</h1><p style="line-height:1.6">${echapper(email.message)}</p>${details ? `<table width="100%" style="background:#f8f9fb;border-radius:8px;margin:20px 0">${details}</table>` : ''}${lien}<p style="font-size:12px;color:#999;margin-top:30px">Message automatique de la plateforme INSEC.</p></td></tr></table></td></tr></table></body></html>`;
+    return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>'
+        + `<body style="margin:0;padding:0;background:#f3f4f6;font-family:${POLICE};color:#111827">`
+        // Aperçu affiché dans la liste des messages.
+        + `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${echapper(email.message)}</div>`
+        + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6"><tr><td align="center" style="padding:32px 12px">'
+        + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden">'
+        // Filet d’accent marine puis rouge, comme en haut des PDF.
+        + `<tr><td style="padding:0;font-size:0;line-height:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td width="72%" height="5" style="background:${MARINE};font-size:0;line-height:0">&nbsp;</td><td width="28%" height="5" style="background:${ROUGE};font-size:0;line-height:0">&nbsp;</td></tr></table></td></tr>`
+        + `<tr><td style="padding:28px 32px 0"><img src="cid:${CID_LOGO}" width="112" alt="INSEC" style="display:block;width:112px;height:auto;border:0"></td></tr>`
+        + '<tr><td style="padding:28px 32px 32px">'
+        + `<p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6b7280">${echapper(email.type)}</p>`
+        + `<h1 style="margin:0;font-size:24px;line-height:1.3;font-weight:700;color:${MARINE}">${echapper(email.titre)}</h1>`
+        + `<p style="margin:14px 0 0;font-size:15px;line-height:1.65;color:#374151">${echapper(email.message)}</p>`
+        + (details ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px">${details}</table>` : '')
+        + lien
+        + '</td></tr>'
+        + '<tr><td style="padding:20px 32px;border-top:1px solid #e5e7eb;background:#fafafa">'
+        + `<p style="margin:0;font-size:12px;line-height:1.6;color:#6b7280"><strong style="color:${MARINE}">INSEC</strong> · Centre associé de l’INTEC – CNAM Paris · Nouakchott, Mauritanie</p>`
+        + '<p style="margin:4px 0 0;font-size:12px;line-height:1.6;color:#9ca3af">Message automatique envoyé par la plateforme de l’INSEC.</p>'
+        + '</td></tr></table></td></tr></table></body></html>';
 }
 
 export function transportSmtp(): Transporter | null {
@@ -101,7 +139,7 @@ export async function expedier(
             to: email.nomDestinataire ? { name: email.nomDestinataire, address: email.destinataire } : email.destinataire,
             subject: email.sujet,
             html: rendreEmail(email, APP_URL.value()),
-            ...(piecesJointes.length ? { attachments: piecesJointes } : {}),
+            attachments: [LOGO_EMAIL, ...piecesJointes],
         });
         await ref.update({ statut: 'Envoyé', erreur: null, envoyeLe: FieldValue.serverTimestamp() });
         return 'Envoyé';
