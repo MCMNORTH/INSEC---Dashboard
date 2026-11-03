@@ -23,6 +23,10 @@ const OR = '#d4af37';
 const jourFr = (d: Date) => new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU, dateStyle: 'short' }).format(d);
 const dateFr = (iso: string) => iso.split('-').reverse().join('/');
 const maj = (v: string) => (v ?? '').toLocaleUpperCase('fr-FR');
+// Nom de fichier lisible et sans accents : « Facture », « BA Awa », « 2026-2027 » → Facture-BA-Awa-2026-2027.pdf
+const nomFichier = (...parties: string[]) =>
+    `${parties.join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.pdf`;
+const nomEtudiant = (etudiant: Doc) => `${maj(String(etudiant.nom ?? ''))} ${String(etudiant.prenom ?? '')}`;
 
 function entete() {
     return [
@@ -114,7 +118,7 @@ async function attestation(id: string) {
         signature('La Direction de l’INSEC', `Fait le ${jourFr(new Date())}`),
     ];
     return {
-        nom: `attestation-inscription-${id}.pdf`,
+        nom: nomFichier('Attestation-inscription', nomEtudiant(etudiant), String(annee.libelle ?? '')),
         contenu: await document(contenu, `Document généré par INSEC Dashboard · Référence INS-${id}`),
     };
 }
@@ -149,7 +153,7 @@ async function releve(id: string) {
         { text: `Crédits validés : ${credits} ECTS`, fontSize: 15, bold: true, color: BLEU, margin: [0, 10, 0, 0] },
     ];
     return {
-        nom: `releve-notes-${id}.pdf`,
+        nom: nomFichier('Releve-notes', nomEtudiant(etudiant), String(annee.libelle ?? '')),
         contenu: await document(contenu, `Document généré le ${formaterDateHeure(new Date())} · INSEC Dashboard`),
     };
 }
@@ -434,7 +438,7 @@ async function recu(id: string) {
         blocCachet('Ce reçu atteste que le paiement ci-dessus a été reçu et validé par l’INSEC. Conservez-le comme justificatif.'),
     ];
     return {
-        nom: `recu-${versement.numeroRecu}.pdf`,
+        nom: nomFichier('Recu', String(versement.numeroRecu ?? ''), nomEtudiant(etudiant)),
         contenu: await documentFinancier(contenu, reference, 'Reçu'),
     };
 }
@@ -519,7 +523,7 @@ async function facture(id: string) {
         blocCachet('Seuls les versements validés sont déduits. Merci de rappeler la référence de la facture lors de chaque règlement.'),
     ];
     return {
-        nom: `facture-inscription-${id}.pdf`,
+        nom: nomFichier('Facture', nomEtudiant(etudiant), String(annee.libelle ?? '')),
         contenu: await documentFinancier(contenu, reference, 'Facture'),
     };
 }
