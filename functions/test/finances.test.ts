@@ -70,8 +70,8 @@ describe('Suivi financier', () => {
         const pdf = Buffer.from(facture.contenu, 'base64');
         expect(facture.nom).toBe(`facture-inscription-${inscriptionId}.pdf`);
         expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
-        expect(pdf.toString('latin1')).toContain('/Subtype /Image');
-        for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
+        // Deux images intégrées : le logo et le cachet signé.
+        expect(pdf.toString('latin1').match(/\/Subtype \/Image/g)?.length ?? 0).toBeGreaterThanOrEqual(2);        for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
             await attendreErreur(appeler(genererPdf, { type: 'facture', id: inscriptionId }, await acteur(role)), 'permission-denied');
         }
     });
