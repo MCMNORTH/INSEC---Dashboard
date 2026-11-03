@@ -69,7 +69,7 @@ describe('Suivi financier', () => {
         await appeler(ajouterVersement, { ...versement, inscriptionId }, finance);
         const facture = await appeler(genererPdf, { type: 'facture', id: inscriptionId }, admin);
         const pdf = Buffer.from(facture.contenu, 'base64');
-        expect(facture.nom).toBe(`facture-inscription-${inscriptionId}.pdf`);
+        expect(facture.nom).toBe('Facture-BA-Awa-2026-2027.pdf');
         expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
         // Deux images intégrées : le logo et le cachet signé.
         expect(pdf.toString('latin1').match(/\/Subtype \/Image/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
@@ -84,7 +84,7 @@ describe('Suivi financier', () => {
         const { id, numeroRecu } = await appeler(ajouterVersement, { ...versement, inscriptionId }, finance);
         const recu = await appeler(genererPdf, { type: 'recu', id }, admin);
         const pdf = Buffer.from(recu.contenu, 'base64');
-        expect(recu.nom).toBe(`recu-${numeroRecu}.pdf`);
+        expect(recu.nom).toBe(`Recu-${numeroRecu}-BA-Awa.pdf`);
         expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
         expect(pdf.toString('latin1').match(/\/Subtype \/Image/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
         for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
