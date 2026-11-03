@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import BarreLaterale from './composants/BarreLaterale.vue';
 import BarreSuperieure from './composants/BarreSuperieure.vue';
+import Dialogue from './composants/Dialogue.vue';
 import MarqueInsec from './composants/MarqueInsec.vue';
 import MessageFlash from './composants/MessageFlash.vue';
 import PaletteCommandes from './composants/PaletteCommandes.vue';
@@ -60,6 +61,7 @@ const recherche = ref(false);
         <RouterView :key="route.path" />
     </div>
     <MessageFlash />
+    <Dialogue />
 </template>
 
 <style>

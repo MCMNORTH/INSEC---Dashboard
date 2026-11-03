@@ -4,6 +4,7 @@ import { collection, query, where } from 'firebase/firestore';
 import { computed, reactive, watch } from 'vue';
 import { appeler } from '../../api';
 import Chargement from '../../composants/Chargement.vue';
+import { confirmer } from '../../dialogue';
 import { indexer, useDocument, useRequete } from '../../donnees';
 import { telecharger } from '../../fichiers';
 import { db } from '../../firebase';
@@ -105,7 +106,13 @@ async function enregistrerPresences() {
     const changements = presencesEnAttente.value;
     if (!changements.length) return;
     const nombre = changements.length;
-    if (!window.confirm(`Enregistrer le statut de présence de ${nombre} étudiant(s) ? Les notes ne seront pas modifiées et aucun e-mail ne sera envoyé.`)) return;
+    const ok = await confirmer({
+        titre: 'Enregistrer les présences ?',
+        message: 'Les notes ne seront pas modifiées et aucun e-mail ne sera envoyé.',
+        details: { 'Étudiants concernés': String(nombre) },
+        libelle: 'Enregistrer',
+    });
+    if (!ok) return;
     const resultat = await soumettre(() =>
         appeler<{ message: string }>('enregistrerPresencesExamen', {
             id: props.id,
@@ -118,7 +125,14 @@ async function enregistrerPresences() {
 async function envoyerToutesConvocations() {
     const nombre = convocables.value.length;
     if (!nombre || examen.value?.statut === 'Annulé') return;
-    if (!window.confirm(`Envoyer ${nombre} convocation(s) ? Les convocations déjà marquées « Envoyée » seront ignorées et ne seront pas renvoyées.`)) return;
+    const ok = await confirmer({
+        titre: 'Envoyer les convocations ?',
+        message: 'Les convocations déjà marquées « Envoyée » seront ignorées et ne seront pas renvoyées.',
+        details: { 'Convocations à envoyer': String(nombre) },
+        libelle: 'Envoyer les convocations',
+        ton: 'envoi',
+    });
+    if (!ok) return;
     const resultat = await soumettre(() => appeler('envoyerConvocationsExamen', { id: props.id }));
     if (resultat) notifier(resultat.message ?? 'Envoi groupé terminé.');
 }
@@ -138,7 +152,13 @@ async function envoyerConvocation(r: Resultat) {
         notifier('Aucune adresse e-mail n’est enregistrée pour cet étudiant.');
         return;
     }
-    if (!window.confirm(`Envoyer la convocation PDF à ${nomComplet(etudiant)} — ${email} ?`)) return;
+    const ok = await confirmer({
+        titre: 'Envoyer la convocation par e-mail ?',
+        details: { Étudiant: nomComplet(etudiant), 'E-mail': email ?? '' },
+        libelle: 'Envoyer',
+        ton: 'envoi',
+    });
+    if (!ok) return;
     const resultat = await soumettre(() => appeler('envoyerDocumentParEmail', { type: 'convocation', id: r.id }));
     if (resultat) notifier(resultat.message ?? 'Convocation envoyée par e-mail.');
 }
