@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant, creerInscription, modifierInscription } from '../src/handlers/etudiants.js';
 import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere } from '../src/handlers/finances.js';
+import { genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import { ecartAuTarif, etatEcheances, montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
@@ -58,6 +59,21 @@ describe('Suivi financier', () => {
         expect(versements).toHaveLength(1);
         expect(versements[0].inscriptionId).toBe(inscriptionId);
         expect((await doc(`inscriptions/${autre.id}`))?.totalVerse).toBe(0);
+    });
+
+    it('génère la facture d’une inscription, avec logo, échéancier et versements', async () => {
+        const admin = await acteur('admin');
+        await appeler(modifierSituationFinanciere, { id: inscriptionId, montantDu: 100000, montantRemise: 10000 }, finance);
+        await appeler(ajouterEcheance, { inscriptionId, libelle: 'Première tranche', montant: 45000, dateEcheance: '2026-10-01' }, finance);
+        await appeler(ajouterVersement, { ...versement, inscriptionId }, finance);
+        const facture = await appeler(genererPdf, { type: 'facture', id: inscriptionId }, admin);
+        const pdf = Buffer.from(facture.contenu, 'base64');
+        expect(facture.nom).toBe(`facture-inscription-${inscriptionId}.pdf`);
+        expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+        expect(pdf.toString('latin1')).toContain('/Subtype /Image');
+        for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
+            await attendreErreur(appeler(genererPdf, { type: 'facture', id: inscriptionId }, await acteur(role)), 'permission-denied');
+        }
     });
 
     it('refuse une remise supérieure au montant dû', async () => {
