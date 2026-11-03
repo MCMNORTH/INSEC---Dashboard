@@ -14,6 +14,7 @@ import { useRequete } from '../donnees';
 import { telecharger } from '../fichiers';
 import { db } from '../firebase';
 import { aujourdhui, date, montant } from '../format';
+import { confirmer, demanderMotif } from '../dialogue';
 import { useFormulaire } from '../formulaire';
 import { notifier } from '../notifications';
 import { useReferentiel } from '../referentiel';
@@ -148,35 +149,71 @@ function editerEcheance(e: { id: string; libelle: string; montant: number; dateE
 }
 const enregistrerEcheance = () =>
     executer('modifierEcheance', { inscriptionId: inscription.value!.id, id: echeanceEnCours.value, ...echeanceModifiee }, () => (echeanceEnCours.value = null));
-function supprimerEcheance(e: { id: string; libelle: string }) {
-    if (window.confirm(`Supprimer l’échéance « ${e.libelle} » ?`)) void executer('supprimerEcheance', { inscriptionId: inscription.value!.id, id: e.id });
+async function supprimerEcheance(e: { id: string; libelle: string; montant: number; dateEcheance: string }) {
+    const ok = await confirmer({
+        titre: 'Supprimer cette échéance ?',
+        message: 'L’échéance sera retirée de l’échéancier. Les versements déjà enregistrés ne changent pas.',
+        details: { Échéance: e.libelle, 'Date limite': date(e.dateEcheance), Montant: `${montant(e.montant)} MRU` },
+        libelle: 'Supprimer',
+        ton: 'danger',
+    });
+    if (ok) void executer('supprimerEcheance', { inscriptionId: inscription.value!.id, id: e.id });
 }
-function traiterVersement(v: Versement, statut: 'Validée' | 'Rejetée') {
+async function traiterVersement(v: Versement, statut: 'Validée' | 'Rejetée') {
+    const details = { Montant: `${montant(v.montant)} MRU`, Date: date(v.dateVersement), Mode: v.modePaiement };
     if (statut === 'Validée') {
-        if (!window.confirm(`Valider le versement de ${montant(v.montant)} MRU du ${date(v.dateVersement)} ? Il sera ajouté au total versé.`)) return;
-        void executer('traiterVersement', { id: v.id, statut });
+        const ok = await confirmer({ titre: 'Valider ce versement ?', message: 'Il sera ajouté au total versé.', details, libelle: 'Valider le versement' });
+        if (ok) void executer('traiterVersement', { id: v.id, statut });
         return;
     }
-    const motif = window.prompt(`Motif du rejet du versement de ${montant(v.montant)} MRU :`);
-    if (motif?.trim()) void executer('traiterVersement', { id: v.id, statut, motif });
+    const motif = await demanderMotif({
+        titre: 'Rejeter ce versement ?',
+        message: 'Le versement ne sera pas compté dans le total versé.',
+        details,
+        champ: 'Motif du rejet',
+        indication: 'Ex. chèque sans provision, montant incorrect',
+        libelle: 'Rejeter',
+        ton: 'danger',
+    });
+    if (motif) void executer('traiterVersement', { id: v.id, statut, motif });
 }
-function annulerVersement(v: Versement) {
-    const motif = window.prompt(`Annuler le versement validé de ${montant(v.montant)} MRU (reçu ${v.numeroRecu}) ?\nIl sera retiré du total versé. Indiquez le motif (ex. erreur de saisie, chèque impayé) :`);
-    if (motif?.trim()) void executer('annulerVersement', { id: v.id, motif });
+async function annulerVersement(v: Versement) {
+    const motif = await demanderMotif({
+        titre: 'Annuler ce versement validé ?',
+        message: 'Il sera retiré du total versé.',
+        details: { Montant: `${montant(v.montant)} MRU`, Date: date(v.dateVersement), Reçu: v.numeroRecu ?? '—' },
+        champ: 'Motif de l’annulation',
+        indication: 'Ex. erreur de saisie, chèque impayé',
+        libelle: 'Annuler le versement',
+        ton: 'danger',
+    });
+    if (motif) void executer('annulerVersement', { id: v.id, motif });
 }
 // Règlement par BUMEX d'une inscription qu'il finance (pas de versement étudiant).
 const reglementBumex = reactive({ montant: 0, dateReglement: aujourdhui(), reference: '' });
 watch(inscription, (i) => {
     if (i?.financeur === 'bumex') Object.assign(reglementBumex, { montant: i.montantBumex ?? montantNet(i), dateReglement: aujourdhui(), reference: '' });
 }, { immediate: true });
-function confirmerReglementBumex() {
+async function confirmerReglementBumex() {
     const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim();
-    if (!window.confirm(`Confirmer que BUMEX a réglé ${montant(reglementBumex.montant)} MRU pour ${nom}, le ${date(reglementBumex.dateReglement)} ?`)) return;
+    const ok = await confirmer({
+        titre: 'Confirmer le règlement BUMEX ?',
+        details: { Étudiant: nom, Montant: `${montant(reglementBumex.montant)} MRU`, 'Date du règlement': date(reglementBumex.dateReglement) },
+        libelle: 'Confirmer le règlement',
+    });
+    if (!ok) return;
     void executer('enregistrerReglementBumex', { inscriptionId: inscription.value!.id, regle: true, ...reglementBumex });
 }
-function annulerReglementBumex() {
-    const motif = window.prompt('Annuler le règlement BUMEX enregistré ? Indiquez le motif (ex. virement rejeté, erreur de saisie) :');
-    if (motif?.trim()) void executer('enregistrerReglementBumex', { inscriptionId: inscription.value!.id, regle: false, motif });
+async function annulerReglementBumex() {
+    const motif = await demanderMotif({
+        titre: 'Annuler le règlement BUMEX ?',
+        message: 'Le règlement enregistré sera retiré du dossier.',
+        champ: 'Motif de l’annulation',
+        indication: 'Ex. virement rejeté, erreur de saisie',
+        libelle: 'Annuler le règlement',
+        ton: 'danger',
+    });
+    if (motif) void executer('enregistrerReglementBumex', { inscriptionId: inscription.value!.id, regle: false, motif });
 }
 
 const couleurStatut = (statut: string) =>
@@ -184,14 +221,27 @@ const couleurStatut = (statut: string) =>
 
 // Relances de paiement (envoi manuel, une par inscription et par jour au maximum).
 const retardsAnnee = computed(() => lignesEtudiants.value.filter(({ dossier }) => montantEnRetard(dossier) > 0).length);
-function relancer() {
+async function relancer() {
     const i = inscription.value!;
     const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim();
-    if (!window.confirm(`Envoyer une relance de paiement à ${nom} (${selectionne.value?.email}) ?\nMontant en retard : ${montant(montantEnRetard(i))} MRU.`)) return;
+    const ok = await confirmer({
+        titre: 'Envoyer une relance de paiement ?',
+        details: { Étudiant: nom, 'E-mail': selectionne.value?.email ?? '—', 'Montant en retard': `${montant(montantEnRetard(i))} MRU` },
+        libelle: 'Envoyer la relance',
+        ton: 'envoi',
+    });
+    if (!ok) return;
     void executer('relancerPaiement', { inscriptionId: i.id });
 }
-function relancerTous() {
-    if (!window.confirm(`Envoyer une relance de paiement à ${retardsAnnee.value} étudiant(s) en retard pour l’année ${anneeEtudiants.value} ?\nUn étudiant déjà relancé aujourd’hui ne recevra pas de second e-mail.`)) return;
+async function relancerTous() {
+    const ok = await confirmer({
+        titre: 'Relancer tous les étudiants en retard ?',
+        message: 'Un étudiant déjà relancé aujourd’hui ne recevra pas de second e-mail.',
+        details: { 'Étudiants en retard': String(retardsAnnee.value), 'Année scolaire': anneeEtudiants.value },
+        libelle: 'Envoyer les relances',
+        ton: 'envoi',
+    });
+    if (!ok) return;
     void executer('relancerTousLesRetards', { anneeId: anneeEtudiants.value });
 }
 
@@ -200,10 +250,15 @@ const confirmerVersement = async () => {
         const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
         const email = selectionne.value?.email?.trim() ?? '';
         const notification = emailEtudiantValide.value
-            ? `Une confirmation sera mise en file d’envoi à ${email}.`
+            ? `Une confirmation sera envoyée à ${email}.`
             : 'Aucune adresse e-mail valide : le paiement sera enregistré sans notification par e-mail.';
-        const resume = `Valider le versement de ${montant(versement.montant ?? 0)} MRU pour ${nom}, le ${date(versement.dateVersement)}, par ${versement.modePaiement} ?\n\nCe versement sera immédiatement ajouté au total encaissé. ${notification}`;
-        if (!window.confirm(resume)) return;
+        const ok = await confirmer({
+            titre: 'Valider ce versement ?',
+            message: `Il sera immédiatement ajouté au total encaissé. ${notification}`,
+            details: { Étudiant: nom, Montant: `${montant(versement.montant ?? 0)} MRU`, Date: date(versement.dateVersement), Mode: versement.modePaiement },
+            libelle: 'Valider le versement',
+        });
+        if (!ok) return;
     }
     await ajouterVersement();
 };
@@ -215,7 +270,14 @@ async function envoyerDocument(type: 'facture' | 'recu', id: string, libelle: st
         notifier('Adresse e-mail absente ou invalide. Corrigez-la dans la fiche de l’étudiant avant l’envoi.');
         return;
     }
-    if (!window.confirm(`Envoyer ${libelle} en PDF à ${nom} (${email}) ? Le document contient des informations personnelles.`)) return;
+    const ok = await confirmer({
+        titre: `Envoyer ${libelle} par e-mail ?`,
+        message: 'Le document PDF contient des informations personnelles : vérifiez l’adresse avant l’envoi.',
+        details: { Destinataire: nom, 'E-mail': email },
+        libelle: 'Envoyer',
+        ton: 'envoi',
+    });
+    if (!ok) return;
     const resultat = await soumettre(() => appeler('envoyerDocumentParEmail', { type, id }));
     if (resultat) notifier(resultat.message ?? 'Document envoyé par e-mail.');
 }

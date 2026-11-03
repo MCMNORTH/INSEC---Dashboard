@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { appeler, messageErreur } from '../../api';
+import { confirmer } from '../../dialogue';
 
 interface ExamenIntec {
     codeUE: string;
@@ -241,7 +242,13 @@ async function enregistrer() {
         erreur.value = 'Indiquez l’adresse du document officiel INTEC.';
         return;
     }
-    if (!window.confirm(`Enregistrer les ${examens.value.length} épreuves du calendrier INTEC ${annee.value} ? Cela ne créera aucun résultat ni aucune convocation.`)) return;
+    const ok = await confirmer({
+        titre: 'Enregistrer le calendrier INTEC ?',
+        message: 'Cela ne créera aucun résultat ni aucune convocation.',
+        details: { Épreuves: String(examens.value.length), Année: String(annee.value) },
+        libelle: 'Enregistrer le calendrier',
+    });
+    if (!ok) return;
     chargement.value = true;
     try {
         const resultat = await appeler<{ message: string }>('importerCalendrierIntec', {
