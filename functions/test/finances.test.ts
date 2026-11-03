@@ -35,6 +35,7 @@ describe('Suivi financier', () => {
         const [email] = await liste('journalEmails');
         expect(email).toMatchObject({ destinataire: 'awa@example.com', type: 'Paiement', statut: 'En attente' });
         expect(email.details.Montant).toBe('30 000 MRU');
+        expect(email.message).toBe('Bonjour Awa, nous confirmons la bonne réception de votre paiement. Merci pour votre règlement.');
     });
 
     it('ne compte pas un versement en attente comme payé', async () => {

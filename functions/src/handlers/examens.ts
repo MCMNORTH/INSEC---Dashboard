@@ -170,7 +170,7 @@ export const enregistrerResultat = operation('enregistrerResultat', ROLES_ADMIN,
             mettreEnFileEmail(tx, {
                 destinataire: etudiant.email, nomDestinataire: nomComplet(etudiant), type: 'Résultat',
                 sujet: 'Publication d’un résultat INSEC', titre: 'Votre résultat est disponible',
-                message: 'Une note vient d’être publiée dans votre dossier académique.',
+                message: `Bonjour ${String(etudiant.prenom ?? '').trim() || nomComplet(etudiant)}, votre résultat pour l’UE ${ue.code} est disponible.`,
                 details: { UE: ue.code, Note: `${note}/${avant.noteSur}`, Décision: apres.valide ? 'Validée' : 'Non validée' },
                 lien: null, libelleLien: null,
             });

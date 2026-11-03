@@ -16,7 +16,7 @@ const formaterDate = (iso: string) => iso.split('-').reverse().join('/');
 // Texte de l'e-mail de confirmation de paiement (versement enregistré validé ou validé ensuite).
 const messagePaiement = (etudiant: Doc) =>
     `Bonjour ${String(etudiant.prenom ?? '').trim() || nomComplet(etudiant)}, nous confirmons la bonne réception de votre paiement. `
-    + 'Il a été validé et enregistré dans votre dossier financier. Merci pour votre règlement.';
+    + 'Merci pour votre règlement.';
 
 export const confirmerReglementBumex2024 = operation('confirmerReglementBumex2024', ROLES_ADMIN, async (_donnees, acteur) => {
     const refs = await col.inscriptions().where('anneeId', '==', '2024-2025').where('formationId', '==', 'DGC').get();

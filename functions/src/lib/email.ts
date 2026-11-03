@@ -97,7 +97,7 @@ export function rendreEmail(email: Email, baseUrl: string): string {
         + '</td></tr>'
         + '<tr><td style="padding:20px 32px;border-top:1px solid #e5e7eb;background:#fafafa">'
         + `<p style="margin:0;font-size:12px;line-height:1.6;color:#6b7280"><strong style="color:${MARINE}">INSEC</strong> · Centre associé de l’INTEC – CNAM Paris · Nouakchott, Mauritanie</p>`
-        + '<p style="margin:4px 0 0;font-size:12px;line-height:1.6;color:#9ca3af">Message automatique envoyé par la plateforme de l’INSEC.</p>'
+        + '<p style="margin:4px 0 0;font-size:12px;line-height:1.6;color:#9ca3af">Pour toute question, contactez le secrétariat de l’INSEC.</p>'
         + '</td></tr></table></td></tr></table></body></html>';
 }
 
