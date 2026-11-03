@@ -75,6 +75,8 @@ async function document(
 
 // Logo officiel (rogné, 600 px), lu une fois et intégré en data URL : aucun accès réseau ni disque par pdfmake.
 const LOGO = `data:image/png;base64,${readFileSync(new URL('../../assets/logo-insec.png', import.meta.url)).toString('base64')}`;
+// Cachet et signature de l’INSEC (fond transparent), apposés au bas des factures.
+const CACHET = `data:image/png;base64,${readFileSync(new URL('../../assets/cachet-signature-insec.png', import.meta.url)).toString('base64')}`;
 const MARINE = '#002057';
 const ROUGE = '#d90014';
 const GRIS = '#6b7280';
@@ -220,7 +222,7 @@ const COULEURS_STATUT: Record<string, string> = {
 const COULEURS_ECHEANCE: Record<string, string> = { Payée: '#047857', Partielle: '#b45309', 'En retard': ROUGE, 'À venir': GRIS };
 const mru = (valeur: number) => `${formaterMontant(valeur)} MRU`;
 const etiquette = (texte: string) => ({ text: maj(texte), fontSize: 7.5, bold: true, color: GRIS, characterSpacing: 1, margin: [0, 0, 0, 4] });
-const sousTitre = (texte: string) => ({ text: texte, fontSize: 11, bold: true, color: MARINE, margin: [0, 26, 0, 6] });
+const sousTitre = (texte: string) => ({ text: texte, fontSize: 11, bold: true, color: MARINE, margin: [0, 18, 0, 4] });
 const aDroite = (cellule: unknown) => ({ ...(typeof cellule === 'object' && cellule ? cellule : { text: cellule }), alignment: 'right' });
 
 // Tableau épuré : en-tête discret souligné en marine, filets horizontaux fins, aucun trait vertical.
@@ -312,7 +314,7 @@ async function facture(id: string) {
                 layout: { defaultBorder: false, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 4, paddingBottom: () => 4 },
             },
         ],
-        margin: [0, 16, 0, 0],
+        margin: [0, 12, 0, 0],
     };
 
     const contenu = [
@@ -339,7 +341,7 @@ async function facture(id: string) {
                 },
             ],
         },
-        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 499, y2: 0, lineWidth: 0.5, lineColor: FILET }], margin: [0, 24, 0, 18] },
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 499, y2: 0, lineWidth: 0.5, lineColor: FILET }], margin: [0, 18, 0, 14] },
         {
             columns: [
                 {
@@ -372,7 +374,7 @@ async function facture(id: string) {
                 },
             ],
             columnGap: 24,
-            margin: [0, 0, 0, 32],
+            margin: [0, 0, 0, 24],
         },
         tableauEpure(['Désignation', 'Montant'], lignesFacture, ['*', 110]),
         totaux,
@@ -409,10 +411,24 @@ async function facture(id: string) {
               ]
             : []),
         {
-            text: 'Seuls les versements validés sont déduits. Merci de rappeler la référence de la facture lors de chaque règlement.',
-            fontSize: 8.5,
-            color: GRIS,
-            margin: [0, 30, 0, 0],
+            columns: [
+                {
+                    width: '*',
+                    text: 'Seuls les versements validés sont déduits. Merci de rappeler la référence de la facture lors de chaque règlement.',
+                    fontSize: 8.5,
+                    color: GRIS,
+                    margin: [0, 30, 24, 0],
+                },
+                {
+                    width: 130,
+                    stack: [
+                        { ...etiquette('Cachet et signature'), alignment: 'center' },
+                        { image: CACHET, width: 120, alignment: 'center', margin: [0, 2, 0, 0] },
+                    ],
+                },
+            ],
+            unbreakable: true,
+            margin: [0, 14, 0, 0],
         },
     ];
     const pied = (page: number, pages: number) => ({
