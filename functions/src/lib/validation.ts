@@ -50,4 +50,7 @@ export const s = {
     choix: <T extends readonly [string, ...string[]]>(valeurs: T) => z.enum(valeurs, { error: 'valeur non autorisée.' }),
 };
 
+/** Valeurs d'un formulaire telles qu'affichées à son ouverture (contrôle des modifications simultanées). */
+export const valeursAttendues = z.record(z.string(), z.unknown()).optional();
+
 export { z };

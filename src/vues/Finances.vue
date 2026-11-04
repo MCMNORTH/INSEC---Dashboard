@@ -122,8 +122,17 @@ onBeforeUnmount(() => {
 // Formulaires du dossier sélectionné.
 const { envoi, erreurs, soumettre } = useFormulaire();
 const situation = reactive({ montantDu: 0, montantRemise: 0, noteFinanciere: '' });
+// Valeurs lues dans la base ; une saisie en cours n'est pas écrasée par une mise à jour en direct
+// (versement d'un collègue), et le serveur refuse si ces champs ont changé entre-temps.
+const situationLue = reactive({ id: '', montantDu: 0, montantRemise: 0, noteFinanciere: '' });
 watch(inscription, (i) => {
-    if (i) Object.assign(situation, { montantDu: i.montantDu, montantRemise: i.montantRemise, noteFinanciere: i.noteFinanciere ?? '' });
+    if (!i) return;
+    const saisieEnCours = situationLue.id === i.id
+        && (situation.montantDu !== situationLue.montantDu || situation.montantRemise !== situationLue.montantRemise || situation.noteFinanciere !== situationLue.noteFinanciere);
+    if (saisieEnCours) return;
+    const valeurs = { montantDu: i.montantDu, montantRemise: i.montantRemise, noteFinanciere: i.noteFinanciere ?? '' };
+    Object.assign(situation, valeurs);
+    Object.assign(situationLue, { id: i.id, ...valeurs });
 }, { immediate: true });
 const echeance = reactive({ libelle: '', montant: null as number | null, dateEcheance: '' });
 const versement = reactive({ montant: null as number | null, dateVersement: aujourdhui(), statut: 'Validée', modePaiement: 'Espèces', reference: '', note: '' });
@@ -137,7 +146,11 @@ async function executer(operation: string, donnees: object, apres?: () => void) 
     notifier(resultat.message ?? 'Enregistré.');
     apres?.();
 }
-const majSituation = () => executer('modifierSituationFinanciere', { id: inscription.value!.id, ...situation });
+const majSituation = () => executer('modifierSituationFinanciere', {
+    id: inscription.value!.id,
+    ...situation,
+    attendu: { montantDu: situationLue.montantDu, montantRemise: situationLue.montantRemise, noteFinanciere: situationLue.noteFinanciere },
+}, () => Object.assign(situationLue, { id: inscription.value!.id, ...situation }));
 const ajouterEcheance = () =>
     executer('ajouterEcheance', { inscriptionId: inscription.value!.id, ...echeance }, () => Object.assign(echeance, { libelle: '', montant: null, dateEcheance: '' }));
 const ajouterVersement = () =>
@@ -249,8 +262,11 @@ const confirmerVersement = async () => {
     const i = inscription.value!;
     // Paiement supérieur au reste à payer : l'excédent deviendrait un trop-perçu à rembourser.
     const excedent = (i.montantDu ?? 0) > 0 ? (versement.montant ?? 0) - soldeRestant(i) : 0;
+    // Même montant à la même date déjà enregistré (hors rejeté ou annulé) : probable double saisie.
+    const doublon = versements.value.find((v) =>
+        v.statut !== 'Rejetée' && v.statut !== 'Annulée' && v.montant === versement.montant && v.dateVersement === versement.dateVersement);
     const valide = versement.statut === 'Validée';
-    if (!valide && excedent <= 0) return ajouterVersement();
+    if (!valide && excedent <= 0 && !doublon) return ajouterVersement();
     const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
     const email = selectionne.value?.email?.trim() ?? '';
     const notification = !valide
@@ -258,11 +274,15 @@ const confirmerVersement = async () => {
         : emailEtudiantValide.value
             ? ` Une confirmation sera envoyée à ${email}.`
             : ' Aucune adresse e-mail valide : le paiement sera enregistré sans notification par e-mail.';
-    // Une seule fenêtre : l'avertissement de dépassement et le récapitulatif de validation.
+    const avertissements = [
+        ...(doublon ? [`Un versement de ${montant(doublon.montant)} MRU à cette date est déjà enregistré (reçu ${doublon.numeroRecu ?? '—'}) : vérifiez qu’il ne s’agit pas d’une double saisie.`] : []),
+        ...(excedent > 0 ? [`Ce versement dépasse le reste à payer de ${montant(excedent)} MRU : cette somme sera à rembourser à l’étudiant.`] : []),
+    ];
+    // Une seule fenêtre : les avertissements éventuels et le récapitulatif de validation.
     const ok = await confirmer({
-        titre: excedent > 0 ? 'Montant supérieur au reste à payer' : 'Valider ce versement ?',
-        message: excedent > 0
-            ? `Ce versement dépasse le reste à payer de ${montant(excedent)} MRU : cette somme sera à rembourser à l’étudiant. Vérifiez le montant saisi.${notification}`
+        titre: doublon ? 'Ce versement est peut-être déjà enregistré' : excedent > 0 ? 'Montant supérieur au reste à payer' : 'Valider ce versement ?',
+        message: avertissements.length
+            ? `${avertissements.join(' ')}${notification}`
             : `Il sera immédiatement ajouté au total encaissé.${notification}`,
         details: {
             Étudiant: nom,
@@ -271,8 +291,8 @@ const confirmerVersement = async () => {
             Date: date(versement.dateVersement),
             Mode: versement.modePaiement,
         },
-        libelle: excedent > 0 ? 'Enregistrer quand même' : 'Valider le versement',
-        ton: excedent > 0 ? 'danger' : 'action',
+        libelle: avertissements.length ? 'Enregistrer quand même' : 'Valider le versement',
+        ton: avertissements.length ? 'danger' : 'action',
     });
     if (ok) await ajouterVersement();
 };

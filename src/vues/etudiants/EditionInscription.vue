@@ -20,8 +20,14 @@ const { donnee: etudiant, chargement: chargementEtudiant } = useDocument<Etudian
 const valeurs = ref<ValeursInscription | null>(props.inscriptionId ? null : {
     formationId: '', anneeId: '', anneeParcours: '', dateInscription: aujourdhui(), numeroIntec: '', financeur: 'etudiant', ueIds: [],
 });
+// Valeurs lues à l'ouverture : le serveur refuse si une autre personne les a changées entre-temps.
+let attendu: Record<string, unknown> | null = null;
 watch(inscription, (i) => {
     if (i && !valeurs.value) {
+        attendu = {
+            formationId: i.formationId, anneeId: i.anneeId, anneeParcours: i.anneeParcours, dateInscription: i.dateInscription,
+            numeroIntec: i.numeroIntec ?? null, statut: i.statut, financeur: i.financeur ?? null, ueIds: [...i.ueIds],
+        };
         valeurs.value = {
             formationId: i.formationId, anneeId: i.anneeId, anneeParcours: i.anneeParcours, dateInscription: i.dateInscription,
             numeroIntec: i.numeroIntec ?? '', statut: i.statut, financeur: i.financeur ?? 'etudiant', ueIds: [...i.ueIds],
@@ -32,7 +38,7 @@ watch(inscription, (i) => {
 const { envoi, erreurs, soumettre } = useFormulaire();
 async function enregistrer() {
     const resultat = await soumettre(() => modification.value
-        ? appeler('modifierInscription', { id: props.inscriptionId, ...valeurs.value })
+        ? appeler('modifierInscription', { id: props.inscriptionId, ...valeurs.value, attendu })
         : appeler('creerInscription', { etudiantId: props.etudiantId, ...valeurs.value }));
     if (!resultat) return;
     notifier(resultat.message ?? 'Inscription enregistrée.', { apresNavigation: true });
