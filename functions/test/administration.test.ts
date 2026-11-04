@@ -8,10 +8,10 @@ import { creerEtudiant } from '../src/handlers/etudiants.js';
 import { exporterExcel, importerEtudiants } from '../src/handlers/excel.js';
 import { ajouterEcheance, modifierSituationFinanciere } from '../src/handlers/finances.js';
 import { verifierDisponibilite } from '../src/handlers/sante.js';
-import { restaurerSauvegarde } from '../src/handlers/sauvegardes.js';
+import { copierFichiers, restaurerSauvegarde } from '../src/handlers/sauvegardes.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import { expedier, rendreEmail } from '../src/lib/email.js';
-import { auth, bucket, db } from '../src/lib/firebase.js';
+import { auth, bucket, db, storage } from '../src/lib/firebase.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
 const etudiant = {
@@ -125,6 +125,17 @@ describe('Administration', () => {
             expect((await liste('etudiants')).find((e) => e.email === 'moussa@example.com')?.telephone).toBe('22000000');
         });
 
+        it('importe un CSV d’Excel en français (point-virgule, encodage Windows) et un CSV UTF-8 avec BOM', async () => {
+            const entetes = 'Prénom;Nom;E-mail;Téléphone;Statut étudiant;Code diplôme;Année académique;Année parcours;Codes UE;Date inscription (AAAA-MM-JJ);N° INTEC;Statut inscription';
+            // Excel en français enregistre en Windows-1252 : pour ces caractères, identique au latin-1.
+            const windows = Buffer.from(`${entetes}\r\nMariém;Sow;mariem@example.com;;Actif\r\n`, 'latin1').toString('base64');
+            expect(await appeler(importerEtudiants, { nom: 'export-excel.csv', contenu: windows, mode: 'ignorer' }, admin)).toMatchObject({ crees: 1, erreurs: [] });
+            expect((await liste('etudiants')).find((e) => e.email === 'mariem@example.com')?.prenom).toBe('Mariém');
+
+            const utf8 = Buffer.from(`\uFEFF${entetes.replaceAll(';', ',')}\nIbrahima,Fall,ibrahima@example.com,,Actif\n`, 'utf8').toString('base64');
+            expect(await appeler(importerEtudiants, { nom: 'modele.csv', contenu: utf8, mode: 'ignorer' }, admin)).toMatchObject({ crees: 1, erreurs: [] });
+        });
+
         it('refuse un fichier dont les colonnes ne suivent pas le modèle', async () => {
             const contenu = await classeurBase64([['Nom', 'Prénom']]);
             await attendreErreur(appeler(importerEtudiants, { nom: 'x.xlsx', contenu, mode: 'ignorer' }, admin), 'failed-precondition');
@@ -190,6 +201,19 @@ describe('Administration', () => {
                 'unauthenticated',
             );
             await attendreErreur(appeler(restaurerSauvegarde, { id: 'x', confirmation: 'RESTAURER' }, superAdmin), 'failed-precondition');
+        });
+
+        it('copie dans la sauvegarde les pièces des étudiants et les documents financiers', async () => {
+            const pdf = Buffer.from('%PDF-1.4 test');
+            await bucket().file('dossiers/e1/piece.pdf').save(pdf);
+            await bucket().file('finances/2026-2027/facture-intec/u1/facture.pdf').save(pdf);
+            const manifestes = await copierFichiers('test-sauvegarde');
+            expect(manifestes.documents.map((d) => d.chemin)).toEqual(['e1/piece.pdf']);
+            expect(manifestes.documentsFinanciers.map((d) => d.chemin)).toEqual(['2026-2027/facture-intec/u1/facture.pdf']);
+            const cible = storage.bucket('demo-insec-sauvegardes');
+            expect((await cible.file('test-sauvegarde/documents/e1/piece.pdf').exists())[0]).toBe(true);
+            expect((await cible.file('test-sauvegarde/finances/2026-2027/facture-intec/u1/facture.pdf').exists())[0]).toBe(true);
+            await cible.deleteFiles({ prefix: 'test-sauvegarde/', force: true });
         });
 
         it('signale la disponibilité et l’absence de sauvegarde comme simple avertissement', async () => {
