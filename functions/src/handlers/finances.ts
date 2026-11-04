@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
-import { col, exiger, nomComplet, prochainNumero, type Doc } from '../lib/donnees.js';
+import { col, controlerModificationConcurrente, exiger, nomComplet, prochainNumero, type Doc } from '../lib/donnees.js';
 import { mettreEnFileEmail } from '../lib/email.js';
 import { db, FieldValue } from '../lib/firebase.js';
-import { erreurChamp, s, valider, z } from '../lib/validation.js';
+import { erreurChamp, s, valider, valeursAttendues, z } from '../lib/validation.js';
 import {
     dateDuJour, decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE,
     soldeRestant, STATUT_VERSEMENT_ANNULE, STATUTS_VERSEMENT, type Echeance, type SituationFinanciere,
@@ -82,13 +82,14 @@ export const enregistrerReglementBumex = operation('enregistrerReglementBumex', 
 
 export const modifierSituationFinanciere = operation('modifierSituationFinanciere', ROLES_FINANCE, async (donnees, acteur) => {
     const v = valider(
-        z.object({ id: s.id(), montantDu: s.entier(0), montantRemise: s.entier(0), noteFinanciere: s.texteOptionnel(2000) }),
+        z.object({ id: s.id(), montantDu: s.entier(0), montantRemise: s.entier(0), noteFinanciere: s.texteOptionnel(2000), attendu: valeursAttendues }),
         donnees,
     );
     if (v.montantRemise > v.montantDu) erreurChamp('montantRemise', 'La remise ne peut pas dépasser le montant dû.');
     await db.runTransaction(async (tx) => {
         const ref = col.inscriptions().doc(v.id);
         const avant = await exiger(tx, ref, 'Inscription introuvable.');
+        controlerModificationConcurrente(avant, v.attendu);
         const apres = { montantDu: v.montantDu, montantRemise: v.montantRemise, noteFinanciere: v.noteFinanciere };
         tx.update(ref, { ...apres, ...trace(acteur) });
         auditerModele(tx, acteur, 'Inscription', v.id, 'updated', avant, apres);

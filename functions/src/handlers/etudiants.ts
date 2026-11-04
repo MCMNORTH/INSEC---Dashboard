@@ -1,9 +1,9 @@
 import type { Transaction } from 'firebase-admin/firestore';
 import { auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
-import { col, exiger, libererUnique, verifierUnique, type Doc } from '../lib/donnees.js';
+import { col, controlerModificationConcurrente, exiger, libererUnique, verifierUnique, type Doc } from '../lib/donnees.js';
 import { bucket, db, FieldValue } from '../lib/firebase.js';
-import { erreurChamp, s, valider, z } from '../lib/validation.js';
+import { erreurChamp, s, valider, valeursAttendues, z } from '../lib/validation.js';
 import { montantDuSelonTarif, ROLES_ADMIN, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
 
 const emailOptionnel = z.preprocess(
@@ -111,10 +111,11 @@ export const creerEtudiant = operation('creerEtudiant', ROLES_ADMIN, async (donn
 });
 
 export const modifierEtudiant = operation('modifierEtudiant', ROLES_ADMIN, async (donnees, acteur) => {
-    const v = valider(identite.extend({ id: s.id() }), donnees);
+    const v = valider(identite.extend({ id: s.id(), attendu: valeursAttendues }), donnees);
     await db.runTransaction(async (tx) => {
         const ref = col.etudiants().doc(v.id);
         const avant = await exiger(tx, ref, 'Étudiant introuvable.');
+        controlerModificationConcurrente(avant, v.attendu);
         const reserver = v.email
             ? await verifierUnique(tx, cleEmailEtudiant(v.email), v.id, 'Cet e-mail est déjà utilisé par un autre étudiant.', 'email')
             : () => {};
@@ -197,11 +198,12 @@ export const creerInscription = operation('creerInscription', ROLES_ADMIN, async
 });
 
 export const modifierInscription = operation('modifierInscription', ROLES_ADMIN, async (donnees, acteur) => {
-    const v = valider(champsInscription.extend({ id: s.id(), statut: s.choix(STATUTS_INSCRIPTION) }), donnees);
+    const v = valider(champsInscription.extend({ id: s.id(), statut: s.choix(STATUTS_INSCRIPTION), attendu: valeursAttendues }), donnees);
     let etudiantId = '';
     await db.runTransaction(async (tx) => {
         const ref = col.inscriptions().doc(v.id);
         const avant = await exiger(tx, ref, 'Inscription introuvable.');
+        controlerModificationConcurrente(avant, v.attendu);
         etudiantId = avant.etudiantId;
         const montantTarif = await controlerInscription(tx, v);
         if ((avant.financeur ?? 'etudiant') !== (v.financeur ?? 'etudiant') && (avant.totalVerse ?? 0) > 0) {
