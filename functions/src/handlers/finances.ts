@@ -12,12 +12,12 @@ import {
 
 const formaterDate = (iso: string) => iso.split('-').reverse().join('/');
 
-/** Enregistre la prise en charge BUMEX sans fabriquer de versement ou reçu étudiant. */
 // Texte de l'e-mail de confirmation de paiement (versement enregistré validé ou validé ensuite).
 const messagePaiement = (etudiant: Doc) =>
     `Bonjour ${String(etudiant.prenom ?? '').trim() || nomComplet(etudiant)}, nous confirmons la bonne réception de votre paiement. `
     + 'Merci pour votre règlement.';
 
+/** Enregistre la prise en charge BUMEX sans fabriquer de versement ou reçu étudiant. */
 export const confirmerReglementBumex2024 = operation('confirmerReglementBumex2024', ROLES_ADMIN, async (_donnees, acteur) => {
     const refs = await col.inscriptions().where('anneeId', '==', '2024-2025').where('formationId', '==', 'DGC').get();
     if (refs.size !== 11 || refs.docs.reduce((n, d) => n + ((d.get('ueIds') as string[] | undefined)?.length ?? 0), 0) !== 41) {
@@ -116,6 +116,7 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
         const inscriptionRef = col.inscriptions().doc(v.inscriptionId);
         const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
         if (inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : aucun versement étudiant ne peut y être enregistré.');
+        if (inscription.statut === 'annulée') refuser('Cette inscription est annulée : aucun versement ne peut y être enregistré.');
         const etudiant = await exiger(tx, col.etudiants().doc(inscription.etudiantId), 'Étudiant introuvable.');
         const [numero, incrementer] = await prochainNumero(tx, 'recus');
         numeroRecu = numeroFormate('REC', numero, new Date());
@@ -171,6 +172,7 @@ export const traiterVersement = operation('traiterVersement', ROLES_FINANCE, asy
         const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
         const etudiant = await exiger(tx, col.etudiants().doc(versement.etudiantId ?? inscription.etudiantId), 'Étudiant introuvable.');
         if (v.statut === 'Validée' && inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : le versement ne peut pas être validé.');
+        if (v.statut === 'Validée' && inscription.statut === 'annulée') refuser('Cette inscription est annulée : le versement ne peut pas être validé. Rejetez-le si besoin.');
         const situation = inscription as unknown as SituationFinanciere;
         const soldeApresPaiement = v.statut === 'Validée' ? Math.max(soldeRestant(situation) - versement.montant, 0) : null;
         const avant = { statut: versement.statut };
@@ -306,8 +308,15 @@ export const genererEcheancier = operation('genererEcheancier', ROLES_FINANCE, a
         const reste = soldeRestant(situation);
         if (!estRecouvrable(situation) || reste <= 0) refuser('Il ne reste rien à payer sur cette inscription.');
         if (reste < v.nombre) erreurChamp('nombre', 'Le reste à payer est trop faible pour autant de tranches.');
-        const echeances = decouperEcheancier(reste, v.nombre, v.premiereDate, v.intervalleMois).map((e) => ({ id: randomUUID(), ...e }));
-        nombre = echeances.length;
+        // Les versements déjà validés forment une première ligne « Déjà versé » : le total de l'échéancier
+        // reste égal au montant net, et ces versements ne sont pas imputés une seconde fois aux nouvelles tranches.
+        const dejaVerse = Math.min(situation.totalVerse ?? 0, montantNet(situation));
+        const jour = dateDuJour();
+        const echeances = [
+            ...(dejaVerse > 0 ? [{ libelle: 'Déjà versé', montant: dejaVerse, dateEcheance: v.premiereDate < jour ? v.premiereDate : jour }] : []),
+            ...decouperEcheancier(reste, v.nombre, v.premiereDate, v.intervalleMois),
+        ].map((e) => ({ id: randomUUID(), ...e }));
+        nombre = v.nombre;
         tx.update(ref, { echeances, ...trace(acteur) });
         auditerModele(tx, acteur, 'Inscription', v.inscriptionId, 'updated', { echeances: existantes }, { echeances });
     });
