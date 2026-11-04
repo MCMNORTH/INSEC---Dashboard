@@ -140,7 +140,9 @@ export interface Resultat {
     commentaire: string | null;
     valide: boolean;
     numeroConvocation: number;
-    convocationEnvoiStatut?: 'En cours' | 'Envoyée' | 'Échec';
+    convocationEnvoiStatut?: 'En cours' | 'Envoyée' | 'Échec' | null;
+    /** false : note nouvelle ou corrigée, pas encore envoyée à l'étudiant (absent = déjà envoyée, ancien fonctionnement). */
+    resultatPublie?: boolean;
     convocationEnvoyeeLe?: Timestamp | null;
     convocationEnvoiDemarreeLe?: Timestamp | null;
 }

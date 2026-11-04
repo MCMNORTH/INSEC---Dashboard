@@ -778,7 +778,10 @@ async function envoyerConvocationSuivie(id: string, acteurId: string, transport:
     if (resultatInitial.convocationEnvoiStatut !== 'Envoyée' && resultatInitial.convocationEnvoiStatut !== 'En cours') {
         const nomPdf = `convocation-examen-${numeroFormate('CONV', Number(resultatInitial.numeroConvocation ?? 0))}.pdf`;
         const anciensEnvois = await db.collection('journalEmails').where('nomPieceJointe', '==', nomPdf).get();
-        const dejaEnvoyee = anciensEnvois.docs.find((document) => document.get('statut') === 'Envoyé');
+        // Après un changement de date ou de salle, seuls les envois postérieurs comptent.
+        const modifieeLe = (resultatInitial.convocationModifieeLe as FirebaseFirestore.Timestamp | undefined)?.toMillis() ?? 0;
+        const dejaEnvoyee = anciensEnvois.docs.find((document) =>
+            document.get('statut') === 'Envoyé' && ((document.get('envoyeLe') as FirebaseFirestore.Timestamp | null)?.toMillis() ?? 0) > modifieeLe);
         if (dejaEnvoyee) {
             await db.runTransaction(async (tx) => {
                 const resultat = await exiger(tx, ref, 'Résultat introuvable.');

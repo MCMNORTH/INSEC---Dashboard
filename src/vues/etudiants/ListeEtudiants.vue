@@ -257,7 +257,7 @@ async function supprimer() {
     <ModaleConfirmation
         :ouverte="!!aSupprimer"
         :envoi="envoi"
-        :message="`Voulez-vous vraiment supprimer ${aSupprimer?.nom} ${aSupprimer?.prenom} ? Cette action est irréversible.`"
+        :message="`Voulez-vous vraiment supprimer ${aSupprimer?.nom} ${aSupprimer?.prenom} ? Sa fiche, ses inscriptions, ses convocations et ses pièces déposées seront effacées définitivement. La suppression est refusée s’il existe des paiements ou un historique d’examen : annulez alors plutôt l’inscription.`"
         @annuler="aSupprimer = null"
         @confirmer="supprimer"
     />

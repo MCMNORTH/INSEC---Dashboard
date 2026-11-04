@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription, supprimerEtudiant } from '../src/handlers/etudiants.js';
+import { creerExamen, enregistrerPresencesExamen } from '../src/handlers/examens.js';
 import { ajouterVersement } from '../src/handlers/finances.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
@@ -74,6 +75,19 @@ describe('Étudiants et inscriptions', () => {
         await appeler(ajouterVersement, { inscriptionId: inscription.id, montant: 1000, dateVersement: '2026-09-20', statut: 'En attente', modePaiement: 'Espèces' }, admin);
         await attendreErreur(appeler(supprimerEtudiant, { id }, admin), 'failed-precondition');
         expect(await doc(`etudiants/${id}`)).toBeDefined();
+    });
+
+    it('interdit la suppression d’un étudiant ayant un historique d’examen', async () => {
+        const { id } = await appeler(creerEtudiant, etudiantValide, admin);
+        const { id: examenId } = await appeler(creerExamen, {
+            ueId: 'TEC111', anneeId: '2026-2027', session: 'Normale', dateExamen: '2099-01-15T09:00:00+00:00', salle: 'A1',
+            noteSur: 20, seuilValidation: 10, statut: 'Planifié',
+        }, admin);
+        const [resultat] = await liste('resultats');
+        await appeler(enregistrerPresencesExamen, { id: examenId, presences: [{ resultatId: resultat.id, presence: 'Absent' }] }, admin);
+        await attendreErreur(appeler(supprimerEtudiant, { id }, admin), 'failed-precondition');
+        expect(await doc(`etudiants/${id}`)).toBeDefined();
+        expect(await liste('resultats')).toHaveLength(1);
     });
 
     it('supprime un étudiant sans historique financier et ses inscriptions', async () => {

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant, modifierInscription } from '../src/handlers/etudiants.js';
-import { creerExamen, enregistrerResultat } from '../src/handlers/examens.js';
+import { creerExamen, enregistrerResultat, modifierExamen, publierResultatsExamen } from '../src/handlers/examens.js';
 import { genererPdf } from '../src/handlers/pdf.js';
+import { db } from '../src/lib/firebase.js';
 import { horaireExamen } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
@@ -39,15 +40,75 @@ describe('Examens et résultats', () => {
         await appeler(creerExamen, examen, admin);
         const [resultat] = await liste('resultats');
         await appeler(enregistrerResultat, { id: resultat.id, presence: 'Présent', note: 12, commentaire: 'Admis' }, admin);
-        expect(await doc(`resultats/${resultat.id}`)).toMatchObject({ note: 12, valide: true });
-        const emails = await liste('journalEmails');
-        expect(emails.some((e) => e.type === 'Résultat' && e.lien === null)).toBe(true);
+        expect(await doc(`resultats/${resultat.id}`)).toMatchObject({ note: 12, valide: true, resultatPublie: false });
 
         const releve = await appeler(genererPdf, { type: 'releve', id: resultat.inscriptionId }, admin);
         const pdf = Buffer.from(releve.contenu, 'base64');
         expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
         const convocation = await appeler(genererPdf, { type: 'convocation', id: resultat.id }, admin);
         expect(convocation.nom).toBe('convocation-examen-CONV-000001.pdf');
+    });
+
+    it('n’envoie une note qu’à la publication des résultats, une seule fois, puis à nouveau si elle est corrigée', async () => {
+        await appeler(creerEtudiant, etudiant('awa@example.com', ['TEC111']), admin);
+        const { id } = await appeler(creerExamen, examen, admin);
+        const [resultat] = await liste('resultats');
+        await appeler(enregistrerResultat, { id: resultat.id, presence: 'Présent', note: 8 }, admin);
+        await appeler(enregistrerResultat, { id: resultat.id, presence: 'Présent', note: 18 }, admin);
+        expect((await liste('journalEmails')).filter((e) => e.type === 'Résultat')).toHaveLength(0);
+
+        expect(await appeler(publierResultatsExamen, { id }, admin)).toMatchObject({ publies: 1, sansEmail: 0 });
+        let emails = (await liste('journalEmails')).filter((e) => e.type === 'Résultat');
+        expect(emails).toHaveLength(1);
+        expect(emails[0].details).toMatchObject({ Note: '18/20', Décision: 'Validée' });
+        expect(await doc(`resultats/${resultat.id}`)).toMatchObject({ resultatPublie: true });
+
+        // Une seconde publication n'envoie rien ; une correction redevient à publier.
+        expect(await appeler(publierResultatsExamen, { id }, admin)).toMatchObject({ publies: 0 });
+        await appeler(enregistrerResultat, { id: resultat.id, presence: 'Présent', note: 17 }, admin);
+        await appeler(publierResultatsExamen, { id }, admin);
+        emails = (await liste('journalEmails')).filter((e) => e.type === 'Résultat');
+        expect(emails).toHaveLength(2);
+
+        for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
+            await attendreErreur(appeler(publierResultatsExamen, { id }, await acteur(role)), 'permission-denied');
+        }
+    });
+
+    it('publie sans e-mail pour un étudiant sans adresse valide', async () => {
+        await appeler(creerEtudiant, { ...etudiant('', ['TEC111']), email: null }, admin);
+        const { id } = await appeler(creerExamen, examen, admin);
+        const [resultat] = await liste('resultats');
+        await appeler(enregistrerResultat, { id: resultat.id, presence: 'Présent', note: 9 }, admin);
+        expect(await appeler(publierResultatsExamen, { id }, admin)).toMatchObject({ publies: 1, sansEmail: 1 });
+        expect(await liste('journalEmails')).toHaveLength(0);
+    });
+
+    it('modifie la date et la salle, recopie sur les convocations et permet de renvoyer celles déjà envoyées', async () => {
+        await appeler(creerEtudiant, etudiant('awa@example.com', ['TEC111']), admin);
+        const { id } = await appeler(creerExamen, examen, admin);
+        const [resultat] = await liste('resultats');
+        await db.collection('resultats').doc(resultat.id).update({ convocationEnvoiStatut: 'Envoyée' });
+        const reponse = await appeler(modifierExamen, { id, dateExamen: '2099-01-20T13:00:00+00:00', salle: 'B2', statut: 'Planifié' }, admin);
+        expect(reponse.aRenvoyer).toBe(1);
+        expect(await doc(`examens/${id}`)).toMatchObject({ salle: 'B2', statut: 'Planifié' });
+        const apres = (await doc(`resultats/${resultat.id}`))!;
+        expect(apres).toMatchObject({ salle: 'B2', statutExamen: 'Planifié', convocationEnvoiStatut: null });
+        expect(apres.dateExamen.toDate().toISOString()).toBe('2099-01-20T13:00:00.000Z');
+        await attendreErreur(appeler(modifierExamen, { id, dateExamen: '2099-01-20T13:00:00+00:00', salle: 'B2', statut: 'Planifié' }, await acteur('finance')), 'permission-denied');
+    });
+
+    it('annule un examen sans note, mais refuse d’annuler un examen déjà noté', async () => {
+        await appeler(creerEtudiant, etudiant('awa@example.com', ['TEC111']), admin);
+        const { id } = await appeler(creerExamen, examen, admin);
+        await appeler(modifierExamen, { id, dateExamen: examen.dateExamen, salle: 'A1', statut: 'Annulé' }, admin);
+        expect((await liste('resultats'))[0].statutExamen).toBe('Annulé');
+        await attendreErreur(appeler(publierResultatsExamen, { id }, admin), 'failed-precondition');
+
+        await appeler(modifierExamen, { id, dateExamen: examen.dateExamen, salle: 'A1', statut: 'Planifié' }, admin);
+        const [resultat] = await liste('resultats');
+        await appeler(enregistrerResultat, { id: resultat.id, presence: 'Présent', note: 11 }, admin);
+        await attendreErreur(appeler(modifierExamen, { id, dateExamen: examen.dateExamen, salle: 'A1', statut: 'Annulé' }, admin), 'invalid-argument', 'statut');
     });
 
     it('refuse une note supérieure au maximum et une présence sans note', async () => {
