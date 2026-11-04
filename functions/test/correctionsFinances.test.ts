@@ -4,7 +4,7 @@ import {
     ajouterEcheance, ajouterVersement, annulerVersement, genererEcheancier, modifierEcheance, modifierSituationFinanciere, supprimerEcheance,
     traiterVersement,
 } from '../src/handlers/finances.js';
-import { ajouterMois, decouperEcheancier, soldeRestant } from '../src/shared/domaine.js';
+import { ajouterMois, decouperEcheancier, ecartEcheancier, etatEcheances, montantEnRetard, soldeRestant } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
 const versement = { dateVersement: '2026-09-20', modePaiement: 'Espèces', reference: null, note: null };
@@ -84,12 +84,19 @@ describe('Corriger une erreur en Finances', () => {
     it('génère l’échéancier sur le reste à payer et ne l’écrase qu’à la demande', async () => {
         await appeler(ajouterVersement, { ...versement, inscriptionId, montant: 10000, statut: 'Validée' }, finance);
         await appeler(genererEcheancier, { inscriptionId, nombre: 3, premiereDate: '2026-11-05', intervalleMois: 1 }, finance);
-        const echeances = (await inscription()).echeances;
-        expect(echeances.map((e: { montant: number }) => e.montant)).toEqual([30000, 30000, 30000]);
-        expect(echeances.map((e: { dateEcheance: string }) => e.dateEcheance)).toEqual(['2026-11-05', '2026-12-05', '2027-01-05']);
+        const dossier = await inscription();
+        const echeances = dossier.echeances;
+        // Le versement déjà fait devient la première ligne : l'échéancier couvre tout le montant net.
+        expect(echeances.map((e: { libelle: string }) => e.libelle)).toEqual(['Déjà versé', 'Tranche 1/3', 'Tranche 2/3', 'Tranche 3/3']);
+        expect(echeances.map((e: { montant: number }) => e.montant)).toEqual([10000, 30000, 30000, 30000]);
+        expect(echeances.slice(1).map((e: { dateEcheance: string }) => e.dateEcheance)).toEqual(['2026-11-05', '2026-12-05', '2027-01-05']);
+        expect(ecartEcheancier(dossier as never)).toBe(0);
+        // Une fois toutes les dates passées, le retard est bien le reste à payer (90 000), et non 80 000.
+        expect(montantEnRetard(dossier as never, '2099-01-01')).toBe(90000);
+        expect(etatEcheances(dossier as never, '2099-01-01').map((e) => e.etat)).toEqual(['Payée', 'En retard', 'En retard', 'En retard']);
         await attendreErreur(appeler(genererEcheancier, { inscriptionId, nombre: 2, premiereDate: '2026-11-05', intervalleMois: 2 }, finance), 'failed-precondition');
         await appeler(genererEcheancier, { inscriptionId, nombre: 2, premiereDate: '2026-11-05', intervalleMois: 2, remplacer: true }, finance);
-        expect((await inscription()).echeances).toHaveLength(2);
+        expect((await inscription()).echeances).toHaveLength(3);
     });
 
     it('refuse ces corrections aux rôles non autorisés', async () => {

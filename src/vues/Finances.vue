@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-    diplomeTarife, ecartAuTarif, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantDuSelonTarif, montantEnRetard, montantNet,
-    soldeRestant, statutPaiement, TARIFS_UE,
+    diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
+    montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE, totalEcheances,
 } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
@@ -246,21 +246,35 @@ async function relancerTous() {
 }
 
 const confirmerVersement = async () => {
-    if (versement.statut === 'Validée') {
-        const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
-        const email = selectionne.value?.email?.trim() ?? '';
-        const notification = emailEtudiantValide.value
-            ? `Une confirmation sera envoyée à ${email}.`
-            : 'Aucune adresse e-mail valide : le paiement sera enregistré sans notification par e-mail.';
-        const ok = await confirmer({
-            titre: 'Valider ce versement ?',
-            message: `Il sera immédiatement ajouté au total encaissé. ${notification}`,
-            details: { Étudiant: nom, Montant: `${montant(versement.montant ?? 0)} MRU`, Date: date(versement.dateVersement), Mode: versement.modePaiement },
-            libelle: 'Valider le versement',
-        });
-        if (!ok) return;
-    }
-    await ajouterVersement();
+    const i = inscription.value!;
+    // Paiement supérieur au reste à payer : l'excédent deviendrait un trop-perçu à rembourser.
+    const excedent = (i.montantDu ?? 0) > 0 ? (versement.montant ?? 0) - soldeRestant(i) : 0;
+    const valide = versement.statut === 'Validée';
+    if (!valide && excedent <= 0) return ajouterVersement();
+    const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
+    const email = selectionne.value?.email?.trim() ?? '';
+    const notification = !valide
+        ? ''
+        : emailEtudiantValide.value
+            ? ` Une confirmation sera envoyée à ${email}.`
+            : ' Aucune adresse e-mail valide : le paiement sera enregistré sans notification par e-mail.';
+    // Une seule fenêtre : l'avertissement de dépassement et le récapitulatif de validation.
+    const ok = await confirmer({
+        titre: excedent > 0 ? 'Montant supérieur au reste à payer' : 'Valider ce versement ?',
+        message: excedent > 0
+            ? `Ce versement dépasse le reste à payer de ${montant(excedent)} MRU : cette somme sera à rembourser à l’étudiant. Vérifiez le montant saisi.${notification}`
+            : `Il sera immédiatement ajouté au total encaissé.${notification}`,
+        details: {
+            Étudiant: nom,
+            Montant: `${montant(versement.montant ?? 0)} MRU`,
+            ...(excedent > 0 ? { 'Reste à payer': `${montant(soldeRestant(i))} MRU` } : {}),
+            Date: date(versement.dateVersement),
+            Mode: versement.modePaiement,
+        },
+        libelle: excedent > 0 ? 'Enregistrer quand même' : 'Valider le versement',
+        ton: excedent > 0 ? 'danger' : 'action',
+    });
+    if (ok) await ajouterVersement();
 };
 
 async function envoyerDocument(type: 'facture' | 'recu', id: string, libelle: string, destinataire: string) {
@@ -494,6 +508,7 @@ const totauxFinanciers = computed(() => ({
                                     <td class="text-right whitespace-nowrap tabular-nums">
                                         <span class="font-semibold text-gray-900">{{ montant(soldeRestant(ligne.dossier)) }}</span>
                                         <span v-if="montantEnRetard(ligne.dossier) > 0" class="block text-[11px] text-red-600">dont {{ montant(montantEnRetard(ligne.dossier)) }} en retard</span>
+                                        <span v-if="montantARembourser(ligne.dossier) > 0" class="block text-[11px] text-sky-700">{{ montant(montantARembourser(ligne.dossier)) }} à rembourser</span>
                                     </td>
                                     <td>
                                         <span class="flex items-center gap-2">
@@ -615,7 +630,12 @@ const totauxFinanciers = computed(() => ({
                                                 <p class="mt-1 font-titre text-xl font-bold text-emerald-700 tabular-nums sm:text-2xl">{{ montant(inscription.totalVerse) }}</p>
                                                 <p class="mt-0.5 text-[11px] text-emerald-700/70">MRU</p>
                                             </div>
-                                            <div :class="['rounded-2xl p-4 ring-1', montantEnRetard(inscription) > 0 ? 'bg-red-50/70 ring-red-100' : 'bg-amber-50/70 ring-amber-100']">
+                                            <div v-if="montantARembourser(inscription) > 0" class="rounded-2xl bg-sky-50/70 p-4 ring-1 ring-sky-100">
+                                                <p class="text-xs text-sky-800">À rembourser</p>
+                                                <p class="mt-1 font-titre text-xl font-bold text-sky-800 tabular-nums sm:text-2xl">{{ montant(montantARembourser(inscription)) }}</p>
+                                                <p class="mt-0.5 text-[11px] text-sky-800/70">MRU · {{ inscription.statut === 'annulée' ? 'inscription annulée' : 'trop-perçu' }}</p>
+                                            </div>
+                                            <div v-else :class="['rounded-2xl p-4 ring-1', montantEnRetard(inscription) > 0 ? 'bg-red-50/70 ring-red-100' : 'bg-amber-50/70 ring-amber-100']">
                                                 <p :class="['text-xs', montantEnRetard(inscription) > 0 ? 'text-red-700' : 'text-amber-800']">Reste à payer</p>
                                                 <p :class="['mt-1 font-titre text-xl font-bold tabular-nums sm:text-2xl', montantEnRetard(inscription) > 0 ? 'text-red-700' : 'text-amber-800']">{{ montant(soldeRestant(inscription)) }}</p>
                                                 <p :class="['mt-0.5 text-[11px]', montantEnRetard(inscription) > 0 ? 'text-red-700/80' : 'text-amber-800/70']">
@@ -730,7 +750,10 @@ const totauxFinanciers = computed(() => ({
                                                 </li>
                                                 <li v-if="!versements.length" class="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">Aucun versement pour l’instant.</li>
                                             </ul>
-                                            <form class="space-y-2.5 self-start rounded-2xl bg-gray-50/70 p-4 ring-1 ring-gray-100" @submit.prevent="confirmerVersement">
+                                            <p v-if="inscription.statut === 'annulée'" class="self-start rounded-2xl bg-gray-50/70 p-4 text-sm leading-6 text-gray-600 ring-1 ring-gray-100">
+                                                <i class="fa-solid fa-ban mr-1 text-gray-400"></i>Inscription annulée : aucun nouveau versement ne peut être enregistré.
+                                            </p>
+                                            <form v-else class="space-y-2.5 self-start rounded-2xl bg-gray-50/70 p-4 ring-1 ring-gray-100" @submit.prevent="confirmerVersement">
                                                 <p class="text-sm font-semibold text-gray-900">Nouveau versement</p>
                                                 <label class="etiquette">Montant (MRU)<input v-model.number="versement.montant" type="number" min="1" class="champ mt-1" required /></label>
                                                 <label class="etiquette">Date<input v-model="versement.dateVersement" type="date" class="champ mt-1" required /></label>
@@ -749,6 +772,10 @@ const totauxFinanciers = computed(() => ({
                                             <div>
                                                 <p v-if="inscription.echeances?.length" class="mb-3 text-xs text-gray-500">
                                                     {{ etatEcheances(inscription).filter((e) => e.etat === 'Payée').length }} / {{ inscription.echeances.length }} tranche(s) payée(s) · les versements validés sont imputés aux échéances dans l’ordre des dates.
+                                                </p>
+                                                <p v-if="ecartEcheancier(inscription) > 0 && soldeRestant(inscription) > 0" class="mb-3 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800 ring-1 ring-amber-100">
+                                                    <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+                                                    <span>L’échéancier totalise {{ montant(totalEcheances(inscription)) }} MRU pour un net de {{ montant(montantNet(inscription)) }} MRU. Si les {{ montant(ecartEcheancier(inscription)) }} MRU d’écart ont été versés avant l’échéancier, régénérez-le en cochant « Remplacer l’échéancier existant » : sinon le retard affiché est sous-estimé.</span>
                                                 </p>
                                                 <ul class="space-y-2">
                                                     <li v-for="e in etatEcheances(inscription)" :key="e.id">
@@ -784,7 +811,7 @@ const totauxFinanciers = computed(() => ({
                                             <div class="space-y-4 self-start">
                                                 <form class="space-y-2.5 rounded-2xl bg-gray-50/70 p-4 ring-1 ring-gray-100" @submit.prevent="genererEcheancier">
                                                     <p class="text-sm font-semibold text-gray-900">Générer un échéancier</p>
-                                                    <p class="text-xs text-gray-500">Répartit le reste à payer ({{ montant(soldeRestant(inscription)) }} MRU).</p>
+                                                    <p class="text-xs text-gray-500">Répartit le reste à payer ({{ montant(soldeRestant(inscription)) }} MRU). Les versements déjà validés sont repris sur une première ligne « Déjà versé ».</p>
                                                     <div class="grid grid-cols-2 gap-2">
                                                         <label class="etiquette">Tranches<input v-model.number="echeancier.nombre" type="number" min="2" max="12" class="champ mt-1" required /></label>
                                                         <label class="etiquette">Tous les (mois)<input v-model.number="echeancier.intervalleMois" type="number" min="1" max="6" class="champ mt-1" required /></label>

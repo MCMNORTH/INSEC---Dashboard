@@ -96,6 +96,17 @@ export function soldeRestant(i: SituationFinanciere): number {
     return Math.max(montantNet(i) - (i.totalVerse ?? 0), 0);
 }
 
+/**
+ * Montant versé par l'étudiant à lui rembourser : tout le versé d'une inscription annulée,
+ * sinon ce qui dépasse le montant net (uniquement quand les frais sont fixés).
+ */
+export function montantARembourser(i: SituationFinanciere): number {
+    const verse = i.totalVerse ?? 0;
+    if (i.statut === 'annulée') return verse;
+    if (i.financeur === 'bumex' || (i.montantDu ?? 0) <= 0) return 0;
+    return Math.max(verse - montantNet(i), 0);
+}
+
 export function statutPaiement(i: SituationFinanciere): StatutPaiement {
     if (i.statut === 'annulée') return 'Annulée';
     if (i.financeur === 'bumex') return 'Pris en charge BUMEX';
@@ -114,6 +125,19 @@ export function montantEnRetard(i: SituationFinanciere, aujourdhui: string = dat
         .filter((e) => e.dateEcheance < aujourdhui)
         .reduce((total, e) => total + e.montant, 0);
     return Math.max(Math.min(exigible, montantNet(i)) - (i.totalVerse ?? 0), 0);
+}
+
+export function totalEcheances(i: Pick<SituationFinanciere, 'echeances'>): number {
+    return (i.echeances ?? []).reduce((total, e) => total + e.montant, 0);
+}
+
+/**
+ * Montant net non couvert par l'échéancier. Un écart apparaît notamment sur un échéancier généré
+ * sur le seul reste à payer : les versements déjà faits sont alors imputés une seconde fois aux tranches.
+ */
+export function ecartEcheancier(i: SituationFinanciere): number {
+    if (!estRecouvrable(i) || !(i.echeances ?? []).length) return 0;
+    return Math.max(montantNet(i) - totalEcheances(i), 0);
 }
 
 export type EtatEcheance = 'Payée' | 'Partielle' | 'En retard' | 'À venir';

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant, creerInscription, modifierInscription } from '../src/handlers/etudiants.js';
-import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere } from '../src/handlers/finances.js';
+import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere, traiterVersement } from '../src/handlers/finances.js';
 import { genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
-import { ecartAuTarif, etatEcheances, montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement } from '../src/shared/domaine.js';
+import {
+    ecartAuTarif, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement,
+} from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
 const etudiant = (email: string) => ({
@@ -156,6 +158,22 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         expect(montantEnRetard({ montantDu: 100000, montantRemise: 0, totalVerse: 50000, echeances }, '2026-11-15')).toBe(20000);
     });
 
+    it('calcule le montant à rembourser : excédent sur le net, ou tout le versé si l’inscription est annulée', () => {
+        const base = { montantDu: 100000, montantRemise: 10000, totalVerse: 95000, echeances: [] };
+        expect(montantARembourser(base)).toBe(5000);
+        expect(montantARembourser({ ...base, totalVerse: 90000 })).toBe(0);
+        expect(montantARembourser({ ...base, statut: 'annulée' })).toBe(95000);
+        expect(montantARembourser({ ...base, montantDu: 0, montantRemise: 0 })).toBe(0);
+        expect(montantARembourser({ ...base, financeur: 'bumex' })).toBe(0);
+    });
+
+    it('signale un échéancier qui ne couvre pas tout le montant net', () => {
+        const echeances = [{ id: 'a', libelle: 'T1', montant: 45000, dateEcheance: '2026-11-01' }, { id: 'b', libelle: 'T2', montant: 45000, dateEcheance: '2026-12-01' }];
+        expect(ecartEcheancier({ montantDu: 100000, montantRemise: 0, totalVerse: 10000, echeances })).toBe(10000);
+        expect(ecartEcheancier({ montantDu: 90000, montantRemise: 0, totalVerse: 0, echeances })).toBe(0);
+        expect(ecartEcheancier({ montantDu: 100000, montantRemise: 0, totalVerse: 0, echeances: [] })).toBe(0);
+    });
+
     it('mesure l’écart entre le montant dû saisi et le tarif (UE × tarif)', () => {
         expect(ecartAuTarif('DGC', 2, 32000)).toBe(0);
         expect(ecartAuTarif('DGC', 2, 40000)).toBe(8000);
@@ -186,6 +204,17 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         const tableau = await appeler(tableauDeBordAdmin, { anneeId: '2026-2027' }, admin);
         expect(tableau).toMatchObject({ montantFacture: 0, resteARecouvrer: 0 });
         expect(tableau.impayes).toHaveLength(0);
+    });
+
+    it('refuse un nouveau versement ou sa validation sur une inscription annulée, et signale le montant à rembourser', async () => {
+        await appeler(ajouterVersement, { ...versement, inscriptionId, montant: 10000 }, finance);
+        const { id: enAttente } = await appeler(ajouterVersement, { ...versement, inscriptionId, montant: 5000, statut: 'En attente' }, finance);
+        await modifier({ statut: 'annulée' });
+        await attendreErreur(appeler(ajouterVersement, { ...versement, inscriptionId, montant: 1000 }, finance), 'failed-precondition');
+        await attendreErreur(appeler(traiterVersement, { id: enAttente, statut: 'Validée' }, finance), 'failed-precondition');
+        // Le rejet reste possible pour solder le versement en attente.
+        await appeler(traiterVersement, { id: enAttente, statut: 'Rejetée', motif: 'Inscription annulée' }, finance);
+        expect(montantARembourser((await doc(`inscriptions/${inscriptionId}`)) as never)).toBe(10000);
     });
 
     it('ne compte pas un dossier BUMEX comme une dette de l’étudiant', async () => {
