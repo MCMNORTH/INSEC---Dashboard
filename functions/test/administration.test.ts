@@ -8,10 +8,10 @@ import { creerEtudiant } from '../src/handlers/etudiants.js';
 import { exporterExcel, importerEtudiants } from '../src/handlers/excel.js';
 import { ajouterEcheance, modifierSituationFinanciere } from '../src/handlers/finances.js';
 import { verifierDisponibilite } from '../src/handlers/sante.js';
-import { restaurerSauvegarde } from '../src/handlers/sauvegardes.js';
+import { copierFichiers, restaurerSauvegarde } from '../src/handlers/sauvegardes.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import { expedier, rendreEmail } from '../src/lib/email.js';
-import { auth, bucket, db } from '../src/lib/firebase.js';
+import { auth, bucket, db, storage } from '../src/lib/firebase.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
 const etudiant = {
@@ -190,6 +190,19 @@ describe('Administration', () => {
                 'unauthenticated',
             );
             await attendreErreur(appeler(restaurerSauvegarde, { id: 'x', confirmation: 'RESTAURER' }, superAdmin), 'failed-precondition');
+        });
+
+        it('copie dans la sauvegarde les pièces des étudiants et les documents financiers', async () => {
+            const pdf = Buffer.from('%PDF-1.4 test');
+            await bucket().file('dossiers/e1/piece.pdf').save(pdf);
+            await bucket().file('finances/2026-2027/facture-intec/u1/facture.pdf').save(pdf);
+            const manifestes = await copierFichiers('test-sauvegarde');
+            expect(manifestes.documents.map((d) => d.chemin)).toEqual(['e1/piece.pdf']);
+            expect(manifestes.documentsFinanciers.map((d) => d.chemin)).toEqual(['2026-2027/facture-intec/u1/facture.pdf']);
+            const cible = storage.bucket('demo-insec-sauvegardes');
+            expect((await cible.file('test-sauvegarde/documents/e1/piece.pdf').exists())[0]).toBe(true);
+            expect((await cible.file('test-sauvegarde/finances/2026-2027/facture-intec/u1/facture.pdf').exists())[0]).toBe(true);
+            await cible.deleteFiles({ prefix: 'test-sauvegarde/', force: true });
         });
 
         it('signale la disponibilité et l’absence de sauvegarde comme simple avertissement', async () => {
