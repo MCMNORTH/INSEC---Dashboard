@@ -1,9 +1,9 @@
 import type { QueryDocumentSnapshot, WriteBatch } from 'firebase-admin/firestore';
 import { auditer, auditerModele, trace } from '../lib/audit.js';
-import { operation } from '../lib/contexte.js';
+import { operation, refuser } from '../lib/contexte.js';
 import { col, exiger, nomComplet } from '../lib/donnees.js';
 import { mettreEnFileEmail } from '../lib/email.js';
-import { db, Timestamp } from '../lib/firebase.js';
+import { db, FieldValue, Timestamp } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
 import { FUSEAU_LOCAL, PRESENCES, resultatValide, ROLES_ADMIN, SESSIONS_EXAMEN, STATUTS_EXAMEN } from '../shared/domaine.js';
 
@@ -158,25 +158,124 @@ export const enregistrerResultat = operation('enregistrerResultat', ROLES_ADMIN,
             presence: v.presence, note, commentaire: v.commentaire,
             valide: resultatValide({ presence: v.presence, note, seuilValidation: avant.seuilValidation }),
         };
-        let etudiant = null;
-        let ue = null;
-        if (note !== null) {
-            etudiant = await exiger(tx, col.etudiants().doc(avant.etudiantId), 'Étudiant introuvable.');
-            ue = await exiger(tx, col.ues().doc(avant.ueId), 'UE introuvable.');
-        }
-        tx.update(ref, { ...apres, ...trace(acteur) });
+        // Une note nouvelle ou corrigée redevient « à publier » ; un résultat sans champ resultatPublie
+        // date d'avant la publication groupée et a déjà été envoyé.
+        const change = note !== (avant.note ?? null) || v.presence !== avant.presence;
+        tx.update(ref, { ...apres, ...(change ? { resultatPublie: false } : {}), ...trace(acteur) });
         auditerModele(tx, acteur, 'ResultatExamen', v.id, 'updated', avant, apres);
-        if (etudiant && ue) {
-            mettreEnFileEmail(tx, {
-                destinataire: etudiant.email, nomDestinataire: nomComplet(etudiant), type: 'Résultat',
-                sujet: 'Publication d’un résultat INSEC', titre: 'Votre résultat est disponible',
-                message: `Bonjour ${String(etudiant.prenom ?? '').trim() || nomComplet(etudiant)}, votre résultat pour l’UE ${ue.code} est disponible.`,
-                details: { UE: ue.code, Note: `${note}/${avant.noteSur}`, Décision: apres.valide ? 'Validée' : 'Non validée' },
-                lien: null, libelleLien: null,
-            });
-        }
     });
-    return { message: 'Résultat enregistré.' };
+    return { message: 'Résultat enregistré. Il sera envoyé à l’étudiant lors de la publication des résultats.' };
+});
+
+const emailValide = (email: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email ?? '').trim());
+
+/** Envoie en une fois les notes nouvelles ou corrigées d'une épreuve ; chaque note n'est envoyée qu'une fois. */
+export const publierResultatsExamen = operation('publierResultatsExamen', ROLES_ADMIN, async (donnees, acteur) => {
+    const v = valider(z.object({ id: s.id() }), donnees);
+    const examen = await exiger(null, col.examens().doc(v.id), 'Examen introuvable.');
+    if (examen.statut === 'Annulé') refuser('Les résultats d’un examen annulé ne peuvent pas être publiés.');
+    const ue = (await col.ues().doc(examen.ueId).get()).data() ?? {};
+    const aPublier = (await col.resultats().where('examenId', '==', v.id).get()).docs
+        .filter((d) => d.get('note') !== null && d.get('note') !== undefined && d.get('resultatPublie') === false);
+    if (!aPublier.length) return { message: 'Aucun nouveau résultat à publier.', publies: 0, sansEmail: 0 };
+
+    let publies = 0;
+    let sansEmail = 0;
+    // Par paquets, dans des transactions : deux publications simultanées n'envoient pas deux fois la même note.
+    for (let i = 0; i < aPublier.length; i += 100) {
+        const paquet = aPublier.slice(i, i + 100);
+        const bilan = await db.runTransaction(async (tx) => {
+            const resultats = await Promise.all(paquet.map((d) => tx.get(d.ref)));
+            const encore = resultats.filter((d) => d.exists && d.get('note') !== null && d.get('resultatPublie') === false);
+            const etudiants = encore.length ? await tx.getAll(...encore.map((d) => col.etudiants().doc(String(d.get('etudiantId'))))) : [];
+            let envoyes = 0;
+            let ignores = 0;
+            encore.forEach((resultat, index) => {
+                const etudiant = etudiants[index]?.data();
+                tx.update(resultat.ref, { resultatPublie: true, resultatPublieLe: FieldValue.serverTimestamp(), ...trace(acteur) });
+                if (!etudiant || !emailValide(etudiant.email)) {
+                    ignores += 1;
+                    return;
+                }
+                mettreEnFileEmail(tx, {
+                    destinataire: String(etudiant.email).trim(), nomDestinataire: nomComplet(etudiant), type: 'Résultat',
+                    sujet: 'Publication d’un résultat INSEC', titre: 'Votre résultat est disponible',
+                    message: `Bonjour ${String(etudiant.prenom ?? '').trim() || nomComplet(etudiant)}, votre résultat pour l’UE ${ue.code ?? ''} est disponible.`,
+                    details: {
+                        UE: String(ue.code ?? ''),
+                        Note: `${resultat.get('note')}/${resultat.get('noteSur')}`,
+                        Décision: resultat.get('valide') ? 'Validée' : 'Non validée',
+                    },
+                    lien: null, libelleLien: null,
+                });
+                envoyes += 1;
+            });
+            return { envoyes, ignores };
+        });
+        publies += bilan.envoyes + bilan.ignores;
+        sansEmail += bilan.ignores;
+    }
+    const lot = db.batch();
+    auditer(lot, acteur, {
+        action: 'updated', modele: 'Examen', modeleId: v.id,
+        description: `Publication des résultats : ${publies} résultat(s), dont ${sansEmail} sans adresse e-mail.`,
+        apres: { publies, sansEmail },
+    });
+    await lot.commit();
+    return {
+        message: `${publies} résultat(s) publié(s).` + (sansEmail ? ` ${sansEmail} étudiant(s) sans adresse e-mail valide n’ont pas reçu d’e-mail.` : ''),
+        publies,
+        sansEmail,
+    };
+});
+
+/**
+ * Modifie la date (heure de Paris), la salle ou le statut d'une épreuve, et recopie ces informations
+ * sur les convocations. Si la date ou la salle change, les convocations déjà envoyées peuvent être renvoyées.
+ */
+export const modifierExamen = operation('modifierExamen', ROLES_ADMIN, async (donnees, acteur) => {
+    const v = valider(
+        z.object({
+            id: s.id(),
+            dateExamen: z.iso.datetime({ offset: true, error: 'date et heure invalides.' }),
+            salle: s.texteOptionnel(100),
+            statut: s.choix(STATUTS_EXAMEN),
+        }),
+        donnees,
+    );
+    const ref = col.examens().doc(v.id);
+    const avant = await exiger(null, ref, 'Examen introuvable.');
+    const resultats = (await col.resultats().where('examenId', '==', v.id).get()).docs;
+    if (v.statut === 'Annulé' && avant.statut !== 'Annulé' && resultats.some((d) => d.get('note') !== null && d.get('note') !== undefined)) {
+        erreurChamp('statut', 'Des notes sont déjà saisies pour cet examen : il ne peut pas être annulé.');
+    }
+    const dateExamen = Timestamp.fromDate(new Date(v.dateExamen));
+    const dateChangee = (avant.dateExamen as Timestamp | undefined)?.toMillis() !== dateExamen.toMillis();
+    const salleChangee = (avant.salle ?? null) !== (v.salle ?? null);
+    const apres = { dateExamen, salle: v.salle, statut: v.statut };
+    const lot = db.batch();
+    lot.update(ref, { ...apres, ...trace(acteur) });
+    auditerModele(lot, acteur, 'Examen', v.id, 'updated', { dateExamen: avant.dateExamen, salle: avant.salle ?? null, statut: avant.statut }, apres);
+    await lot.commit();
+
+    // Convocations déjà envoyées avec l'ancienne date ou l'ancienne salle : elles redeviennent « à envoyer ».
+    const aRenvoyer = (dateChangee || salleChangee) && v.statut !== 'Annulé'
+        ? resultats.filter((d) => d.get('convocationEnvoiStatut') === 'Envoyée' && d.get('presence') === 'Convoqué')
+        : [];
+    const idsARenvoyer = new Set(aRenvoyer.map((d) => d.id));
+    await ecrireParLots(resultats, (lotResultats, d) => {
+        lotResultats.update(d.ref, {
+            dateExamen, salle: v.salle, statutExamen: v.statut,
+            ...(idsARenvoyer.has(d.id) ? { convocationEnvoiStatut: null, convocationModifieeLe: FieldValue.serverTimestamp() } : {}),
+            ...trace(acteur),
+        });
+    });
+    const message = v.statut === 'Annulé'
+        ? 'Examen annulé. Aucune convocation ne sera plus envoyée.'
+        : aRenvoyer.length
+            ? `Examen modifié. ${aRenvoyer.length} convocation(s) déjà envoyée(s) avec l’ancienne date ou salle sont à renvoyer.`
+            : 'Examen modifié.';
+    return { message, aRenvoyer: aRenvoyer.length };
 });
 
 

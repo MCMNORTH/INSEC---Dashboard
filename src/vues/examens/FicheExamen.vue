@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PRESENCES } from '@shared/domaine';
+import { dateHeureDansFuseau, FUSEAU_EXAMENS, PRESENCES, STATUTS_EXAMEN } from '@shared/domaine';
 import { collection, query, where } from 'firebase/firestore';
 import { computed, reactive, watch } from 'vue';
 import { appeler } from '../../api';
@@ -8,7 +8,7 @@ import { confirmer } from '../../dialogue';
 import { indexer, useDocument, useRequete } from '../../donnees';
 import { telecharger } from '../../fichiers';
 import { db } from '../../firebase';
-import { horaireExamen, nomComplet } from '../../format';
+import { horaireExamen, instantDepuisDateHeureParis, nomComplet } from '../../format';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 import { useReferentiel } from '../../referentiel';
@@ -102,6 +102,60 @@ async function enregistrer(r: Resultat) {
     if (resultat) notifier(resultat.message ?? 'Résultat enregistré.');
 }
 
+// Notes saisies mais pas encore envoyées aux étudiants.
+const aPublier = computed(() => resultats.value.filter((r) => r.note !== null && r.resultatPublie === false));
+
+async function publierResultats() {
+    const nombre = aPublier.value.length;
+    if (!nombre) return;
+    const ok = await confirmer({
+        titre: 'Publier les résultats ?',
+        message: 'Chaque étudiant concerné recevra sa note par e-mail. Vérifiez les notes avant de publier : une note corrigée ensuite devra être publiée à nouveau.',
+        details: { 'Notes à envoyer': String(nombre), UE: ue(examen.value!.ueId)?.code ?? '' },
+        libelle: 'Publier et envoyer',
+        ton: 'envoi',
+    });
+    if (!ok) return;
+    const resultat = await soumettre(() => appeler<{ message: string }>('publierResultatsExamen', { id: props.id }));
+    if (resultat) notifier(resultat.message);
+}
+
+// Modification de l'épreuve : l'heure se saisit à l'heure de Paris, comme dans le calendrier INTEC.
+const versChampParis = (d: Date) => {
+    const { date: jour, heure: h } = dateHeureDansFuseau(d, FUSEAU_EXAMENS);
+    const [j, m, a] = jour.split('/');
+    return `${a}-${m}-${j}T${h}`;
+};
+const edition = reactive({ ouverte: false, dateExamen: '', salle: '', statut: 'Planifié' });
+function ouvrirEdition() {
+    const e = examen.value!;
+    Object.assign(edition, { ouverte: true, dateExamen: versChampParis(e.dateExamen.toDate()), salle: e.salle ?? '', statut: e.statut });
+}
+const instantEdition = computed(() => instantDepuisDateHeureParis(edition.dateExamen));
+
+async function enregistrerExamen() {
+    if (!instantEdition.value) {
+        notifier('Date ou heure invalide (une heure qui n’existe pas au passage à l’heure d’été est refusée).', { type: 'erreur' });
+        return;
+    }
+    if (edition.statut === 'Annulé' && examen.value?.statut !== 'Annulé') {
+        const ok = await confirmer({
+            titre: 'Annuler cet examen ?',
+            message: 'Plus aucune convocation ne pourra être envoyée pour cette épreuve. Les présences et le suivi restent consultables.',
+            details: { UE: ue(examen.value!.ueId)?.code ?? '', Date: horaireExamen(examen.value!.dateExamen) },
+            libelle: 'Annuler l’examen',
+            ton: 'danger',
+        });
+        if (!ok) return;
+    }
+    const resultat = await soumettre(() =>
+        appeler<{ message: string }>('modifierExamen', { id: props.id, dateExamen: instantEdition.value, salle: edition.salle, statut: edition.statut }),
+    );
+    if (!resultat) return;
+    edition.ouverte = false;
+    notifier(resultat.message);
+}
+
 async function enregistrerPresences() {
     const changements = presencesEnAttente.value;
     if (!changements.length) return;
@@ -177,8 +231,29 @@ async function envoyerConvocation(r: Resultat) {
                     <div class="min-w-0 flex-1">
                         <p class="surtitre">{{ formation(examen.formationId)?.code }} · {{ annee(examen.anneeId)?.libelle }}</p>
                         <h1 class="titre-page mt-1.5">{{ ue(examen.ueId)?.code }} — {{ ue(examen.ueId)?.libelle }}</h1>
+                        <span v-if="examen.statut !== 'Planifié'" :class="['pastille mt-2', examen.statut === 'Annulé' ? 'bg-red-50 text-red-700 ring-red-600/15' : 'bg-gray-50 text-gray-600 ring-gray-500/15']">{{ examen.statut }}</span>
                     </div>
+                    <button type="button" class="bouton-secondaire" :disabled="envoi" @click="edition.ouverte ? (edition.ouverte = false) : ouvrirEdition()">
+                        <i class="fa-solid fa-pen text-xs"></i>{{ edition.ouverte ? 'Fermer' : 'Modifier l’examen' }}
+                    </button>
                 </div>
+                <form v-if="edition.ouverte" class="relative grid gap-4 border-t border-gray-100 p-5 sm:grid-cols-[1fr_1fr_180px_auto] sm:items-end sm:p-6" @submit.prevent="enregistrerExamen">
+                    <label class="etiquette">Date et heure (heure de Paris)
+                        <input v-model="edition.dateExamen" type="datetime-local" class="champ mt-1.5" required />
+                        <span class="mt-1 block text-xs font-normal text-gray-500">{{ instantEdition ? horaireExamen(instantEdition) : 'Date ou heure invalide' }}</span>
+                    </label>
+                    <label class="etiquette">Salle
+                        <input v-model="edition.salle" maxlength="100" class="champ mt-1.5" placeholder="À confirmer" />
+                        <span class="mt-1 block text-xs font-normal text-gray-500">&nbsp;</span>
+                    </label>
+                    <label class="etiquette">Statut
+                        <select v-model="edition.statut" class="champ mt-1.5"><option v-for="st in STATUTS_EXAMEN" :key="st">{{ st }}</option></select>
+                        <span class="mt-1 block text-xs font-normal text-gray-500">&nbsp;</span>
+                    </label>
+                    <div class="pb-6"><button class="bouton-action" :disabled="envoi || !instantEdition">Enregistrer</button></div>
+                    <p v-if="erreurs.statut" class="text-xs text-red-600 sm:col-span-4">{{ erreurs.statut }}</p>
+                    <p class="text-xs text-gray-500 sm:col-span-4"><i class="fa-solid fa-circle-info mr-1 text-insec-400"></i>Si la date ou la salle change, les convocations déjà envoyées redeviennent « à envoyer » pour que les étudiants reçoivent la bonne information.</p>
+                </form>
                 <dl class="relative grid gap-px border-t border-gray-100 bg-gray-100 text-sm sm:grid-cols-2 md:grid-cols-4">
                     <div class="bg-surface px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Date officielle INTEC</dt><dd class="mt-1 font-semibold text-gray-900">{{ horaireExamen(examen.dateExamen) }}</dd></div>
                     <div class="bg-surface px-5 py-4 sm:px-6"><dt class="text-xs font-medium text-gray-500">Session</dt><dd class="mt-1 font-semibold text-gray-900">{{ examen.session }}</dd></div>
@@ -277,6 +352,13 @@ async function envoyerConvocation(r: Resultat) {
                         :disabled="envoi || !convocables.length || examen.statut === 'Annulé'"
                         @click="envoyerToutesConvocations"
                     ><i class="fa-solid fa-paper-plane"></i> Envoyer les convocations ({{ convocables.length }} à envoyer)</button>
+                    <button
+                        type="button"
+                        class="bouton-action"
+                        :disabled="envoi || !aPublier.length || examen.statut === 'Annulé'"
+                        title="Envoyer aux étudiants les notes nouvelles ou corrigées"
+                        @click="publierResultats"
+                    ><i class="fa-solid fa-bullhorn"></i> Publier les résultats ({{ aPublier.length }})</button>
                 </div>
             </div>
             <div class="carte mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4 text-sm text-gray-700">
@@ -340,6 +422,7 @@ async function envoyerConvocation(r: Resultat) {
                             <span :class="['h-1.5 w-1.5 rounded-full', r.valide ? 'bg-emerald-500' : 'bg-red-500']"></span>
                             {{ r.valide ? 'UE validée' : 'UE non validée' }}
                         </span>
+                        <span v-if="r.resultatPublie === false" class="pastille ml-2 bg-amber-50 text-amber-800 ring-amber-600/20"><i class="fa-regular fa-clock text-[10px]"></i>Note non publiée</span>
                     </p>
                 </form>
                 <div v-if="!resultats.length" class="carte flex flex-col items-center px-6 py-12 text-center">

@@ -141,6 +141,10 @@ export const supprimerEtudiant = operation('supprimerEtudiant', ROLES_ADMIN, asy
             tx.get(col.pieces().where('etudiantId', '==', id)),
             tx.get(col.utilisateurs().where('etudiantId', '==', id)),
         ]);
+        // Un historique d'examen (présence pointée ou note) ne doit jamais disparaître avec la fiche.
+        if (resultats.docs.some((r) => r.get('presence') !== 'Convoqué' || (r.get('note') !== null && r.get('note') !== undefined))) {
+            refuser('Impossible de supprimer cet étudiant : il a un historique d’examen (présence ou note). Annulez plutôt son inscription.');
+        }
         const examensTouches = new Map<string, number>();
         resultats.docs.forEach((r) => examensTouches.set(r.get('examenId'), (examensTouches.get(r.get('examenId')) ?? 0) + 1));
         for (const i of inscriptions.docs) {

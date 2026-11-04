@@ -10,7 +10,9 @@ export {
 export { envoyerEmail } from './handlers/emails.js';
 export { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription, supprimerEtudiant } from './handlers/etudiants.js';
 export { exporterExcel, importerEtudiants } from './handlers/excel.js';
-export { creerExamen, enregistrerPresencesExamen, enregistrerResultat, mettreAJourPreparationExamen } from './handlers/examens.js';
+export {
+    creerExamen, enregistrerPresencesExamen, enregistrerResultat, mettreAJourPreparationExamen, modifierExamen, publierResultatsExamen,
+} from './handlers/examens.js';
 export {
     ajouterEcheance, ajouterVersement, annulerVersement, confirmerReglementBumex2024, enregistrerReglementBumex, genererEcheancier, lireTauxEuroMru, modifierEcheance,
     modifierSituationFinanciere, modifierTauxEuroMru, supprimerEcheance, traiterVersement,
