@@ -125,6 +125,17 @@ describe('Administration', () => {
             expect((await liste('etudiants')).find((e) => e.email === 'moussa@example.com')?.telephone).toBe('22000000');
         });
 
+        it('importe un CSV d’Excel en français (point-virgule, encodage Windows) et un CSV UTF-8 avec BOM', async () => {
+            const entetes = 'Prénom;Nom;E-mail;Téléphone;Statut étudiant;Code diplôme;Année académique;Année parcours;Codes UE;Date inscription (AAAA-MM-JJ);N° INTEC;Statut inscription';
+            // Excel en français enregistre en Windows-1252 : pour ces caractères, identique au latin-1.
+            const windows = Buffer.from(`${entetes}\r\nMariém;Sow;mariem@example.com;;Actif\r\n`, 'latin1').toString('base64');
+            expect(await appeler(importerEtudiants, { nom: 'export-excel.csv', contenu: windows, mode: 'ignorer' }, admin)).toMatchObject({ crees: 1, erreurs: [] });
+            expect((await liste('etudiants')).find((e) => e.email === 'mariem@example.com')?.prenom).toBe('Mariém');
+
+            const utf8 = Buffer.from(`\uFEFF${entetes.replaceAll(';', ',')}\nIbrahima,Fall,ibrahima@example.com,,Actif\n`, 'utf8').toString('base64');
+            expect(await appeler(importerEtudiants, { nom: 'modele.csv', contenu: utf8, mode: 'ignorer' }, admin)).toMatchObject({ crees: 1, erreurs: [] });
+        });
+
         it('refuse un fichier dont les colonnes ne suivent pas le modèle', async () => {
             const contenu = await classeurBase64([['Nom', 'Prénom']]);
             await attendreErreur(appeler(importerEtudiants, { nom: 'x.xlsx', contenu, mode: 'ignorer' }, admin), 'failed-precondition');
