@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ROLES_ADMIN } from '@shared/domaine';
 import { collection, orderBy, query } from 'firebase/firestore';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -12,9 +13,12 @@ import { db } from '../../firebase';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 import { useReferentiel } from '../../referentiel';
+import { aRole } from '../../session';
 import type { Etudiant, Inscription } from '../../types';
 
 const router = useRouter();
+// Création, modification et suppression : administration seulement (finance et consultation lisent).
+const estAdmin = aRole(...ROLES_ADMIN);
 const route = useRoute();
 const { formationsActives, annees, anneeCourante, formation } = useReferentiel();
 const { donnees: etudiants, chargement, erreur } = useRequete<Etudiant>(() => query(collection(db, 'etudiants'), orderBy('nom')));
@@ -128,7 +132,7 @@ async function supprimer() {
                     <option v-for="a in annees" :key="a.id" :value="a.id">Année {{ a.libelle }}</option>
                 </select>
             </label>
-            <RouterLink to="/etudiants/nouveau" class="bouton-action"><i class="fa-solid fa-plus text-xs"></i> Nouvel étudiant</RouterLink>
+            <RouterLink v-if="estAdmin" to="/etudiants/nouveau" class="bouton-action"><i class="fa-solid fa-plus text-xs"></i> Nouvel étudiant</RouterLink>
         </div>
     </header>
 
@@ -190,7 +194,7 @@ async function supprimer() {
                         Créez le premier dossier et son inscription pour {{ libelleAnnee }}, ou importez votre registre avec le modèle INSEC.
                         Les années suivantes seront ajoutées au même dossier pour conserver tout l’historique.
                     </p>
-                    <div class="mt-5 flex flex-wrap gap-3">
+                    <div v-if="estAdmin" class="mt-5 flex flex-wrap gap-3">
                         <RouterLink to="/etudiants/nouveau" class="bouton-action"><i class="fa-solid fa-plus text-xs"></i> Créer le premier dossier</RouterLink>
                         <RouterLink to="/excel" class="bouton-secondaire">
                             <i class="fa-solid fa-file-arrow-up text-xs" aria-hidden="true"></i>Importer le registre
@@ -211,7 +215,7 @@ async function supprimer() {
         </section>
         <div v-else class="carte overflow-x-auto">
             <table class="tableau">
-                <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation cette année</th><th>Statut pour l’année</th><th>Situation</th><th class="text-right">Actions</th></tr></thead>
+                <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation cette année</th><th>Statut pour l’année</th><th>Situation</th><th v-if="estAdmin" class="text-right">Actions</th></tr></thead>
                 <tbody>
                     <tr v-for="e in affiches" :key="e.id" class="cursor-pointer" @click="router.push(`/etudiants/${e.id}`)">
                         <td>
@@ -243,7 +247,7 @@ async function supprimer() {
                             <p v-if="situationInscription(e.id).detail" class="mt-1 text-xs text-gray-500">{{ situationInscription(e.id).detail }}</p>
                         </td>
                         <td><BadgeStatut :statut="e.statut" /></td>
-                        <td class="text-right whitespace-nowrap" @click.stop>
+                        <td v-if="estAdmin" class="text-right whitespace-nowrap" @click.stop>
                             <RouterLink :to="`/etudiants/${e.id}/modifier`" class="bouton-icone hover:bg-insec-50 hover:text-insec-700" title="Modifier" aria-label="Modifier"><i class="fa-solid fa-pen text-[13px]"></i></RouterLink>
                             <button class="bouton-icone hover:bg-red-50 hover:text-red-600" title="Supprimer" aria-label="Supprimer" @click="aSupprimer = e"><i class="fa-solid fa-trash text-[13px]"></i></button>
                         </td>

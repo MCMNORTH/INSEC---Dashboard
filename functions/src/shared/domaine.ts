@@ -1,7 +1,7 @@
 // Règles métier partagées entre les Cloud Functions et l'application web.
 // Ce fichier ne doit dépendre d'aucun SDK : il est importé des deux côtés.
 
-export const ROLES = ['super_admin', 'admin', 'finance', 'enseignant', 'etudiant'] as const;
+export const ROLES = ['super_admin', 'admin', 'finance', 'consultation', 'enseignant', 'etudiant'] as const;
 
 // Années scolaires gérées par l'INSEC dans le tableau de bord.
 export const ANNEE_ACADEMIQUE_PAR_DEFAUT = '2026-2027';
@@ -9,8 +9,10 @@ export const ANNEES_ACADEMIQUES_VISIBLES = ['2024-2025', '2025-2026', '2026-2027
 export type Role = (typeof ROLES)[number];
 export const ROLES_ADMIN: readonly Role[] = ['admin', 'super_admin'];
 export const ROLES_FINANCE: readonly Role[] = ['admin', 'super_admin', 'finance'];
+/** Lecture des étudiants, inscriptions, versements et résultats ; « consultation » ne peut rien modifier. */
+export const ROLES_LECTURE: readonly Role[] = ['admin', 'super_admin', 'finance', 'consultation'];
 /** Comptes créables depuis l'application : l'équipe INSEC uniquement (le super-administrateur est créé par script). */
-export const ROLES_CREABLES = ['admin', 'finance'] as const;
+export const ROLES_CREABLES = ['admin', 'finance', 'consultation'] as const;
 
 export const STATUTS_ETUDIANT = ['Actif', 'Suspendu', 'Diplômé', 'Abandon'] as const;
 export const STATUTS_INSCRIPTION = ['active', 'terminée', 'annulée', 'suspendue'] as const;
@@ -228,6 +230,7 @@ export function libelleRole(role: string): string {
         super_admin: 'Super administrateur',
         admin: 'Administrateur',
         finance: 'Finance',
+        consultation: 'Consultation',
         enseignant: 'Enseignant',
         etudiant: 'Étudiant',
     };

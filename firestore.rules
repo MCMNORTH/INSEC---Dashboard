@@ -7,21 +7,31 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function connecte() { return request.auth != null; }
-    function role() { return connecte() ? request.auth.token.get('role', '') : ''; }
+    function profil() { return /databases/$(database)/documents/utilisateurs/$(request.auth.uid); }
+    // Rôle et état lus dans le profil, que seul le serveur écrit : un changement de rôle ou une désactivation
+    // s'appliquent immédiatement, sans attendre l'expiration du jeton. Le rôle du jeton sert de repli
+    // pour un ancien profil sans rôle ; sans profil, ou compte désactivé, aucun accès.
+    function role() {
+      return !connecte() || !exists(profil()) ? ''
+        : get(profil()).data.get('actif', true) != true ? ''
+        : get(profil()).data.get('role', request.auth.token.get('role', ''));
+    }
     function admin() { return role() in ['admin', 'super_admin']; }
-    function finance() { return role() in ['admin', 'super_admin', 'finance']; }
+    // Lecture seule des étudiants et des finances (le rôle « consultation » ne modifie rien).
+    function lecture() { return role() in ['admin', 'super_admin', 'finance', 'consultation']; }
 
     // Référentiel des diplômes, UE et années scolaires.
-    match /formations/{id} { allow read: if finance(); }
-    match /annees/{id} { allow read: if finance(); }
-    match /ues/{id} { allow read: if finance(); }
+    match /formations/{id} { allow read: if lecture(); }
+    match /annees/{id} { allow read: if lecture(); }
+    match /ues/{id} { allow read: if lecture(); }
 
-    match /etudiants/{id} { allow read: if finance(); }
-    match /inscriptions/{id} { allow read: if finance(); }
-    match /versements/{id} { allow read: if finance(); }
+    match /etudiants/{id} { allow read: if lecture(); }
+    match /inscriptions/{id} { allow read: if lecture(); }
+    match /versements/{id} { allow read: if lecture(); }
 
     match /examens/{id} { allow read: if admin(); }
-    match /resultats/{id} { allow read: if admin(); }
+    // Les résultats figurent sur la fiche de l'étudiant.
+    match /resultats/{id} { allow read: if lecture(); }
     match /resultatsHistoriques/{id} { allow read: if admin(); }
 
     match /pieces/{id} { allow read: if admin(); }

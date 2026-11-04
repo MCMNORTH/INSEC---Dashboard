@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import nodemailer from 'nodemailer';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { synchroniserAlertes } from '../src/handlers/alertes.js';
-import { basculerCompte, creerCompte } from '../src/handlers/comptes.js';
+import { basculerCompte, creerCompte, modifierRoleCompte } from '../src/handlers/comptes.js';
 import { enregistrerPiece, modifierPiece, telechargerPiece } from '../src/handlers/documents.js';
 import { creerEtudiant } from '../src/handlers/etudiants.js';
 import { exporterExcel, importerEtudiants } from '../src/handlers/excel.js';
@@ -62,6 +62,38 @@ describe('Administration', () => {
             await attendreErreur(appeler(basculerCompte, { uid: superAdmin.uid }, admin), 'permission-denied');
             await appeler(basculerCompte, { uid }, superAdmin);
             expect((await auth.getUser(uid)).disabled).toBe(true);
+        });
+
+        it('crée un compte consultation, qui ne peut rien modifier', async () => {
+            const { uid } = await appeler(creerCompte, { nom: 'Collègue', email: 'collegue@example.com', role: 'consultation' }, admin);
+            expect((await auth.getUser(uid)).customClaims).toEqual({ role: 'consultation' });
+            const consult = { uid, role: 'consultation' as const };
+            await attendreErreur(appeler(ajouterEcheance, { inscriptionId: 'x', libelle: 'T', montant: 1, dateEcheance: '2026-01-01' }, consult), 'permission-denied');
+            await attendreErreur(appeler(modifierSituationFinanciere, { id: 'x', montantDu: 1, montantRemise: 0 }, consult), 'permission-denied');
+            await attendreErreur(appeler(creerEtudiant, { ...etudiant, email: 'autre@example.com' }, consult), 'permission-denied');
+            await attendreErreur(appeler(exporterExcel, { type: 'etudiants' }, consult), 'permission-denied');
+            await attendreErreur(appeler(creerCompte, { nom: 'X', email: 'x@example.com', role: 'consultation' }, consult), 'permission-denied');
+        });
+
+        it('change le rôle d’un compte, avec effet immédiat, dans les limites de chaque rôle', async () => {
+            const { uid } = await appeler(creerCompte, { nom: 'Collègue', email: 'collegue@example.com', role: 'finance' }, admin);
+            await appeler(modifierRoleCompte, { uid, role: 'consultation' }, admin);
+            expect((await auth.getUser(uid)).customClaims).toEqual({ role: 'consultation' });
+            expect(await doc(`utilisateurs/${uid}`)).toMatchObject({ role: 'consultation' });
+            // Le jeton dit encore « finance », mais le profil fait foi : l'écriture est refusée tout de suite.
+            await attendreErreur(appeler(ajouterEcheance, { inscriptionId: 'x', libelle: 'T', montant: 1, dateEcheance: '2026-01-01' }, { uid, role: 'finance' }), 'permission-denied');
+            expect((await liste('journalAudit')).some((a) => a.modele === 'User' && a.apres?.role === 'consultation')).toBe(true);
+
+            await attendreErreur(appeler(modifierRoleCompte, { uid, role: 'admin' }, admin), 'permission-denied');
+            await attendreErreur(appeler(modifierRoleCompte, { uid: admin.uid, role: 'finance' }, admin), 'failed-precondition');
+            await attendreErreur(appeler(modifierRoleCompte, { uid, role: 'super_admin' }, admin), 'invalid-argument', 'role');
+            const superAdmin = await acteur('super_admin');
+            await attendreErreur(appeler(modifierRoleCompte, { uid: superAdmin.uid, role: 'finance' }, admin), 'failed-precondition');
+            await appeler(modifierRoleCompte, { uid, role: 'admin' }, superAdmin);
+            expect(await doc(`utilisateurs/${uid}`)).toMatchObject({ role: 'admin' });
+            for (const role of ['finance', 'consultation'] as const) {
+                await attendreErreur(appeler(modifierRoleCompte, { uid, role: 'finance' }, await acteur(role)), 'permission-denied');
+            }
         });
 
         it('désactive un compte, qui perd immédiatement l’accès, mais pas le sien', async () => {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { ROLES_LECTURE } from '@shared/domaine';
 import { computed, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import BarreLaterale from './composants/BarreLaterale.vue';
 import BarreSuperieure from './composants/BarreSuperieure.vue';
 import Dialogue from './composants/Dialogue.vue';
@@ -12,7 +13,7 @@ import { aRole, session } from './session';
 const route = useRoute();
 const miseEnPage = computed(() => {
     if (route.meta.publique || !session.uid) return 'publique';
-    return aRole('admin', 'super_admin', 'finance') ? 'administration' : 'portail';
+    return aRole(...ROLES_LECTURE) ? 'administration' : 'portail';
 });
 
 const lire = (cle: string) => {
@@ -31,6 +32,12 @@ watch(menuReduit, (valeur) => {
     }
 });
 const menuMobile = ref(false);
+
+// Déconnexion automatique (compte désactivé, inactivité) : retour à la page de connexion, qui affiche le motif.
+const router = useRouter();
+watch(() => session.uid, (uid, avant) => {
+    if (avant && !uid && !route.meta.publique) void router.push('/connexion');
+});
 const recherche = ref(false);
 </script>
 

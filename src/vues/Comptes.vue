@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { libelleRole } from '@shared/domaine';
 import { collection, orderBy, query } from 'firebase/firestore';
-import { reactive } from 'vue';
+import { computed, reactive } from 'vue';
 import { appeler } from '../api';
 import Chargement from '../composants/Chargement.vue';
+import { confirmer } from '../dialogue';
 import { useRequete } from '../donnees';
 import { db } from '../firebase';
 import { useFormulaire } from '../formulaire';
@@ -16,7 +17,7 @@ const { donnees: comptes, chargement, erreur } = useRequete<Utilisateur>(() => q
 const superAdmin = aRole('super_admin');
 
 const { envoi, erreurs, soumettre } = useFormulaire();
-const f = reactive({ nom: '', email: '', role: 'finance' });
+const f = reactive({ nom: '', email: '', role: 'consultation' });
 
 /** Mot de passe aléatoire que personne ne connaît, exigé par les anciennes versions du serveur (ignoré ensuite). */
 function motDePasseJetable(): string {
@@ -37,11 +38,32 @@ async function creer() {
     } catch {
         notifier(`Compte créé, mais l’e-mail n’a pas pu être envoyé : demandez à la personne d’utiliser « Mot de passe oublié » avec ${email}.`);
     }
-    Object.assign(f, { nom: '', email: '', role: 'finance' });
+    Object.assign(f, { nom: '', email: '', role: 'consultation' });
 }
 
-/** Un administrateur ne peut gérer que les comptes finance ; le super-administrateur gère aussi les administrateurs. */
+/** Un administrateur ne gère que les comptes finance et consultation ; le super-administrateur gère aussi les administrateurs. */
 const modifiable = (c: Utilisateur) => c.id !== session.uid && (superAdmin || (c.role !== 'admin' && c.role !== 'super_admin'));
+
+/** Rôles proposés pour un compte : l'administrateur ne peut donner que Finance ou Consultation. */
+const rolesPossibles = computed(() => (superAdmin ? ['admin', 'finance', 'consultation'] : ['finance', 'consultation']));
+
+async function changerRole(c: Utilisateur, evenement: Event) {
+    const select = evenement.target as HTMLSelectElement;
+    const role = select.value;
+    const ok = await confirmer({
+        titre: 'Changer le rôle de ce compte ?',
+        message: 'Le nouveau rôle s’applique immédiatement : la personne verra les pages correspondant à ce rôle.',
+        details: { Compte: c.nom || c.email || '', 'Rôle actuel': libelleRole(c.role), 'Nouveau rôle': libelleRole(role) },
+        libelle: 'Changer le rôle',
+    });
+    if (!ok) {
+        select.value = c.role;
+        return;
+    }
+    const resultat = await soumettre(() => appeler('modifierRoleCompte', { uid: c.id, role }));
+    if (resultat) notifier(resultat.message ?? 'Rôle modifié.');
+    else select.value = c.role;
+}
 
 async function basculer(c: Utilisateur) {
     const resultat = await soumettre(() => appeler('basculerCompte', { uid: c.id }));
@@ -54,7 +76,7 @@ async function basculer(c: Utilisateur) {
         <div>
             <p class="surtitre">Administration</p>
             <h1 class="titre-page mt-1.5">Comptes & accès</h1>
-            <p class="sous-titre">Accès de l’équipe INSEC (administration et finance)</p>
+            <p class="sous-titre">Accès de l’équipe INSEC : administration, finance et consultation</p>
         </div>
     </header>
     <div class="grid gap-6 lg:grid-cols-3">
@@ -73,7 +95,17 @@ async function basculer(c: Utilisateur) {
                                     </span>
                                 </div>
                             </td>
-                            <td class="text-gray-600">{{ libelleRole(c.role) }}</td>
+                            <td class="text-gray-600">
+                                <select
+                                    v-if="modifiable(c) && rolesPossibles.includes(c.role)"
+                                    :value="c.role"
+                                    class="champ w-auto py-1.5 text-sm"
+                                    :disabled="envoi"
+                                    aria-label="Rôle du compte"
+                                    @change="changerRole(c, $event)"
+                                ><option v-for="r in rolesPossibles" :key="r" :value="r">{{ libelleRole(r) }}</option></select>
+                                <template v-else>{{ libelleRole(c.role) }}</template>
+                            </td>
                             <td>
                                 <button
                                     :class="['pastille cursor-pointer transition disabled:cursor-not-allowed disabled:opacity-70', c.actif ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/15 hover:bg-emerald-100' : 'bg-red-50 text-red-700 ring-red-600/15 hover:bg-red-100']"
@@ -105,10 +137,16 @@ async function basculer(c: Utilisateur) {
                 </label>
                 <label class="etiquette">Rôle
                     <select v-model="f.role" class="champ mt-1.5">
+                        <option value="consultation">Consultation (lecture seule)</option>
                         <option value="finance">Finance</option>
                         <option v-if="superAdmin" value="admin">Administrateur</option>
                     </select>
                 </label>
+                <ul class="space-y-1.5 rounded-xl border border-gray-100 p-3 text-xs leading-5 text-gray-600">
+                    <li><strong class="text-gray-900">Consultation</strong> : voit les étudiants, leurs fiches et les finances, sans rien modifier.</li>
+                    <li><strong class="text-gray-900">Finance</strong> : enregistre les versements, échéanciers et relances ; voit les fiches étudiants.</li>
+                    <li><strong class="text-gray-900">Administrateur</strong> : gère tout (étudiants, examens, comptes finance et consultation).</li>
+                </ul>
                 <p class="rounded-xl bg-gray-50 p-3 text-xs leading-5 text-gray-500"><i class="fa-solid fa-circle-info mr-1 text-insec-400"></i>La personne recevra un e-mail pour choisir elle-même son mot de passe.<template v-if="!superAdmin"> Seul le super-administrateur peut créer un compte administrateur.</template></p>
                 <button class="bouton-action w-full" :disabled="envoi">Créer le compte</button>
             </form>

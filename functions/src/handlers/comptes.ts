@@ -51,6 +51,28 @@ export const creerCompte = operation('creerCompte', ROLES_ADMIN, async (donnees,
     return { uid, email: v.email, message: 'Compte créé. Un e-mail va permettre à la personne de définir son mot de passe.' };
 });
 
+/**
+ * Change le rôle d'un compte de l'équipe. Le profil fait foi pour les règles et les fonctions :
+ * le nouveau rôle s'applique immédiatement ; le jeton est mis à jour à son prochain renouvellement.
+ */
+export const modifierRoleCompte = operation('modifierRoleCompte', ROLES_ADMIN, async (donnees, acteur) => {
+    const v = valider(z.object({ uid: s.id(), role: s.choix(ROLES_CREABLES) }), donnees);
+    if (v.uid === acteur.uid) refuser('Vous ne pouvez pas changer votre propre rôle.');
+    const ref = col.utilisateurs().doc(v.uid);
+    const compte = await exiger(null, ref, 'Compte introuvable.');
+    if (compte.role === 'super_admin') refuser('Le rôle du super-administrateur ne peut pas être modifié.');
+    if ((compte.role === 'admin' || v.role === 'admin') && acteur.role !== 'super_admin') {
+        throw new HttpsError('permission-denied', 'Seul le super-administrateur peut donner ou retirer le rôle administrateur.');
+    }
+    if (compte.role === v.role) return { message: 'Ce compte a déjà ce rôle.' };
+    await auth.setCustomUserClaims(v.uid, { role: v.role });
+    const lot = db.batch();
+    lot.update(ref, { role: v.role, ...trace(acteur) });
+    auditerModele(lot, acteur, 'User', v.uid, 'updated', { role: compte.role }, { role: v.role });
+    await lot.commit();
+    return { message: 'Rôle modifié. Il s’applique immédiatement.' };
+});
+
 export const basculerCompte = operation('basculerCompte', ROLES_ADMIN, async (donnees, acteur) => {
     const { uid } = valider(z.object({ uid: s.id() }), donnees);
     if (uid === acteur.uid) refuser('Vous ne pouvez pas désactiver votre propre compte.');

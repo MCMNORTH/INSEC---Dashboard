@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ROLES_ADMIN } from '@shared/domaine';
+import { ROLES_LECTURE } from '@shared/domaine';
 import { collection, orderBy, query } from 'firebase/firestore';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -27,7 +27,7 @@ watch(ouverte, async (valeur) => {
     champ.value?.focus();
 });
 const { donnees: etudiants } = useRequete<Etudiant>(() =>
-    dejaOuverte.value && aRole(...ROLES_ADMIN) ? query(collection(db, 'etudiants'), orderBy('nom')) : null,
+    dejaOuverte.value && aRole(...ROLES_LECTURE) ? query(collection(db, 'etudiants'), orderBy('nom')) : null,
 );
 
 const normaliser = (v: string) => v.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
