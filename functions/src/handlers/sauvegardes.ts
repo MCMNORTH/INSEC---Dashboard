@@ -33,10 +33,22 @@ async function collectionsAExporter(): Promise<string[]> {
     return [...racines, 'alertes'];
 }
 
+/**
+ * Fichiers copiés avec chaque sauvegarde : pièces des étudiants et documents financiers
+ * (factures INTEC, justificatifs). `champ` est la liste du manifeste ; les anciennes
+ * sauvegardes, sans « documentsFinanciers », restent lisibles.
+ */
+export const ZONES_FICHIERS = [
+    { source: 'dossiers/', dossier: 'documents', champ: 'documents' },
+    { source: 'finances/', dossier: 'finances', champ: 'documentsFinanciers' },
+] as const;
+
+type Manifeste = { chemin: string; md5: string; taille: number }[];
+
 async function copierDocuments(source: string, destination: string) {
     const [fichiers] = await bucket().getFiles({ prefix: source });
     const cible = storage.bucket(nomBucket());
-    const manifeste: { chemin: string; md5: string; taille: number }[] = [];
+    const manifeste: Manifeste = [];
     for (const fichier of fichiers) {
         const relatif = fichier.name.slice(source.length);
         await fichier.copy(cible.file(`${destination}${relatif}`));
@@ -45,14 +57,23 @@ async function copierDocuments(source: string, destination: string) {
     return manifeste;
 }
 
+/** Copie toutes les zones de fichiers dans le bucket des sauvegardes et renvoie leurs manifestes. */
+export async function copierFichiers(id: string): Promise<Record<string, Manifeste>> {
+    const manifestes: Record<string, Manifeste> = {};
+    for (const zone of ZONES_FICHIERS) manifestes[zone.champ] = await copierDocuments(zone.source, `${id}/${zone.dossier}/`);
+    return manifestes;
+}
+
 export async function verifier(id: string): Promise<{ integrite: boolean; erreur: string | null }> {
     const sauvegarde = await exiger(null, col.sauvegardes().doc(id), 'Sauvegarde introuvable.');
     const cible = storage.bucket(nomBucket());
     const [metadonnees] = await cible.file(`${id}/firestore/firestore.overall_export_metadata`).exists();
     if (!metadonnees) return { integrite: false, erreur: 'Export Firestore absent ou incomplet.' };
-    for (const d of (sauvegarde.documents ?? []) as { chemin: string; md5: string }[]) {
-        const [meta] = await cible.file(`${id}/documents/${d.chemin}`).getMetadata().catch(() => [null]);
-        if (!meta || meta.md5Hash !== d.md5) return { integrite: false, erreur: `Document altéré ou manquant : ${d.chemin}` };
+    for (const zone of ZONES_FICHIERS) {
+        for (const d of (sauvegarde[zone.champ] ?? []) as { chemin: string; md5: string }[]) {
+            const [meta] = await cible.file(`${id}/${zone.dossier}/${d.chemin}`).getMetadata().catch(() => [null]);
+            if (!meta || meta.md5Hash !== d.md5) return { integrite: false, erreur: `Document altéré ou manquant : ${zone.source}${d.chemin}` };
+        }
     }
     return { integrite: true, erreur: null };
 }
@@ -71,8 +92,9 @@ export async function executerSauvegarde(motif: string): Promise<string> {
             collectionIds: await collectionsAExporter(),
         });
         await operationExport.promise();
-        const documents = await copierDocuments('dossiers/', `${id}/documents/`);
-        await ref.update({ documents, nbDocuments: documents.length });
+        const manifestes = await copierFichiers(id);
+        const nbDocuments = Object.values(manifestes).reduce((total, m) => total + m.length, 0);
+        await ref.update({ ...manifestes, nbDocuments });
         const controle = await verifier(id);
         await ref.update({ statut: controle.integrite ? 'Terminée' : 'Échec', ...controle, termineeLe: FieldValue.serverTimestamp() });
         if (!controle.integrite) throw new Error(controle.erreur ?? 'Contrôle d’intégrité échoué.');
@@ -123,9 +145,11 @@ export const restaurerSauvegarde = operation('restaurerSauvegarde', SUPER_ADMIN,
     const client = new firestoreAdmin.v1.FirestoreAdminClient();
     const [operationImport] = await client.importDocuments({ name: cheminBase(), inputUriPrefix: `gs://${nomBucket()}/${v.id}/firestore` });
     await operationImport.promise();
-    for (const d of (sauvegarde.documents ?? []) as { chemin: string }[]) {
-        if (d.chemin.includes('..')) continue;
-        await storage.bucket(nomBucket()).file(`${v.id}/documents/${d.chemin}`).copy(bucket().file(`dossiers/${d.chemin}`));
+    for (const zone of ZONES_FICHIERS) {
+        for (const d of (sauvegarde[zone.champ] ?? []) as { chemin: string }[]) {
+            if (d.chemin.includes('..')) continue;
+            await storage.bucket(nomBucket()).file(`${v.id}/${zone.dossier}/${d.chemin}`).copy(bucket().file(`${zone.source}${d.chemin}`));
+        }
     }
     await auditerDirect(acteur, { action: 'restore', description: `Restauration depuis ${v.id}` });
     return { message: 'Restauration terminée. Une sauvegarde de précaution a été créée.' };
