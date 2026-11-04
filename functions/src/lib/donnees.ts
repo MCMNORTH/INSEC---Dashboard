@@ -63,3 +63,21 @@ export async function prochainNumero(tx: Transaction, nom: string): Promise<[num
 export function nomComplet(e: Doc | null | undefined): string {
     return `${e?.prenom ?? ''} ${e?.nom ?? ''}`.trim();
 }
+
+const normaliser = (v: unknown) =>
+    v === undefined || v === null || v === '' ? null : Array.isArray(v) ? JSON.stringify([...v].sort()) : typeof v === 'object' ? JSON.stringify(v) : String(v);
+
+/**
+ * Refuse l'enregistrement si l'un des champs du formulaire a été modifié par une autre personne
+ * depuis son ouverture. `attendu` contient les valeurs affichées à l'ouverture ; seuls ces champs
+ * sont comparés (un versement enregistré entre-temps ne bloque donc pas la modification d'une inscription).
+ */
+export function controlerModificationConcurrente(actuel: Doc, attendu: Record<string, unknown> | undefined): void {
+    if (!attendu) return;
+    if (Object.keys(attendu).some((champ) => normaliser(actuel[champ]) !== normaliser(attendu[champ]))) {
+        throw new HttpsError(
+            'failed-precondition',
+            'Cette fiche a été modifiée par une autre personne pendant que vous la modifiiez. Rechargez la page pour voir la nouvelle version, puis refaites votre modification.',
+        );
+    }
+}

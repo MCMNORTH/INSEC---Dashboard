@@ -99,6 +99,16 @@ describe('Corriger une erreur en Finances', () => {
         expect((await inscription()).echeances).toHaveLength(3);
     });
 
+    it('refuse une correction si une autre personne a changé ces montants entre-temps, mais pas après un simple versement', async () => {
+        const attendu = { montantDu: 100000, montantRemise: 0, noteFinanciere: null };
+        // Un collègue enregistre un versement : la situation reste modifiable.
+        await appeler(ajouterVersement, { ...versement, inscriptionId, montant: 5000, statut: 'Validée' }, finance);
+        await appeler(modifierSituationFinanciere, { id: inscriptionId, montantDu: 100000, montantRemise: 10000, attendu }, finance);
+        // Le formulaire d'un autre onglet, ouvert avant cette remise, est refusé.
+        await attendreErreur(appeler(modifierSituationFinanciere, { id: inscriptionId, montantDu: 90000, montantRemise: 0, attendu }, finance), 'failed-precondition');
+        expect(await inscription()).toMatchObject({ montantDu: 100000, montantRemise: 10000 });
+    });
+
     it('refuse ces corrections aux rôles non autorisés', async () => {
         const { id } = await appeler(ajouterVersement, { ...versement, inscriptionId, montant: 30000, statut: 'Validée' }, finance);
         for (const role of ['enseignant', 'etudiant'] as const) {

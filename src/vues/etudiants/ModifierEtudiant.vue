@@ -13,13 +13,18 @@ const props = defineProps<{ id: string }>();
 const router = useRouter();
 const { donnee: etudiant, chargement } = useDocument<Etudiant>(() => `etudiants/${props.id}`);
 const identite = ref<Identite | null>(null);
+// Valeurs lues à l'ouverture : le serveur refuse si une autre personne les a changées entre-temps.
+let attendu: Record<string, unknown> | null = null;
 watch(etudiant, (e) => {
-    if (e && !identite.value) identite.value = { nom: e.nom, prenom: e.prenom, email: e.email ?? '', dateNaissance: e.dateNaissance ?? '', telephone: e.telephone ?? '', statut: e.statut };
+    if (e && !identite.value) {
+        identite.value = { nom: e.nom, prenom: e.prenom, email: e.email ?? '', dateNaissance: e.dateNaissance ?? '', telephone: e.telephone ?? '', statut: e.statut };
+        attendu = { nom: e.nom, prenom: e.prenom, email: e.email ?? null, dateNaissance: e.dateNaissance ?? null, telephone: e.telephone ?? null, statut: e.statut };
+    }
 }, { immediate: true });
 const { envoi, erreurs, soumettre } = useFormulaire();
 
 async function enregistrer() {
-    const resultat = await soumettre(() => appeler('modifierEtudiant', { id: props.id, ...identite.value }));
+    const resultat = await soumettre(() => appeler('modifierEtudiant', { id: props.id, ...identite.value, attendu }));
     if (!resultat) return;
     notifier(resultat.message ?? 'Identité mise à jour.', { apresNavigation: true });
     await router.push(`/etudiants/${props.id}`);

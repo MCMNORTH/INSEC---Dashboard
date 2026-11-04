@@ -69,6 +69,30 @@ describe('Étudiants et inscriptions', () => {
         expect((await doc(`inscriptions/${inscription.id}`))?.statut).toBe('suspendue');
     });
 
+    it('accepte une modification d’inscription dont les valeurs lues n’ont pas changé, même après un versement', async () => {
+        await appeler(creerEtudiant, etudiantValide, admin);
+        const [i] = await liste('inscriptions');
+        // Valeurs telles que le formulaire les lit à l'ouverture (champs absents = null).
+        const attendu = {
+            formationId: i.formationId, anneeId: i.anneeId, anneeParcours: i.anneeParcours, dateInscription: i.dateInscription,
+            numeroIntec: i.numeroIntec ?? null, statut: i.statut, financeur: i.financeur ?? null, ueIds: [...i.ueIds].reverse(),
+        };
+        await appeler(ajouterVersement, { inscriptionId: i.id, montant: 1000, dateVersement: '2026-09-20', statut: 'Validée', modePaiement: 'Espèces' }, admin);
+        await appeler(modifierInscription, { ...etudiantValide, id: i.id, statut: 'suspendue', attendu }, admin);
+        await attendreErreur(appeler(modifierInscription, { ...etudiantValide, id: i.id, statut: 'terminée', attendu }, admin), 'failed-precondition');
+        expect((await doc(`inscriptions/${i.id}`))?.statut).toBe('suspendue');
+    });
+
+    it('refuse une modification d’identité si une autre personne l’a changée entre-temps', async () => {
+        const { id } = await appeler(creerEtudiant, etudiantValide, admin);
+        const lu = (await doc(`etudiants/${id}`))!;
+        const attendu = { nom: lu.nom, prenom: lu.prenom, email: lu.email, dateNaissance: lu.dateNaissance ?? null, telephone: lu.telephone ?? null, statut: lu.statut };
+        const identite = { nom: lu.nom, prenom: lu.prenom, email: lu.email, telephone: '', statut: 'Actif' };
+        await appeler(modifierEtudiant, { id, ...identite, nom: 'Ba-Diop', attendu }, admin);
+        await attendreErreur(appeler(modifierEtudiant, { id, ...identite, prenom: 'Aïcha', attendu }, admin), 'failed-precondition');
+        expect(await doc(`etudiants/${id}`)).toMatchObject({ nom: 'Ba-Diop', prenom: 'Awa' });
+    });
+
     it('interdit la suppression d’un étudiant ayant un historique financier', async () => {
         const { id } = await appeler(creerEtudiant, etudiantValide, admin);
         const [inscription] = await liste('inscriptions');
