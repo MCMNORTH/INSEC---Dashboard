@@ -38,6 +38,15 @@ beforeEach(async () => {
         await setDoc(doc(db, 'sauvegardes/s1'), { statut: 'Terminée' });
         await setDoc(doc(db, 'uniques/etudiant-email:awa@example.com'), { proprietaire: 'e1' });
         await setDoc(doc(db, 'utilisateurs/u-etudiant/alertes/a1'), { titre: 'Alerte', lueLe: null, archiveeLe: null, active: true });
+        await setDoc(doc(db, 'versements/v1'), { etudiantId: 'e1', montant: 1000 });
+        await setDoc(doc(db, 'pieces/p1'), { etudiantId: 'e1', type: 'Pièce d’identité' });
+        await setDoc(doc(db, 'journalEmails/m1'), { destinataire: 'awa@example.com' });
+        // Profils des comptes : les règles lisent le rôle et l'état « actif » dans le profil.
+        for (const [uid, role] of [['u-admin', 'admin'], ['u-super', 'super_admin'], ['u-finance', 'finance'], ['u-consult', 'consultation'], ['u-etudiant', 'etudiant'], ['u-prof', 'enseignant']]) {
+            await setDoc(doc(db, `utilisateurs/${uid}`), { role, actif: true });
+        }
+        await setDoc(doc(db, 'utilisateurs/u-desactive'), { role: 'admin', actif: false });
+        await setDoc(doc(db, 'utilisateurs/u-retrograde'), { role: 'consultation', actif: true });
     });
 });
 
@@ -81,9 +90,44 @@ describe('Règles Firestore', () => {
         await assertSucceeds(getDocs(collection(finance, 'inscriptions')));
         await assertSucceeds(getDoc(doc(finance, 'etudiants/e2')));
         await assertSucceeds(getDoc(doc(finance, 'formations/DGC')));
-        await assertFails(getDoc(doc(finance, 'resultats/r1')));
+        // Les résultats figurent sur la fiche de l'étudiant, désormais ouverte au rôle finance.
+        await assertSucceeds(getDoc(doc(finance, 'resultats/r1')));
         await assertFails(getDoc(doc(finance, 'examens/x1')));
         await assertFails(getDoc(doc(finance, 'journalAudit/a1')));
+        await assertFails(getDoc(doc(finance, 'pieces/p1')));
+    });
+
+    it('ouvre au rôle consultation la lecture des étudiants et des finances, sans pièces, journaux ni comptes', async () => {
+        const consult = env.authenticatedContext('u-consult', jeton('consultation')).firestore();
+        for (const chemin of ['etudiants/e1', 'inscriptions/i1', 'versements/v1', 'resultats/r1', 'formations/DGC', 'ues/TEC111']) {
+            await assertSucceeds(getDoc(doc(consult, chemin)));
+        }
+        await assertSucceeds(getDocs(collection(consult, 'etudiants')));
+        for (const chemin of ['pieces/p1', 'examens/x1', 'journalAudit/a1', 'journalEmails/m1', 'sauvegardes/s1', 'utilisateurs/u-admin']) {
+            await assertFails(getDoc(doc(consult, chemin)));
+        }
+        await assertFails(setDoc(doc(consult, 'versements/v2'), { montant: 1 }));
+        await assertFails(updateDoc(doc(consult, 'inscriptions/i1'), { totalVerse: 0 }));
+        // Son propre profil reste lisible (l'application y détecte une désactivation).
+        await assertSucceeds(getDoc(doc(consult, 'utilisateurs/u-consult')));
+    });
+
+    it('coupe immédiatement l’accès d’un compte désactivé ou sans profil, même avec un jeton valide', async () => {
+        const desactive = env.authenticatedContext('u-desactive', jeton('admin')).firestore();
+        const sansProfil = env.authenticatedContext('u-inconnu', jeton('admin')).firestore();
+        for (const ctx of [desactive, sansProfil]) {
+            await assertFails(getDoc(doc(ctx, 'etudiants/e1')));
+            await assertFails(getDoc(doc(ctx, 'journalAudit/a1')));
+        }
+        await assertSucceeds(getDoc(doc(desactive, 'utilisateurs/u-desactive')));
+    });
+
+    it('applique le rôle du profil plutôt que celui du jeton après un changement de rôle', async () => {
+        // Jeton encore « admin », profil passé en « consultation ».
+        const retrograde = env.authenticatedContext('u-retrograde', jeton('admin')).firestore();
+        await assertSucceeds(getDoc(doc(retrograde, 'etudiants/e1')));
+        await assertFails(getDoc(doc(retrograde, 'journalAudit/a1')));
+        await assertFails(getDoc(doc(retrograde, 'pieces/p1')));
     });
 
     it('réserve les sauvegardes au super-administrateur et masque les index techniques', async () => {

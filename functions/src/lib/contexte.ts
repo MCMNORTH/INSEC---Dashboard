@@ -46,6 +46,8 @@ export async function autoriser(acteur: Acteur, autorisation: Autorisation): Pro
     if (!profil.exists || profil.get('actif') === false) {
         throw new HttpsError('permission-denied', 'Ce compte est désactivé.');
     }
+    // Le rôle du profil fait foi : un changement de rôle s'applique sans attendre le renouvellement du jeton.
+    acteur.role = (profil.get('role') as Role | undefined) ?? acteur.role;
     if (autorisation === 'connecte') return;
     if (!acteur.role || !autorisation.includes(acteur.role)) {
         throw new HttpsError('permission-denied', 'Accès refusé pour votre rôle.');

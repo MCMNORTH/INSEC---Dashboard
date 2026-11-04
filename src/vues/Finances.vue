@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
     diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
-    montantEnRetard, montantNet, soldeRestant, statutPaiement, TARIFS_UE, totalEcheances,
+    montantEnRetard, montantNet, ROLES_FINANCE, soldeRestant, statutPaiement, TARIFS_UE, totalEcheances,
 } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
@@ -342,6 +342,8 @@ const dateTaux = ref<string | null>(null);
 const chargementTaux = ref(true);
 const erreurTaux = ref('');
 const tauxAdmin = computed(() => aRole('admin', 'super_admin'));
+// Le rôle « consultation » voit tout en lecture seule : aucun formulaire ni bouton d'action.
+const peutModifier = computed(() => aRole(...ROLES_FINANCE));
 const nombreFormate = (v: number) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const euros = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(v);
 const dateTauxFormatee = computed(() => dateTaux.value ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(dateTaux.value)) : null);
@@ -455,7 +457,7 @@ const totauxFinanciers = computed(() => ({
                         <i class="fa-solid fa-magnifying-glass pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-[13px] text-gray-400"></i>
                         <input v-model="recherche" type="search" placeholder="Rechercher un étudiant…" class="champ pl-10" aria-label="Rechercher un étudiant" />
                     </span>
-                    <button v-if="retardsAnnee" type="button" class="bouton-secondaire text-red-600" :disabled="envoi" @click="relancerTous">
+                    <button v-if="retardsAnnee && peutModifier" type="button" class="bouton-secondaire text-red-600" :disabled="envoi" @click="relancerTous">
                         <i class="fa-regular fa-paper-plane text-xs"></i>Relancer les {{ retardsAnnee }} retard(s)
                     </button>
                 </div>
@@ -613,7 +615,7 @@ const totauxFinanciers = computed(() => ({
                                             <p class="mt-2 text-xs opacity-80">Aucun versement ni reçu étudiant : ce financement est suivi séparément.</p>
                                         </div>
                                         <button
-                                            v-if="inscription.statutBumex === 'reglee'"
+                                            v-if="inscription.statutBumex === 'reglee' && peutModifier"
                                             type="button"
                                             class="bouton-fantome shrink-0 text-xs text-gray-500 hover:text-red-600"
                                             :disabled="envoi"
@@ -621,7 +623,7 @@ const totauxFinanciers = computed(() => ({
                                         >Annuler</button>
                                     </div>
 
-                                    <form v-if="inscription.statutBumex !== 'reglee'" class="rounded-2xl bg-gray-50/70 p-5 ring-1 ring-gray-100" @submit.prevent="confirmerReglementBumex">
+                                    <form v-if="inscription.statutBumex !== 'reglee' && peutModifier" class="rounded-2xl bg-gray-50/70 p-5 ring-1 ring-gray-100" @submit.prevent="confirmerReglementBumex">
                                         <p class="text-sm font-semibold text-gray-900">Enregistrer le règlement de BUMEX</p>
                                         <p class="mt-0.5 text-xs text-gray-500">À remplir quand BUMEX a effectivement payé cette inscription.</p>
                                         <div class="mt-4 grid gap-3 sm:grid-cols-3">
@@ -670,7 +672,7 @@ const totauxFinanciers = computed(() => ({
                                                 <strong class="tabular-nums">{{ inscription.ueIds.length }} UE × {{ montant(tarifUe(inscription) ?? 0) }} = {{ montant(tarifDe(inscription) ?? 0) }} MRU</strong>
                                                 {{ ' ' }}<span class="text-amber-800/80">({{ ecartDe(inscription)! > 0 ? '+' : '' }}{{ montant(ecartDe(inscription)!) }})</span>.
                                             </span>
-                                            <button type="button" class="bouton-secondaire min-h-0 py-1.5 text-xs" @click="appliquerTarif">Utiliser le tarif</button>
+                                            <button v-if="peutModifier" type="button" class="bouton-secondaire min-h-0 py-1.5 text-xs" @click="appliquerTarif">Utiliser le tarif</button>
                                         </div>
                                         <div class="mt-4 flex items-center gap-3">
                                             <span class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
@@ -698,7 +700,7 @@ const totauxFinanciers = computed(() => ({
                                                 ><i class="fa-regular fa-envelope text-xs"></i>Envoyer la facture</button>
                                             </template>
                                             <button
-                                                v-if="montantEnRetard(inscription) > 0"
+                                                v-if="montantEnRetard(inscription) > 0 && peutModifier"
                                                 type="button"
                                                 class="bouton-danger"
                                                 :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
@@ -709,7 +711,8 @@ const totauxFinanciers = computed(() => ({
                                             <template v-if="emailEtudiantValide"><i class="fa-regular fa-envelope mr-1"></i>{{ selectionne.email }}</template>
                                             <template v-else>
                                                 <i class="fa-solid fa-triangle-exclamation mr-1 text-amber-500"></i>Adresse e-mail absente ou invalide :
-                                                <RouterLink :to="`/etudiants/${selectionne.id}/modifier`" class="lien">corriger la fiche</RouterLink>.
+                                                <RouterLink v-if="aRole('admin', 'super_admin')" :to="`/etudiants/${selectionne.id}/modifier`" class="lien">corriger la fiche</RouterLink>
+                                                <template v-else>à corriger par l’administration</template>.
                                             </template>
                                             <template v-if="inscription.derniereRelanceLe"> · Dernière relance le {{ date(inscription.derniereRelanceLe) }}<template v-if="inscription.nbRelances"> ({{ inscription.nbRelances }} au total)</template></template>
                                         </p>
@@ -757,7 +760,7 @@ const totauxFinanciers = computed(() => ({
                                                     </div>
                                                     <p v-if="v.motifAnnulation || v.motifRejet" class="mt-2 text-xs text-red-600">Motif : {{ v.motifAnnulation || v.motifRejet }}</p>
                                                     <p class="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 pt-2.5 text-xs">
-                                                        <template v-if="v.statut === 'En attente'">
+                                                        <template v-if="v.statut === 'En attente' && peutModifier">
                                                             <button type="button" class="cursor-pointer font-semibold text-emerald-700 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Validée')">Valider</button>
                                                             <button type="button" class="cursor-pointer font-semibold text-red-600 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Rejetée')">Rejeter</button>
                                                         </template>
@@ -765,7 +768,7 @@ const totauxFinanciers = computed(() => ({
                                                             <button type="button" class="lien" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))">Reçu PDF</button>
                                                             <button type="button" class="lien disabled:cursor-not-allowed disabled:opacity-50" :disabled="envoi || !emailEtudiantValide" @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')">Envoyer le reçu</button>
                                                         </template>
-                                                        <button v-if="v.statut === 'Validée'" type="button" class="ml-auto cursor-pointer font-medium text-gray-400 hover:text-red-600" :disabled="envoi" @click="annulerVersement(v)">Annuler</button>
+                                                        <button v-if="v.statut === 'Validée' && peutModifier" type="button" class="ml-auto cursor-pointer font-medium text-gray-400 hover:text-red-600" :disabled="envoi" @click="annulerVersement(v)">Annuler</button>
                                                     </p>
                                                 </li>
                                                 <li v-if="!versements.length" class="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">Aucun versement pour l’instant.</li>
@@ -773,7 +776,7 @@ const totauxFinanciers = computed(() => ({
                                             <p v-if="inscription.statut === 'annulée'" class="self-start rounded-2xl bg-gray-50/70 p-4 text-sm leading-6 text-gray-600 ring-1 ring-gray-100">
                                                 <i class="fa-solid fa-ban mr-1 text-gray-400"></i>Inscription annulée : aucun nouveau versement ne peut être enregistré.
                                             </p>
-                                            <form v-else class="space-y-2.5 self-start rounded-2xl bg-gray-50/70 p-4 ring-1 ring-gray-100" @submit.prevent="confirmerVersement">
+                                            <form v-else-if="peutModifier" class="space-y-2.5 self-start rounded-2xl bg-gray-50/70 p-4 ring-1 ring-gray-100" @submit.prevent="confirmerVersement">
                                                 <p class="text-sm font-semibold text-gray-900">Nouveau versement</p>
                                                 <label class="etiquette">Montant (MRU)<input v-model.number="versement.montant" type="number" min="1" class="champ mt-1" required /></label>
                                                 <label class="etiquette">Date<input v-model="versement.dateVersement" type="date" class="champ mt-1" required /></label>
@@ -820,15 +823,15 @@ const totauxFinanciers = computed(() => ({
                                                                 </span>
                                                             </span>
                                                             <strong class="text-sm text-gray-900 tabular-nums">{{ montant(e.montant) }} <span class="text-[11px] font-medium text-gray-400">MRU</span></strong>
-                                                            <button type="button" class="bouton-icone h-8 w-8" title="Modifier" :disabled="envoi" @click="editerEcheance(e)"><i class="fa-solid fa-pen text-[11px]"></i></button>
-                                                            <button type="button" class="bouton-icone h-8 w-8 hover:bg-red-50 hover:text-red-600" title="Supprimer" :disabled="envoi" @click="supprimerEcheance(e)"><i class="fa-solid fa-trash text-[11px]"></i></button>
+                                                            <button v-if="peutModifier" type="button" class="bouton-icone h-8 w-8" title="Modifier" :disabled="envoi" @click="editerEcheance(e)"><i class="fa-solid fa-pen text-[11px]"></i></button>
+                                                            <button v-if="peutModifier" type="button" class="bouton-icone h-8 w-8 hover:bg-red-50 hover:text-red-600" title="Supprimer" :disabled="envoi" @click="supprimerEcheance(e)"><i class="fa-solid fa-trash text-[11px]"></i></button>
                                                         </div>
                                                     </li>
                                                     <li v-if="!inscription.echeances?.length" class="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">Aucune échéance. Générez un échéancier ou ajoutez une échéance.</li>
                                                 </ul>
                                                 <p v-if="erreurs.montant" class="mt-2 text-xs text-red-600">{{ erreurs.montant }}</p>
                                             </div>
-                                            <div class="space-y-4 self-start">
+                                            <div v-if="peutModifier" class="space-y-4 self-start">
                                                 <form class="space-y-2.5 rounded-2xl bg-gray-50/70 p-4 ring-1 ring-gray-100" @submit.prevent="genererEcheancier">
                                                     <p class="text-sm font-semibold text-gray-900">Générer un échéancier</p>
                                                     <p class="text-xs text-gray-500">Répartit le reste à payer ({{ montant(soldeRestant(inscription)) }} MRU). Les versements déjà validés sont repris sur une première ligne « Déjà versé ».</p>
@@ -854,7 +857,7 @@ const totauxFinanciers = computed(() => ({
                                         </div>
 
                                         <!-- Situation financière -->
-                                        <form v-else class="max-w-xl space-y-4" @submit.prevent="majSituation">
+                                        <form v-else class="max-w-xl" @submit.prevent="majSituation"><fieldset :disabled="!peutModifier" class="space-y-4">
                                             <p class="text-sm text-gray-500">Montant facturé et remise accordée pour cette inscription. Le net à payer et le reste sont recalculés automatiquement.</p>
                                             <div class="grid grid-cols-2 gap-3">
                                                 <label class="etiquette">Montant brut (MRU)<input v-model.number="situation.montantDu" type="number" min="0" class="champ mt-1.5" required /></label>
@@ -863,12 +866,13 @@ const totauxFinanciers = computed(() => ({
                                             <p v-if="erreurs.montantRemise" class="text-xs text-red-600">{{ erreurs.montantRemise }}</p>
                                             <p v-if="tarifDe(inscription) !== null" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
                                                 <span><i class="fa-solid fa-calculator mr-1.5 text-gray-400"></i>Tarif : {{ inscription.ueIds.length }} UE × {{ montant(tarifUe(inscription) ?? 0) }} = <strong class="text-gray-800 tabular-nums">{{ montant(tarifDe(inscription)!) }} MRU</strong></span>
-                                                <button v-if="situation.montantDu !== tarifDe(inscription)" type="button" class="lien" @click="situation.montantDu = tarifDe(inscription)!">Utiliser ce montant</button>
+                                                <button v-if="situation.montantDu !== tarifDe(inscription) && peutModifier" type="button" class="lien" @click="situation.montantDu = tarifDe(inscription)!">Utiliser ce montant</button>
                                                 <span v-else class="text-emerald-700"><i class="fa-solid fa-check mr-1"></i>Conforme au tarif</span>
                                             </p>
                                             <label class="etiquette">Note financière interne<textarea v-model="situation.noteFinanciere" class="champ mt-1.5" rows="3" maxlength="2000"></textarea></label>
-                                            <button class="bouton-principal" :disabled="envoi"><i class="fa-solid fa-check text-xs"></i>Enregistrer</button>
-                                        </form>
+                                            <button v-if="peutModifier" class="bouton-principal" :disabled="envoi"><i class="fa-solid fa-check text-xs"></i>Enregistrer</button>
+                                            <p v-else class="text-xs text-gray-500"><i class="fa-solid fa-eye mr-1"></i>Consultation : lecture seule.</p>
+                                        </fieldset></form>
                                     </div>
                                 </template>
                             </div>
@@ -985,7 +989,7 @@ const totauxFinanciers = computed(() => ({
                 </section>
             </div>
 
-            <DocumentsFinanciers v-if="anneeSynthese" :annee-id="anneeSynthese" :libelle-annee="carte?.libelle ?? anneeSynthese" />
+            <DocumentsFinanciers v-if="anneeSynthese && peutModifier" :annee-id="anneeSynthese" :libelle-annee="carte?.libelle ?? anneeSynthese" />
 
             <p v-if="totauxFinanciers.diplomesAControler" class="mb-4 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
                 <i class="fa-solid fa-triangle-exclamation mt-0.5 text-amber-500"></i>

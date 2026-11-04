@@ -1,4 +1,4 @@
-import { ROLES_ADMIN, ROLES_FINANCE, type Role } from '@shared/domaine';
+import { ROLES_ADMIN, ROLES_LECTURE, type Role } from '@shared/domaine';
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { apresNavigation } from './notifications';
 import { accueil, aRole, session, sessionPrete } from './session';
@@ -15,6 +15,8 @@ declare module 'vue-router' {
 }
 
 const admin = { roles: ROLES_ADMIN };
+// Pages consultables en lecture seule (finance et consultation compris).
+const lecture = { roles: ROLES_LECTURE };
 
 const routes: RouteRecordRaw[] = [
     { path: '/', redirect: '/connexion' },
@@ -30,9 +32,9 @@ const routes: RouteRecordRaw[] = [
     { path: '/admin/tableau-de-bord', component: () => import('./vues/admin/TableauDeBord.vue'), meta: { ...admin, titre: 'Tableau de bord' } },
     { path: '/candidatures', redirect: '/admin/tableau-de-bord' },
     { path: '/candidatures/:pathMatch(.*)*', redirect: '/admin/tableau-de-bord' },
-    { path: '/etudiants', component: () => import('./vues/etudiants/ListeEtudiants.vue'), meta: { ...admin, titre: 'Étudiants' } },
+    { path: '/etudiants', component: () => import('./vues/etudiants/ListeEtudiants.vue'), meta: { ...lecture, titre: 'Étudiants' } },
     { path: '/etudiants/nouveau', component: () => import('./vues/etudiants/NouvelEtudiant.vue'), meta: { ...admin, titre: 'Nouvel étudiant' } },
-    { path: '/etudiants/:id', component: () => import('./vues/etudiants/FicheEtudiant.vue'), props: true, meta: { ...admin, titre: 'Étudiant' } },
+    { path: '/etudiants/:id', component: () => import('./vues/etudiants/FicheEtudiant.vue'), props: true, meta: { ...lecture, titre: 'Étudiant' } },
     { path: '/etudiants/:id/modifier', component: () => import('./vues/etudiants/ModifierEtudiant.vue'), props: true, meta: { ...admin, titre: 'Modifier l’étudiant' } },
     { path: '/etudiants/:id/documents', component: () => import('./vues/etudiants/DocumentsEtudiant.vue'), props: true, meta: { ...admin, titre: 'Dossier documentaire' } },
     { path: '/etudiants/:id/inscriptions/nouvelle', component: () => import('./vues/etudiants/EditionInscription.vue'), props: (r) => ({ etudiantId: r.params.id }), meta: { ...admin, titre: 'Nouvelle inscription' } },
@@ -51,7 +53,7 @@ const routes: RouteRecordRaw[] = [
     { path: '/convention-intec', component: () => import('./vues/admin/ConventionIntec.vue'), meta: { ...admin, titre: 'Convention INTEC' } },
     { path: '/audit', component: () => import('./vues/Audit.vue'), meta: { ...admin, titre: 'Journal d’audit' } },
     { path: '/sauvegardes', component: () => import('./vues/Sauvegardes.vue'), meta: { roles: ['super_admin'], titre: 'Sauvegardes' } },
-    { path: '/finances', component: () => import('./vues/Finances.vue'), meta: { roles: ROLES_FINANCE, titre: 'Finances' } },
+    { path: '/finances', component: () => import('./vues/Finances.vue'), meta: { ...lecture, titre: 'Finances' } },
     { path: '/alertes', component: () => import('./vues/Alertes.vue'), meta: { titre: 'Alertes' } },
     { path: '/portail/:pathMatch(.*)*', redirect: '/acces-refuse' },
     { path: '/:chemin(.*)*', component: () => import('./vues/Introuvable.vue'), meta: { publique: true, titre: 'Page introuvable' } },

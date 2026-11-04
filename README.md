@@ -17,7 +17,7 @@ L’application fonctionne entièrement sur **Firebase** :
 
 ## Architecture
 
-- **Lectures** : le navigateur lit Firestore en temps réel ; les règles limitent chaque rôle à ses données (un étudiant ne voit que son dossier, la finance n’accède ni au journal d’audit ni aux résultats, etc.).
+- **Lectures** : le navigateur lit Firestore en temps réel ; les règles limitent chaque rôle à ses données. Le rôle et l’état « actif » sont lus dans le profil (`utilisateurs/{uid}`, écrit seulement par le serveur) : un changement de rôle ou une désactivation s’appliquent immédiatement. Finance et Consultation lisent les étudiants, inscriptions, versements et résultats, mais ni les pièces déposées, ni les journaux, ni les comptes ; Consultation ne peut rien modifier.
 - **Écritures** : toutes passent par des fonctions appelables (`functions/src/handlers`) qui valident les données, appliquent les règles métier dans une transaction et ajoutent l’entrée du **journal d’audit** dans la même transaction. Aucune écriture directe n’est autorisée depuis le navigateur, sauf le marquage lu/archivé de ses propres alertes.
 - **Règles partagées** : les calculs financiers et académiques (`functions/src/shared/domaine.ts`) sont utilisés à la fois par les fonctions et par l’interface.
 - **E-mails** : les opérations ajoutent un document à `journalEmails` ; le déclencheur `envoyerEmail` l’expédie par SMTP et met à jour son statut (`Envoyé` / `Échec`), visible dans *Communications*.
@@ -46,6 +46,7 @@ Comptes créés par `amorcer:local` (émulateurs uniquement) :
 | Super-administrateur | `superadmin@insec.test` | aucun : utiliser « Mot de passe oublié » (lien visible dans l’Emulator UI, onglet Authentication) |
 | Administrateur | `admin@insec.test` | `insec-demo-2026` |
 | Finance | `finance@insec.test` | `insec-demo-2026` |
+| Consultation (lecture seule) | `consultation@insec.test` | `insec-demo-2026` |
 
 En local, les e-mails sont simulés (journalisés comme envoyés) et l’interface Emulator UI est disponible sur http://127.0.0.1:4000.
 
@@ -86,7 +87,7 @@ npm run build                    # vérification des types et compilation de l�
 
 ## Sauvegarde et restauration
 
-- Une sauvegarde est créée chaque jour à 02:00 (heure de Nouakchott) : export Firestore géré + copie des pièces de `dossiers/`, avec contrôle d’intégrité (MD5). Les sauvegardes de plus de 30 jours sont purgées.
+- Une sauvegarde est créée chaque jour à 02:00 (heure de Nouakchott) : export Firestore géré + copie des pièces de `dossiers/` et des documents financiers de `finances/`, avec contrôle d’intégrité (MD5). Les sauvegardes de plus de 30 jours sont purgées.
 - La restauration est réservée au super-administrateur : elle exige la saisie de son mot de passe (ré-authentification de moins de 5 minutes) et la confirmation `RESTAURER`. Une sauvegarde de précaution est créée automatiquement avant l’import.
 - L’import Firestore remplace les documents présents dans la sauvegarde mais **ne supprime pas** ceux créés depuis. Pour un retour exact à un état antérieur, restaurez dans un projet vide.
 - Testez périodiquement une restauration dans un projet Firebase distinct.

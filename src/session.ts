@@ -34,6 +34,12 @@ async function appliquer(utilisateur: User | null) {
         Object.assign(session, { uid: null, nom: '', email: '', role: null, etudiantId: null, enseignantId: null });
         return;
     }
+    // Session restaurée après une longue inactivité (navigateur rouvert le lendemain) : fermée.
+    const enregistree = activiteEnregistree();
+    if (enregistree && Date.now() - enregistree > INACTIVITE_MS) {
+        await deconnexion(MESSAGE_INACTIVITE);
+        return;
+    }
     const jeton = await utilisateur.getIdTokenResult();
     Object.assign(session, {
         uid: utilisateur.uid,
@@ -43,10 +49,64 @@ async function appliquer(utilisateur: User | null) {
         etudiantId: (jeton.claims.etudiantId as string | undefined) ?? null,
         enseignantId: (jeton.claims.enseignantId as string | undefined) ?? null,
     });
-    // Déconnexion immédiate si le compte est désactivé pendant la session.
+    // Déconnexion immédiate si le compte est désactivé pendant la session ; un changement de rôle
+    // (le profil fait foi) renouvelle le jeton et recharge l'application sur l'accueil du nouveau rôle.
     arreterProfil = onSnapshot(doc(db, 'utilisateurs', utilisateur.uid), (profil) => {
-        if (profil.exists() && profil.get('actif') === false) void deconnexion('Ce compte est désactivé.');
+        if (!profil.exists()) return;
+        if (profil.get('actif') === false) {
+            void deconnexion('Ce compte est désactivé.');
+            return;
+        }
+        const roleProfil = profil.get('role') as Role | undefined;
+        if (roleProfil && session.role && roleProfil !== session.role) {
+            void utilisateur.getIdToken(true).finally(() => window.location.assign(accueil(roleProfil)));
+        }
     }, () => undefined);
+    noterActivite();
+}
+
+// Fermeture de session après 30 minutes sans activité, tous onglets confondus (poste partagé).
+const INACTIVITE_MS = 30 * 60 * 1000;
+const MESSAGE_INACTIVITE = 'Session fermée après 30 minutes d’inactivité. Reconnectez-vous pour continuer.';
+const CLE_ACTIVITE = 'insec.derniereActivite';
+let derniereActivite = Date.now();
+
+function noterActivite(): void {
+    derniereActivite = Date.now();
+    try {
+        localStorage.setItem(CLE_ACTIVITE, String(derniereActivite));
+    } catch {
+        // Stockage indisponible : l'activité de cet onglet seul est prise en compte.
+    }
+}
+
+function activiteEnregistree(): number {
+    try {
+        return Number(localStorage.getItem(CLE_ACTIVITE) ?? 0);
+    } catch {
+        return 0;
+    }
+}
+
+const activiteRecente = () => Math.max(derniereActivite, activiteEnregistree());
+
+if (typeof window !== 'undefined') {
+    let enregistreeLe = 0;
+    const surActivite = () => {
+        // Au plus une écriture toutes les 30 secondes.
+        if (Date.now() - enregistreeLe > 30_000) {
+            enregistreeLe = Date.now();
+            noterActivite();
+        }
+    };
+    for (const evenement of ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const) {
+        window.addEventListener(evenement, surActivite, { passive: true });
+    }
+    window.setInterval(() => {
+        if (session.uid && Date.now() - activiteRecente() > INACTIVITE_MS) {
+            void deconnexion(MESSAGE_INACTIVITE);
+        }
+    }, 60_000);
 }
 
 onAuthStateChanged(auth, async (utilisateur) => {
@@ -68,6 +128,8 @@ export function accueil(role: Role | null = session.role): string {
             return '/admin/tableau-de-bord';
         case 'finance':
             return '/finances';
+        case 'consultation':
+            return '/etudiants';
         case 'enseignant':
         case 'etudiant':
             return '/acces-refuse';
@@ -91,6 +153,7 @@ export const messageAuth = (erreur: unknown) =>
 
 export async function connexion(email: string, motDePasse: string): Promise<void> {
     session.messageDeconnexion = '';
+    noterActivite();
     const { user } = await signInWithEmailAndPassword(auth, email.trim(), motDePasse);
     await appliquer(user);
 }

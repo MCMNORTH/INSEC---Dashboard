@@ -6,7 +6,7 @@ import { mettreEnFileEmail } from '../lib/email.js';
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, valeursAttendues, z } from '../lib/validation.js';
 import {
-    dateDuJour, decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE,
+    dateDuJour, decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, ROLES_LECTURE,
     soldeRestant, STATUT_VERSEMENT_ANNULE, STATUTS_VERSEMENT, type Echeance, type SituationFinanciere,
 } from '../shared/domaine.js';
 
@@ -327,7 +327,7 @@ export const genererEcheancier = operation('genererEcheancier', ROLES_FINANCE, a
 
 const tauxEuroMruRef = () => db.collection('parametres').doc('tauxEuroMru');
 
-export const lireTauxEuroMru = operation('lireTauxEuroMru', ROLES_FINANCE, async () => {
+export const lireTauxEuroMru = operation('lireTauxEuroMru', ROLES_LECTURE, async () => {
     const document = await tauxEuroMruRef().get();
     if (!document.exists) return { taux: null, modifieLe: null };
     const modifieLe = document.get('modifieLe');
