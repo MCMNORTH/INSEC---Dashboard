@@ -172,12 +172,26 @@ export const exporterExcel = operation(
     { memory: '512MiB', timeoutSeconds: 120 },
 );
 
+/**
+ * Texte d'un fichier CSV : UTF-8 (avec ou sans BOM), sinon Windows-1252, l'encodage
+ * des CSV enregistrés par Excel en français (« CSV (séparateur : point-virgule) »).
+ */
+export function texteCsv(contenu: Buffer): string {
+    let texte: string;
+    try {
+        texte = new TextDecoder('utf-8', { fatal: true }).decode(contenu);
+    } catch {
+        texte = new TextDecoder('windows-1252').decode(contenu);
+    }
+    return texte.replace(/^﻿/, '');
+}
+
 async function lireLignes(nom: string, contenu: Buffer): Promise<string[][]> {
     const wb = new ExcelJS.Workbook();
     const feuille = nom.toLowerCase().endsWith('.csv')
         ? await (() => {
-            const texte = contenu.toString('utf8').replace(/^\\uFEFF/, '');
-            const entete = texte.split(/\\r?\\n/, 1)[0] ?? '';
+            const texte = texteCsv(contenu);
+            const entete = texte.split(/\r?\n/, 1)[0] ?? '';
             const nombre = (separateur: string) => (entete.match(new RegExp(separateur === ';' ? ';' : ',', 'g')) ?? []).length;
             const delimiteur = nombre(';') > nombre(',') ? ';' : ',';
             return wb.csv.read(Readable.from(texte), { parserOptions: { delimiter: delimiteur } });
