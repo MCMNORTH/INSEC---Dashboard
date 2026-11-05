@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { confirmer } from '../dialogue';
 import { correspond, initiales, LIBELLES_ROLES, NAVIGATION } from '../navigation';
 import { aRole, deconnexion, session } from '../session';
 import { useAlertesNonLues } from './alertesNonLues';
@@ -35,6 +36,13 @@ const THEMES: { valeur: ChoixTheme; libelle: string; icone: string }[] = [
 const estMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 async function quitter() {
+    const ok = await confirmer({
+        titre: 'Se déconnecter ?',
+        message: 'Vous devrez saisir à nouveau votre e-mail et votre mot de passe pour revenir dans le tableau de bord.',
+        libelle: 'Se déconnecter',
+        ton: 'danger',
+    });
+    if (!ok) return;
     await deconnexion();
     await router.push('/connexion');
 }
