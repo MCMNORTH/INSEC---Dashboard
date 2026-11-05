@@ -255,6 +255,10 @@
 /* ——— Formulaires ——— */
 @utility champ {
     @apply w-full rounded-xl border border-gray-200 bg-surface px-3.5 py-2.5 text-sm text-gray-900 shadow-xs transition duration-150 placeholder:text-gray-400 hover:border-gray-300 focus:border-insec-500 focus:ring-4 focus:ring-insec-500/12 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500;
+    /* Liste déroulante : place réservée à droite pour la flèche, qui ne chevauche jamais le texte. */
+    &:is(select) {
+        @apply pr-10;
+    }
 }
 @utility etiquette {
     @apply block text-[13px] font-medium text-gray-700;

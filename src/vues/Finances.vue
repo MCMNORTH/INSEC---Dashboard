@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-    diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
+    coutIntecEuro, diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
     montantEnRetard, montantNet, ROLES_FINANCE, soldeRestant, statutPaiement, TARIFS_UE, totalEcheances,
 } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
@@ -382,11 +382,10 @@ const detailsFinanciers = computed(() => {
         const diplome = diplomeTarife(code);
         const tarif = diplome ? { diplome, intec: TARIFS_UE[diplome].intecEuro, mru: TARIFS_UE[diplome].mru } : null;
         const unites = dossier.ueIds?.length ?? 0;
-        const coutIntecEuro = tarif ? tarif.intec * unites : null;
+        const coutEuro = coutIntecEuro(code, unites);
         const tarifMru = tarif ? tarif.mru * unites : null;
-        const coutIntecMru = coutIntecEuro !== null && tauxEuroMru.value !== null ? Math.round(coutIntecEuro * tauxEuroMru.value) : null;
+        const coutIntecMru = coutEuro !== null && tauxEuroMru.value !== null ? Math.round(coutEuro * tauxEuroMru.value) : null;
         const financeurBumex = dossier.financeur === 'bumex';
-        const allocationBumex = financeurBumex ? (dossier.montantBumex ?? montantNet(dossier)) : 0;
         const margeTheorique = !financeurBumex && tarifMru !== null && coutIntecMru !== null ? tarifMru - coutIntecMru : null;
         return {
             id: dossier.id,
@@ -394,12 +393,11 @@ const detailsFinanciers = computed(() => {
             code: tarif?.diplome ?? (code || 'Diplôme à vérifier'),
             unites,
             financeurBumex,
-            coutIntecEuro,
+            coutIntecEuro: coutEuro,
             coutIntecMru,
             tarifMru,
             encaisse: financeurBumex ? null : dossier.totalVerse ?? 0,
             restant: financeurBumex ? null : soldeRestant(dossier),
-            allocationBumex,
             bumexRegle: dossier.statutBumex === 'reglee',
             margeTheorique,
         };
@@ -410,7 +408,9 @@ const totauxFinanciers = computed(() => ({
     coutIntecEuro: detailsFinanciers.value.reduce((total, ligne) => total + (ligne.coutIntecEuro ?? 0), 0),
     coutIntecMru: tauxEuroMru.value === null ? null : Math.round(detailsFinanciers.value.reduce((total, ligne) => total + (ligne.coutIntecEuro ?? 0), 0) * tauxEuroMru.value),
     tarifEtudiantsMru: detailsFinanciers.value.filter((ligne) => !ligne.financeurBumex).reduce((total, ligne) => total + (ligne.tarifMru ?? 0), 0),
-    financementInterneBumex: detailsFinanciers.value.filter((ligne) => ligne.financeurBumex).reduce((total, ligne) => total + ligne.allocationBumex, 0),
+    // BUMEX règle à l'INTEC le tarif des UE en euros, sans marge pour l'INSEC.
+    financementBumexEuro: detailsFinanciers.value.filter((ligne) => ligne.financeurBumex).reduce((total, ligne) => total + (ligne.coutIntecEuro ?? 0), 0),
+    financementBumexMru: tauxEuroMru.value === null ? null : Math.round(detailsFinanciers.value.filter((ligne) => ligne.financeurBumex).reduce((total, ligne) => total + (ligne.coutIntecEuro ?? 0), 0) * tauxEuroMru.value),
     margeEtudiantsMru: detailsFinanciers.value.some((ligne) => !ligne.financeurBumex && ligne.margeTheorique === null) ? null : detailsFinanciers.value.filter((ligne) => !ligne.financeurBumex).reduce((total, ligne) => total + (ligne.margeTheorique ?? 0), 0),
     diplomesAControler: detailsFinanciers.value.filter((ligne) => ligne.coutIntecEuro === null).length,
 }));
@@ -920,8 +920,9 @@ const totauxFinanciers = computed(() => ({
                         <p class="text-[13px] font-medium text-gray-500">Financement BUMEX · interne</p>
                         <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm"><i class="fa-solid fa-building-columns text-[13px]"></i></span>
                     </div>
-                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ montant(totauxFinanciers.financementInterneBumex) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></p>
-                    <p class="mt-2.5 text-xs text-gray-500">Financement interne à l’INSEC, sans recette externe pour le groupe</p>
+                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ euros(totauxFinanciers.financementBumexEuro) }}</p>
+                    <p class="mt-2.5 text-xs text-gray-500">{{ totauxFinanciers.financementBumexMru === null ? 'Équivalent MRU à calculer après saisie du taux' : `≈ ${montant(totauxFinanciers.financementBumexMru)} MRU` }}</p>
+                    <p class="mt-1 text-xs text-gray-400">Tarif INTEC par UE, payé en euros, sans marge</p>
                 </article>
                 <article class="carte p-5">
                     <div class="flex items-start justify-between gap-3">
@@ -1021,7 +1022,8 @@ const totauxFinanciers = computed(() => ({
                                 <td class="text-right whitespace-nowrap tabular-nums">{{ ligne.tarifMru === null ? '—' : `${montant(ligne.tarifMru)} MRU` }}<span class="block text-xs text-gray-500">{{ ligne.financeurBumex ? 'Financement interne BUMEX' : 'À la charge de l’étudiant' }}</span></td>
                                 <td class="text-right whitespace-nowrap tabular-nums">
                                     <template v-if="ligne.financeurBumex">
-                                        <strong class="font-semibold text-amber-800">{{ montant(ligne.allocationBumex) }} MRU</strong>
+                                        <strong class="font-semibold text-amber-800">{{ ligne.coutIntecEuro === null ? 'Barème à vérifier' : euros(ligne.coutIntecEuro) }}</strong>
+                                        <span class="block text-xs text-gray-500">{{ ligne.coutIntecMru === null ? '≈ — MRU' : `≈ ${montant(ligne.coutIntecMru)} MRU` }}</span>
                                         <span class="block text-xs text-gray-500">{{ ligne.bumexRegle ? 'Financement BUMEX indiqué comme réglé' : 'Financement BUMEX à suivre' }}</span>
                                     </template>
                                     <template v-else>
