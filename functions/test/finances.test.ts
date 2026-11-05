@@ -4,7 +4,8 @@ import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere, traiter
 import { genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import {
-    ecartAuTarif, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnRetard, montantNet, soldeRestant, statutPaiement,
+    ecartAuTarif, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
+    soldeRestant, statutPaiement,
 } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
@@ -78,6 +79,44 @@ describe('Suivi financier', () => {
         for (const role of ['finance', 'enseignant', 'etudiant'] as const) {
             await attendreErreur(appeler(genererPdf, { type: 'facture', id: inscriptionId }, await acteur(role)), 'permission-denied');
         }
+    });
+
+    it('numérote les factures dans une suite continue, et garde numéro et date à la réimpression', async () => {
+        const admin = await acteur('admin');
+        const maintenant = new Date();
+        const periode = `${maintenant.getUTCFullYear()}${String(maintenant.getUTCMonth() + 1).padStart(2, '0')}`;
+        await appeler(genererPdf, { type: 'facture', id: inscriptionId }, admin);
+        const premiere = (await doc(`inscriptions/${inscriptionId}`))!;
+        expect(premiere.numeroFacture).toBe(`FAC-${periode}-000001`);
+        expect(premiere.factureEmiseLe).toBe(maintenant.toISOString().slice(0, 10));
+        // Réimpression : même numéro, compteur inchangé.
+        await appeler(genererPdf, { type: 'facture', id: inscriptionId }, admin);
+        expect((await doc(`inscriptions/${inscriptionId}`))?.numeroFacture).toBe(`FAC-${periode}-000001`);
+        expect((await doc('compteurs/factures'))?.valeur).toBe(1);
+        // Une autre inscription reçoit le numéro suivant.
+        await appeler(creerEtudiant, etudiant('moussa@example.com'), admin);
+        const autre = (await liste('inscriptions')).find((i) => i.id !== inscriptionId)!;
+        await appeler(genererPdf, { type: 'facture', id: autre.id }, admin);
+        expect((await doc(`inscriptions/${autre.id}`))?.numeroFacture).toBe(`FAC-${periode}-000002`);
+        expect((await liste('journalAudit')).some((a) => a.modele === 'Inscription' && a.apres?.numeroFacture === `FAC-${periode}-000001`)).toBe(true);
+    });
+
+    it('écrit les montants en toutes lettres selon l’orthographe traditionnelle', () => {
+        expect(nombreEnLettres(0)).toBe('zéro');
+        expect(nombreEnLettres(21)).toBe('vingt et un');
+        expect(nombreEnLettres(71)).toBe('soixante et onze');
+        expect(nombreEnLettres(80)).toBe('quatre-vingts');
+        expect(nombreEnLettres(81)).toBe('quatre-vingt-un');
+        expect(nombreEnLettres(91)).toBe('quatre-vingt-onze');
+        expect(nombreEnLettres(200)).toBe('deux cents');
+        expect(nombreEnLettres(201)).toBe('deux cent un');
+        expect(nombreEnLettres(80000)).toBe('quatre-vingt mille');
+        expect(nombreEnLettres(180000)).toBe('cent quatre-vingt mille');
+        expect(nombreEnLettres(200000)).toBe('deux cent mille');
+        expect(nombreEnLettres(2500000)).toBe('deux millions cinq cent mille');
+        expect(nombreEnLettres(200000000)).toBe('deux cents millions');
+        expect(montantEnLettres(36000)).toBe('Trente-six mille ouguiyas');
+        expect(montantEnLettres(1)).toBe('Un ouguiya');
     });
 
     it('génère le reçu d’un versement validé, avec logo et cachet, et le refuse pour un versement en attente', async () => {
