@@ -33,7 +33,8 @@ Seule la version Vue + Firebase existe (l’ancien site Laravel et son hébergem
 | Sauvegardes | export Firestore géré quotidien (Cloud Scheduler) |
 
 - Projet Firebase de production : **`insec-bd390`** (`.firebaserc`, alias `default`). Projet local des émulateurs : `demo-insec`.
-- Site en ligne : https://insec-bd390.web.app
+- Site en ligne : **https://plateforme.insec.mr** (domaine personnalisé Firebase Hosting ; CNAME `plateforme` → `insec-bd390.web.app` chez Cloudflare, en « DNS only »). Restent actifs : https://insec-bd390.web.app, `app.insec.mr`, `dashboard.insec.mr`.
+- `APP_URL` (liens des e-mails) vaut `https://plateforme.insec.mr` dans `functions/.env.insec-bd390`.
 - **Écritures** : uniquement via des fonctions appelables (`functions/src/handlers/*.ts`), qui valident (zod), appliquent les règles dans une transaction et écrivent le **journal d’audit** dans la même transaction. Pas d’écriture directe depuis le navigateur.
 - **Règles partagées** front/back : `functions/src/shared/domaine.ts` (importé côté Vue via l’alias `@shared`). Les calculs financiers doivent rester à cet endroit, testés.
 - Routes de l’interface : `src/router.ts` ; vues : `src/vues/` ; composants : `src/composants/`.
