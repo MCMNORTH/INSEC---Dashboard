@@ -69,4 +69,5 @@ export const LIBELLES_ROLES: Record<string, string> = {
     super_admin: 'Super administrateur',
     admin: 'Administration',
     finance: 'Équipe finance',
+    consultation: 'Consultation',
 };
