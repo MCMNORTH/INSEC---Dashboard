@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import nodemailer from 'nodemailer';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { synchroniserAlertes } from '../src/handlers/alertes.js';
-import { basculerCompte, creerCompte, modifierRoleCompte } from '../src/handlers/comptes.js';
+import { basculerCompte, creerCompte, modifierPhotoProfil, modifierRoleCompte } from '../src/handlers/comptes.js';
 import { enregistrerPiece, modifierPiece, telechargerPiece } from '../src/handlers/documents.js';
 import { creerEtudiant } from '../src/handlers/etudiants.js';
 import { exporterExcel, importerEtudiants } from '../src/handlers/excel.js';
@@ -94,6 +94,22 @@ describe('Administration', () => {
             for (const role of ['finance', 'consultation'] as const) {
                 await attendreErreur(appeler(modifierRoleCompte, { uid, role: 'finance' }, await acteur(role)), 'permission-denied');
             }
+        });
+
+        it('change puis retire sa propre photo de profil, sans recopier l’image dans le journal', async () => {
+            const consult = await acteur('consultation');
+            const photo = `data:image/jpeg;base64,${Buffer.from('image-de-test').toString('base64')}`;
+            await appeler(modifierPhotoProfil, { photo }, consult);
+            expect((await doc(`utilisateurs/${consult.uid}`))?.photo).toBe(photo);
+            const audit = (await liste('journalAudit')).find((a) => a.modele === 'User' && a.modeleId === consult.uid)!;
+            expect(audit.apres).toEqual({ photo: 'présente' });
+            expect(JSON.stringify(audit)).not.toContain('base64');
+            await appeler(modifierPhotoProfil, { photo: null }, consult);
+            expect((await doc(`utilisateurs/${consult.uid}`))?.photo).toBeNull();
+            // Seules les images (jpeg, png, webp), et pas trop lourdes.
+            await attendreErreur(appeler(modifierPhotoProfil, { photo: 'data:text/html;base64,PHNjcmlwdD4=' }, consult), 'invalid-argument', 'photo');
+            await attendreErreur(appeler(modifierPhotoProfil, { photo: `data:image/png;base64,${'A'.repeat(160_000)}` }, consult), 'invalid-argument', 'photo');
+            await attendreErreur(appeler(modifierPhotoProfil, { photo }, null), 'unauthenticated');
         });
 
         it('désactive un compte, qui perd immédiatement l’accès, mais pas le sien', async () => {
