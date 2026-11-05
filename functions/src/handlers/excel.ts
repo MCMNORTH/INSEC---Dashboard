@@ -245,13 +245,13 @@ function inscriptionImport(ligne: string[], refs: Awaited<ReturnType<typeof refe
         throw new Error('Codes UE vides ou répétés; séparez les codes distincts par un point-virgule.');
     }
     const ueIds = codesUE.map((code) => {
+        // Les UE peuvent relever de plusieurs années du diplôme (choix permis par l'INTEC).
         const correspondances = [...refs.ues.entries()].filter(([, valeur]) =>
             valeur.formationId === formation[0]
-            && valeur.anneeParcours === anneeParcours
             && String(valeur.code ?? '').trim().toLocaleUpperCase('fr-FR') === code,
         );
         if (correspondances.length !== 1) {
-            throw new Error('UE « ' + code + ' » introuvable ou ambiguë pour ' + codeFormation + ', année parcours ' + anneeParcours + '.');
+            throw new Error('UE « ' + code + ' » introuvable ou ambiguë pour ' + codeFormation + '.');
         }
         return correspondances[0][0];
     });
