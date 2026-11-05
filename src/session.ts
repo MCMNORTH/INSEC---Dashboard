@@ -20,6 +20,7 @@ export const session = reactive({
     role: null as Role | null,
     etudiantId: null as string | null,
     enseignantId: null as string | null,
+    photo: null as string | null,
     messageDeconnexion: '',
 });
 
@@ -31,7 +32,7 @@ async function appliquer(utilisateur: User | null) {
     arreterProfil?.();
     arreterProfil = null;
     if (!utilisateur) {
-        Object.assign(session, { uid: null, nom: '', email: '', role: null, etudiantId: null, enseignantId: null });
+        Object.assign(session, { uid: null, nom: '', email: '', role: null, etudiantId: null, enseignantId: null, photo: null });
         return;
     }
     // Session restaurée après une longue inactivité (navigateur rouvert le lendemain) : fermée.
@@ -53,6 +54,7 @@ async function appliquer(utilisateur: User | null) {
     // (le profil fait foi) renouvelle le jeton et recharge l'application sur l'accueil du nouveau rôle.
     arreterProfil = onSnapshot(doc(db, 'utilisateurs', utilisateur.uid), (profil) => {
         if (!profil.exists()) return;
+        session.photo = (profil.get('photo') as string | null | undefined) ?? null;
         if (profil.get('actif') === false) {
             void deconnexion('Ce compte est désactivé.');
             return;

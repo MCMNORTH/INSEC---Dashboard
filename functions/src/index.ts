@@ -2,7 +2,7 @@ import './lib/firebase.js';
 
 export { synchroniserAlertes } from './handlers/alertes.js';
 export { lireCalendriersIntec, importerCalendrierIntec } from './handlers/calendriersIntec.js';
-export { basculerCompte, creerCompte, modifierRoleCompte } from './handlers/comptes.js';
+export { basculerCompte, creerCompte, modifierPhotoProfil, modifierRoleCompte } from './handlers/comptes.js';
 export {
     enregistrerDocumentFinancier, enregistrerPiece, lireDocumentsFinanciers, modifierPiece, telechargerConventionIntec,
     telechargerDocumentFinancier, telechargerPiece,

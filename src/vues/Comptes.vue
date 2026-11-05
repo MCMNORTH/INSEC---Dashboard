@@ -3,12 +3,12 @@ import { libelleRole } from '@shared/domaine';
 import { collection, orderBy, query } from 'firebase/firestore';
 import { computed, reactive } from 'vue';
 import { appeler } from '../api';
+import Avatar from '../composants/Avatar.vue';
 import Chargement from '../composants/Chargement.vue';
 import { confirmer } from '../dialogue';
 import { useRequete } from '../donnees';
 import { db } from '../firebase';
 import { useFormulaire } from '../formulaire';
-import { initiales } from '../navigation';
 import { notifier } from '../notifications';
 import { aRole, envoyerLienReinitialisation, session } from '../session';
 import type { Utilisateur } from '../types';
@@ -88,7 +88,7 @@ async function basculer(c: Utilisateur) {
                         <tr v-for="c in comptes" :key="c.id">
                             <td>
                                 <div class="flex items-center gap-3">
-                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-insec-50 text-[11px] font-bold text-insec-700 ring-1 ring-insec-100">{{ initiales(c.nom || c.email || '') }}</span>
+                                    <Avatar :nom="c.nom || c.email || ''" :photo="c.photo" classe="h-9 w-9 text-[11px] ring-1 ring-insec-100" />
                                     <span class="min-w-0">
                                         <strong class="block font-semibold text-gray-900">{{ c.nom }}</strong>
                                         <span class="block text-xs text-gray-500">{{ c.email }}</span>

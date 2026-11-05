@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { appeler, messageErreur } from '../api';
 import { confirmer } from '../dialogue';
-import { correspond, initiales, LIBELLES_ROLES, NAVIGATION } from '../navigation';
+import { correspond, LIBELLES_ROLES, NAVIGATION } from '../navigation';
+import { notifier } from '../notifications';
 import { aRole, deconnexion, session } from '../session';
 import { useAlertesNonLues } from './alertesNonLues';
 import { choixTheme, type ChoixTheme } from '../theme';
+import Avatar from './Avatar.vue';
 import BoutonTheme from './BoutonTheme.vue';
 import MenuDeroulant from './MenuDeroulant.vue';
 
@@ -34,6 +37,66 @@ const THEMES: { valeur: ChoixTheme; libelle: string; icone: string }[] = [
 ];
 
 const estMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+// Photo de profil : recadrée en carré et réduite à 256 px dans le navigateur avant l'envoi.
+const champPhoto = ref<HTMLInputElement | null>(null);
+const envoiPhoto = ref(false);
+const COTE_PHOTO = 256;
+
+async function reduirePhoto(fichier: File): Promise<string> {
+    const image = await createImageBitmap(fichier);
+    const cote = Math.min(image.width, image.height);
+    const toile = document.createElement('canvas');
+    toile.width = toile.height = COTE_PHOTO;
+    const contexte = toile.getContext('2d')!;
+    // Fond blanc : la transparence d'un PNG deviendrait noire en JPEG.
+    contexte.fillStyle = '#fff';
+    contexte.fillRect(0, 0, COTE_PHOTO, COTE_PHOTO);
+    contexte.imageSmoothingQuality = 'high';
+    contexte.drawImage(image, (image.width - cote) / 2, (image.height - cote) / 2, cote, cote, 0, 0, COTE_PHOTO, COTE_PHOTO);
+    image.close();
+    return toile.toDataURL('image/jpeg', 0.85);
+}
+
+async function enregistrerPhoto(photo: string | null) {
+    envoiPhoto.value = true;
+    try {
+        const resultat = await appeler('modifierPhotoProfil', { photo });
+        notifier(resultat.message ?? 'Photo de profil mise à jour.');
+    } catch (erreur) {
+        notifier(messageErreur(erreur), { type: 'erreur' });
+    } finally {
+        envoiPhoto.value = false;
+    }
+}
+
+async function photoChoisie(evenement: Event) {
+    const champ = evenement.target as HTMLInputElement;
+    const fichier = champ.files?.[0];
+    champ.value = '';
+    if (!fichier) return;
+    if (!/^image\/(jpeg|png|webp)$/.test(fichier.type)) {
+        notifier('Choisissez une image JPEG, PNG ou WebP.', { type: 'erreur' });
+        return;
+    }
+    if (fichier.size > 10 * 1024 * 1024) {
+        notifier('Image trop lourde (10 Mo au maximum).', { type: 'erreur' });
+        return;
+    }
+    let photo: string;
+    try {
+        photo = await reduirePhoto(fichier);
+    } catch {
+        notifier('Cette image n’a pas pu être lue.', { type: 'erreur' });
+        return;
+    }
+    await enregistrerPhoto(photo);
+}
+
+async function retirerPhoto() {
+    const ok = await confirmer({ titre: 'Retirer votre photo ?', message: 'Vos initiales s’afficheront à nouveau à la place de la photo.', libelle: 'Retirer la photo', ton: 'danger' });
+    if (ok) await enregistrerPhoto(null);
+}
 
 async function quitter() {
     const ok = await confirmer({
@@ -99,9 +162,7 @@ async function quitter() {
 
                 <MenuDeroulant libelle="Menu du compte" largeur="w-72" classe-declencheur="flex items-center gap-2.5 rounded-xl py-1 pr-2 pl-1 transition hover:bg-surface">
                     <template #declencheur="{ ouvert }">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-insec-600 to-insec-700 text-[11px] font-bold text-white ring-2 ring-surface">
-                            {{ initiales(session.nom) }}
-                        </span>
+                        <Avatar :nom="session.nom" :photo="session.photo" classe="h-8 w-8 text-[11px] ring-2 ring-surface" />
                         <span class="hidden min-w-0 text-left sm:block">
                             <span class="block max-w-36 truncate text-[13px] leading-4 font-semibold text-gray-900">{{ session.nom }}</span>
                             <span class="block text-[11px] leading-4 text-gray-500">{{ LIBELLES_ROLES[session.role ?? ''] ?? 'Équipe INSEC' }}</span>
@@ -110,12 +171,19 @@ async function quitter() {
                     </template>
 
                     <div class="flex items-center gap-3 rounded-xl bg-linear-to-br from-insec-50 to-surface p-3 ring-1 ring-insec-100">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-insec-600 to-insec-700 text-xs font-bold text-white">{{ initiales(session.nom) }}</span>
+                        <Avatar :nom="session.nom" :photo="session.photo" classe="h-10 w-10 text-xs" />
                         <span class="min-w-0">
                             <span class="block truncate text-sm font-semibold text-gray-900">{{ session.nom }}</span>
                             <span class="block truncate text-xs text-gray-500">{{ session.email }}</span>
                         </span>
                     </div>
+                    <div class="my-1.5 h-px bg-gray-100"></div>
+                    <button role="menuitem" type="button" class="element-menu" :disabled="envoiPhoto" @click="champPhoto?.click()">
+                        <i :class="['fa-solid', envoiPhoto ? 'fa-spinner fa-spin' : 'fa-camera']"></i>{{ session.photo ? 'Changer ma photo' : 'Ajouter une photo' }}
+                    </button>
+                    <button v-if="session.photo" role="menuitem" type="button" class="element-menu" :disabled="envoiPhoto" @click="retirerPhoto">
+                        <i class="fa-solid fa-user-xmark"></i>Retirer ma photo
+                    </button>
                     <div class="my-1.5 h-px bg-gray-100"></div>
                     <RouterLink v-if="aRole('admin', 'super_admin')" role="menuitem" to="/tableau-de-bord" class="element-menu"><i class="fa-solid fa-chart-simple"></i>Tableau de bord</RouterLink>
                     <RouterLink v-if="aRole('admin', 'super_admin')" role="menuitem" to="/gestion" class="element-menu"><i class="fa-solid fa-sliders"></i>Centre de gestion</RouterLink>
@@ -152,6 +220,8 @@ async function quitter() {
                         <i class="fa-solid fa-arrow-right-from-bracket"></i>Se déconnecter
                     </button>
                 </MenuDeroulant>
+                <!-- Hors du menu : le champ reste monté quand le menu se ferme pendant le choix du fichier. -->
+                <input ref="champPhoto" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="photoChoisie" />
             </div>
         </div>
     </header>

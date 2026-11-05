@@ -73,6 +73,25 @@ export const modifierRoleCompte = operation('modifierRoleCompte', ROLES_ADMIN, a
     return { message: 'Rôle modifié. Il s’applique immédiatement.' };
 });
 
+// Photo de profil : image carrée réduite dans le navigateur (256 px), stockée dans le profil sous forme de data URL.
+const photoProfil = z.union([
+    z.null(),
+    z.string().max(150_000, 'image trop lourde.').regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/, 'image invalide.'),
+]);
+
+/** Chaque membre de l'équipe change ou retire sa propre photo de profil (et seulement la sienne). */
+export const modifierPhotoProfil = operation('modifierPhotoProfil', 'connecte', async (donnees, acteur) => {
+    const { photo } = valider(z.object({ photo: photoProfil }), donnees);
+    const ref = col.utilisateurs().doc(acteur.uid!);
+    const compte = await exiger(null, ref, 'Compte introuvable.');
+    const lot = db.batch();
+    lot.update(ref, { photo, ...trace(acteur) });
+    // Le journal indique le changement sans recopier l'image.
+    auditerModele(lot, acteur, 'User', acteur.uid!, 'updated', { photo: compte.photo ? 'présente' : 'aucune' }, { photo: photo ? 'présente' : 'aucune' });
+    await lot.commit();
+    return { message: photo ? 'Photo de profil mise à jour.' : 'Photo de profil retirée.' };
+});
+
 export const basculerCompte = operation('basculerCompte', ROLES_ADMIN, async (donnees, acteur) => {
     const { uid } = valider(z.object({ uid: s.id() }), donnees);
     if (uid === acteur.uid) refuser('Vous ne pouvez pas désactiver votre propre compte.');

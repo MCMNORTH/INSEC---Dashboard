@@ -168,6 +168,7 @@ export interface Utilisateur {
     etudiantId: string | null;
     enseignantId: string | null;
     actif: boolean;
+    photo?: string | null;
 }
 
 export interface Alerte {
