@@ -225,6 +225,58 @@ export function formaterMontant(valeur: number): string {
         .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
+const UNITES = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize'];
+const DIZAINES = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante'];
+
+/** 0 à 99 ; `final` : le nombre termine l'expression (« quatre-vingts », mais « quatre-vingt mille »). */
+function moinsDeCent(n: number, final: boolean): string {
+    if (n <= 16) return UNITES[n];
+    if (n < 20) return `dix-${UNITES[n - 10]}`;
+    const dizaine = Math.floor(n / 10);
+    const unite = n % 10;
+    if (dizaine === 7 || dizaine === 9) {
+        const base = dizaine === 7 ? 'soixante' : 'quatre-vingt';
+        return dizaine === 7 && unite === 1 ? 'soixante et onze' : `${base}-${moinsDeCent(10 + unite, false)}`;
+    }
+    if (dizaine === 8) return unite === 0 ? `quatre-vingt${final ? 's' : ''}` : `quatre-vingt-${UNITES[unite]}`;
+    if (unite === 0) return DIZAINES[dizaine];
+    return unite === 1 ? `${DIZAINES[dizaine]} et un` : `${DIZAINES[dizaine]}-${UNITES[unite]}`;
+}
+
+/** 0 à 999 ; « deux cents », mais « deux cent un » et « deux cent mille ». */
+function moinsDeMille(n: number, final: boolean): string {
+    const centaines = Math.floor(n / 100);
+    const reste = n % 100;
+    const cent = centaines === 0 ? '' : centaines === 1 ? 'cent' : `${UNITES[centaines]} cent${reste === 0 && final ? 's' : ''}`;
+    if (!reste) return cent || 'zéro';
+    return cent ? `${cent} ${moinsDeCent(reste, final)}` : moinsDeCent(reste, final);
+}
+
+/** Nombre entier positif en toutes lettres (orthographe traditionnelle), ex. 36 000 → « trente-six mille ». */
+export function nombreEnLettres(valeur: number): string {
+    const n = Math.round(Math.abs(valeur ?? 0));
+    if (n === 0) return 'zéro';
+    const parties: string[] = [];
+    const milliards = Math.floor(n / 1e9);
+    const millions = Math.floor((n % 1e9) / 1e6);
+    const milliers = Math.floor((n % 1e6) / 1000);
+    const reste = n % 1000;
+    // Milliard et million sont des noms : « deux cents millions ».
+    if (milliards) parties.push(`${moinsDeMille(milliards, true)} milliard${milliards > 1 ? 's' : ''}`);
+    if (millions) parties.push(`${moinsDeMille(millions, true)} million${millions > 1 ? 's' : ''}`);
+    // Mille est invariable et ne prend pas « un » devant.
+    if (milliers) parties.push(milliers === 1 ? 'mille' : `${moinsDeMille(milliers, false)} mille`);
+    if (reste) parties.push(moinsDeMille(reste, true));
+    return parties.join(' ');
+}
+
+/** Montant en ouguiyas en toutes lettres, pour la mention « Arrêtée la présente facture à la somme de… ». */
+export function montantEnLettres(valeur: number): string {
+    const n = Math.round(Math.abs(valeur ?? 0));
+    const texte = `${nombreEnLettres(n)} ouguiya${n > 1 ? 's' : ''}`;
+    return texte.charAt(0).toUpperCase() + texte.slice(1);
+}
+
 export function libelleRole(role: string): string {
     const libelles: Record<string, string> = {
         super_admin: 'Super administrateur',

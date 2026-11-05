@@ -3,12 +3,16 @@ import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import pdfmake from 'pdfmake';
 import { HttpsError } from 'firebase-functions/v2/https';
-import { operation } from '../lib/contexte.js';
-import { col, exiger, type Doc } from '../lib/donnees.js';
+import { auditerModele } from '../lib/audit.js';
+import { operation, type Acteur } from '../lib/contexte.js';
+import { col, exiger, prochainNumero, type Doc } from '../lib/donnees.js';
 import { db, FieldValue, FUSEAU } from '../lib/firebase.js';
 import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email.js';
 import { s, valider, z } from '../lib/validation.js';
-import { etatEcheances, formaterMontant, horaireExamen, montantNet, numeroFormate, resultatValide, ROLES_ADMIN, soldeRestant, statutPaiement } from '../shared/domaine.js';
+import {
+    dateDuJour, etatEcheances, formaterMontant, horaireExamen, montantDuSelonTarif, montantEnLettres, montantNet, numeroFormate, resultatValide,
+    ROLES_ADMIN, soldeRestant, statutPaiement,
+} from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
 
 const require = createRequire(import.meta.url);
@@ -201,19 +205,35 @@ const mru = (valeur: number) => `${formaterMontant(valeur)} MRU`;
 const etiquette = (texte: string) => ({ text: maj(texte), fontSize: 7.5, bold: true, color: GRIS, characterSpacing: 1, margin: [0, 0, 0, 4] });
 const sousTitre = (texte: string) => ({ text: texte, fontSize: 11, bold: true, color: MARINE, margin: [0, 18, 0, 4] });
 const aDroite = (cellule: unknown) => ({ ...(typeof cellule === 'object' && cellule ? cellule : { text: cellule }), alignment: 'right' });
-// Référence courte et lisible de la facture : année de début + 8 premiers caractères de l’inscription.
-const referenceFacture = (inscription: Doc) => `FAC-${String(inscription.anneeId ?? '').slice(0, 4)}-${String(inscription.id).slice(0, 8).toUpperCase()}`;
+
+/**
+ * Numéro de facture attribué à la première émission, dans une suite continue (FAC-AAAAMM-000001),
+ * avec sa date d'émission : une facture réimprimée garde son numéro et sa date.
+ */
+async function numeroterFacture(inscriptionId: string, acteur?: Acteur): Promise<{ numero: string; emiseLe: string }> {
+    return db.runTransaction(async (tx) => {
+        const ref = col.inscriptions().doc(inscriptionId);
+        const inscription = await exiger(tx, ref, 'Inscription introuvable.');
+        if (inscription.numeroFacture) return { numero: String(inscription.numeroFacture), emiseLe: String(inscription.factureEmiseLe ?? dateDuJour()) };
+        const [numero, incrementer] = await prochainNumero(tx, 'factures');
+        const facture = { numeroFacture: numeroFormate('FAC', numero, new Date()), factureEmiseLe: dateDuJour() };
+        incrementer();
+        tx.update(ref, facture);
+        if (acteur) auditerModele(tx, acteur, 'Inscription', inscriptionId, 'updated', { numeroFacture: null }, facture);
+        return { numero: facture.numeroFacture, emiseLe: facture.factureEmiseLe };
+    });
+}
 
 // Tableau épuré : en-tête discret souligné en marine, filets horizontaux fins, aucun trait vertical.
-function tableauEpure(entetes: string[], lignes: unknown[][], largeurs: (string | number)[]) {
-    const derniere = largeurs.length - 1;
+function tableauEpure(entetes: string[], lignes: unknown[][], largeurs: (string | number)[], colonnesChiffrees = 1) {
+    const premiereChiffree = largeurs.length - colonnesChiffrees;
     return {
         table: {
             headerRows: 1,
             widths: largeurs,
             body: [
-                entetes.map((e, i) => ({ ...etiquette(e), margin: [0, 0, 0, 0], ...(i === derniere ? { alignment: 'right' } : {}) })),
-                ...lignes.map((ligne) => ligne.map((cellule, i) => (i === derniere ? aDroite(cellule) : cellule))),
+                entetes.map((e, i) => ({ ...etiquette(e), margin: [0, 0, 0, 0], ...(i >= premiereChiffree ? { alignment: 'right' } : {}) })),
+                ...lignes.map((ligne) => ligne.map((cellule, i) => (i >= premiereChiffree ? aDroite(cellule) : cellule))),
             ],
         },
         layout: {
@@ -326,23 +346,45 @@ function totauxFinanciers(lignes: [string, string][], final: [string, string]) {
     };
 }
 
-// Mention finale à gauche, cachet et signature de l’INSEC à droite (jamais coupés entre deux pages).
-function blocCachet(mention: string) {
-    return {
-        columns: [
-            { width: '*', text: mention, fontSize: 8.5, color: GRIS, margin: [0, 30, 24, 0] },
-            {
-                width: 130,
-                stack: [
-                    { ...etiquette('Cachet et signature'), alignment: 'center' },
-                    { image: CACHET, width: 120, alignment: 'center', margin: [0, 2, 0, 0] },
-                ],
-            },
-        ],
-        unbreakable: true,
-        margin: [0, 14, 0, 0],
-    };
+// Page A4 et marges des documents financiers (en points).
+const PAGE_A4 = { largeur: 595.28, hauteur: 841.89 };
+const MARGES_FINANCIERES = { gauche: 48, haut: 56, droite: 48, bas: 64 };
+const HAUTEUR_CACHET = 128;
+
+/**
+ * Mention finale à gauche, cachet et signature de l’INSEC à droite, ancrés en bas de la dernière page,
+ * à l’emplacement habituel des signatures. Un espace réservé de même hauteur dans le flux garantit
+ * qu’aucun contenu ne passe dessous : s’il ne reste pas assez de place, le bloc passe en bas de la page suivante.
+ */
+function blocCachet(mention: string): unknown[] {
+    const largeur = PAGE_A4.largeur - MARGES_FINANCIERES.gauche - MARGES_FINANCIERES.droite;
+    return [
+        // Espace réservé dans le flux, de la hauteur du bloc ancré (passe à la page suivante s'il ne tient pas).
+        { canvas: [{ type: 'rect', x: 0, y: 0, w: 1, h: HAUTEUR_CACHET, color: '#ffffff' }] },
+        {
+            absolutePosition: { x: MARGES_FINANCIERES.gauche, y: PAGE_A4.hauteur - MARGES_FINANCIERES.bas - HAUTEUR_CACHET },
+            columns: [
+                { width: largeur - 154, text: mention, fontSize: 8.5, color: GRIS, margin: [0, 40, 0, 0] },
+                {
+                    width: 130,
+                    stack: [
+                        { ...etiquette('Cachet et signature'), alignment: 'center' },
+                        { image: CACHET, width: 120, alignment: 'center', margin: [0, 2, 0, 0] },
+                    ],
+                },
+            ],
+            columnGap: 24,
+        },
+    ];
 }
+
+/** Mention légale du montant en toutes lettres (factures et reçus). */
+const mentionEnLettres = (debut: string, montant: number) => ({
+    text: [`${debut} `, { text: `${montantEnLettres(montant)} (${mru(montant)})`, bold: true }, '.'],
+    fontSize: 9,
+    color: '#374151',
+    margin: [0, 16, 0, 0],
+});
 
 // Mise en page commune : filet d’accent aux couleurs du logo (marine puis rouge) et pied de page paginé.
 function documentFinancier(contenu: unknown[], reference: string, titreDocument: string) {
@@ -361,7 +403,7 @@ function documentFinancier(contenu: unknown[], reference: string, titreDocument:
     });
     return document(contenu, pied, 'portrait', {
         pageSize: 'A4',
-        pageMargins: [48, 56, 48, 64],
+        pageMargins: [MARGES_FINANCIERES.gauche, MARGES_FINANCIERES.haut, MARGES_FINANCIERES.droite, MARGES_FINANCIERES.bas],
         defaultStyle: { font: 'Roboto', fontSize: 9.5, color: '#111827', lineHeight: 1.15 },
         background: bandeau,
         info: { title: `${titreDocument} ${reference}`, author: 'INSEC' },
@@ -417,7 +459,7 @@ async function recu(id: string) {
         ...enteteFinancier('Reçu', reference, 'Payé', VERT),
         partiesFinancieres('Reçu de', etudiant, inscription, [
             ['Date du paiement', dateFr(String(versement.dateVersement))],
-            ['Année académique', String(annee.libelle)],
+            ['Année scolaire', String(annee.libelle)],
         ]),
         montantRecu,
         tableauEpure(['Désignation', 'Montant'], [[
@@ -425,17 +467,18 @@ async function recu(id: string) {
                 stack: [
                     { text: `Versement · frais de formation ${formation.code}`, bold: true },
                     { text: `${formation.libelle} · année ${annee.libelle}`, fontSize: 8.5, color: GRIS, margin: [0, 2, 0, 0] },
-                    { text: `Facture associée : ${referenceFacture(inscription)}`, fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] },
+                    ...(inscription.numeroFacture ? [{ text: `Facture associée : ${inscription.numeroFacture}`, fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
                 ],
             },
             mru(versement.montant),
         ]], ['*', 110]),
-        sousTitre('Situation du dossier'),
+        mentionEnLettres('Arrêté le présent reçu à la somme de', Number(versement.montant ?? 0)),
+        sousTitre(`Situation du dossier au ${jourFr(new Date())}`),
         totauxFinanciers(
-            [['Total net dû', mru(montantNet(inscription as never))], ['Total versé à ce jour', mru(totalVerse)]],
+            [['Total net dû', mru(montantNet(inscription as never))], ['Total versé', mru(totalVerse)]],
             ['Reste à payer', mru(soldeRestant(situation))],
         ),
-        blocCachet('Ce reçu atteste que le paiement ci-dessus a été reçu et validé par l’INSEC. Conservez-le comme justificatif.'),
+        ...blocCachet('Ce reçu atteste que le paiement ci-dessus a été reçu et validé par l’INSEC. Conservez-le comme justificatif.'),
     ];
     return {
         nom: nomFichier('Recu', String(versement.numeroRecu ?? ''), nomEtudiant(etudiant)),
@@ -443,7 +486,7 @@ async function recu(id: string) {
     };
 }
 
-async function facture(id: string) {
+async function facture(id: string, acteur?: Acteur) {
     const { inscription, etudiant, formation, annee } = await contexteInscription(id);
     const versements = (await col.versements().where('inscriptionId', '==', id).get()).docs
         .map((doc) => doc.data())
@@ -463,8 +506,14 @@ async function facture(id: string) {
         : statut === 'Annulée'
             ? 'Inscription annulée : aucun montant n’est dû au titre de cette inscription.'
             : null;
-    const reference = referenceFacture(inscription);
+    const { numero: reference, emiseLe } = await numeroterFacture(id, acteur);
     const codesUe = ues.map((u) => u.get('code')).filter(Boolean);
+    // Quantité × prix unitaire quand le montant suit le tarif du diplôme ; sinon un forfait.
+    const montantDu = Number(inscription.montantDu ?? 0);
+    const tarif = codesUe.length ? montantDuSelonTarif(formation.code, codesUe.length) : null;
+    const auTarif = tarif !== null && tarif === montantDu;
+    const quantite = auTarif ? `${codesUe.length} UE` : '1';
+    const prixUnitaire = auTarif ? mru(montantDu / codesUe.length) : mru(montantDu);
 
     const lignesFacture: unknown[][] = [
         [
@@ -472,22 +521,29 @@ async function facture(id: string) {
                 stack: [
                     { text: `Frais de formation · ${formation.code}`, bold: true },
                     { text: `${formation.libelle} · année ${annee.libelle}`, fontSize: 8.5, color: GRIS, margin: [0, 2, 0, 0] },
-                    ...(codesUe.length ? [{ text: `${codesUe.length} UE : ${codesUe.join(', ')}`, fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
+                    ...(codesUe.length ? [{ text: `UE : ${codesUe.join(', ')}`, fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
+                    ...(!auTarif ? [{ text: 'Montant forfaitaire', fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
                 ],
             },
-            mru(inscription.montantDu ?? 0),
+            quantite,
+            prixUnitaire,
+            mru(montantDu),
         ],
-        ...(remise > 0 ? [['Remise accordée', `− ${mru(remise)}`]] : []),
+        ...(remise > 0 ? [['Remise accordée', '', '', `− ${mru(remise)}`]] : []),
     ];
 
     const contenu = [
         ...enteteFinancier('Facture', reference, statut, COULEURS_STATUT[statut] ?? GRIS),
         partiesFinancieres('Facturé à', etudiant, inscription, [
-            ['Émise le', jourFr(new Date())],
-            ['Année académique', String(annee.libelle)],
+            ['Émise le', dateFr(emiseLe)],
+            ['Année scolaire', String(annee.libelle)],
         ]),
-        tableauEpure(['Désignation', 'Montant'], lignesFacture, ['*', 110]),
-        totauxFinanciers([['Total net', mru(net)], ['Déjà réglé', `− ${mru(montantEncaisse)}`]], ['Reste à payer', mru(solde)]),
+        tableauEpure(['Désignation', 'Quantité', 'Prix unitaire', 'Montant'], lignesFacture, ['*', 60, 85, 95], 3),
+        totauxFinanciers(
+            [['Total net', mru(net)], [`Déjà réglé au ${jourFr(new Date())}`, montantEncaisse > 0 ? `− ${mru(montantEncaisse)}` : mru(0)]],
+            ['Reste à payer', mru(solde)],
+        ),
+        mentionEnLettres('Arrêtée la présente facture à la somme de', net),
         ...(mentionStatut ? [{ text: mentionStatut, alignment: 'right', color: MARINE, bold: true, fontSize: 9, margin: [0, 8, 0, 0] }] : []),
         ...(echeances.length
             ? [
@@ -520,7 +576,7 @@ async function facture(id: string) {
                   ),
               ]
             : []),
-        blocCachet('Seuls les versements validés sont déduits. Merci de rappeler la référence de la facture lors de chaque règlement.'),
+        ...blocCachet('Seuls les versements validés sont déduits. Merci de rappeler le numéro de la facture lors de chaque règlement.'),
     ];
     return {
         nom: nomFichier('Facture', nomEtudiant(etudiant), String(annee.libelle ?? '')),
@@ -673,14 +729,16 @@ async function bordereauCopies(id: string) {
     };
 }
 
-const generateurs = { attestation, releve, convocation, recu, facture, feuillePresence, bordereauCopies };
+const generateurs: Record<string, (id: string, acteur?: Acteur) => Promise<{ nom: string; contenu: string }>> = {
+    attestation, releve, convocation, recu, facture, feuillePresence, bordereauCopies,
+};
 
 export const genererPdf = operation(
     'genererPdf',
     ROLES_ADMIN,
-    async (donnees) => {
+    async (donnees, acteur) => {
         const v = valider(z.object({ type: s.choix(['attestation', 'releve', 'convocation', 'recu', 'facture', 'feuillePresence', 'bordereauCopies'] as const), id: s.id() }), donnees);
-        return generateurs[v.type](v.id);
+        return generateurs[v.type](v.id, acteur);
     },
     { memory: '512MiB' },
 );
@@ -726,9 +784,10 @@ async function expedierDocument(
     id: string,
     acteurId: string,
     transport: ReturnType<typeof transportSmtp>,
+    acteur?: Acteur,
 ) {
     const contexte = await destinataireDocument(type, id);
-    const pdf = await generateurs[type](id);
+    const pdf = await generateurs[type](id, acteur);
     const contenu = Buffer.from(pdf.contenu, 'base64');
     if (contenu.length > 8 * 1024 * 1024) {
         throw new HttpsError('resource-exhausted', 'Le document dépasse la taille maximale autorisée pour un e-mail.');
@@ -841,7 +900,7 @@ export const envoyerDocumentParEmail = operation(
             if (statut === 'En cours') return { message: 'L’envoi de cette convocation est déjà en cours.' };
             return { message: 'Convocation envoyée.' };
         }
-        const resultat = await expedierDocument(v.type, id, acteurId, transportSmtp());
+        const resultat = await expedierDocument(v.type, id, acteurId, transportSmtp(), acteur);
         if (resultat.statut === 'Échec') {
             throw new HttpsError('unavailable', 'Le document n’a pas pu être envoyé. Consultez le journal des communications.');
         }
