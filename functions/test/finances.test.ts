@@ -4,7 +4,7 @@ import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere, traiter
 import { genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import {
-    ecartAuTarif, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
+    coutIntecEuro, ecartAuTarif, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
     soldeRestant, statutPaiement,
 } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
@@ -167,6 +167,14 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         finance = await acteur('finance');
         await appeler(creerEtudiant, { ...etudiant('awa@example.com'), ueIds: ['TEC111', 'TEC119'] }, admin);
         inscriptionId = (await liste('inscriptions'))[0].id;
+    });
+
+    it('calcule en euros le coût INTEC, payé sans marge par BUMEX : nombre d’UE × tarif INTEC du diplôme', () => {
+        expect(coutIntecEuro('DGC', 3)).toBe(480);
+        expect(coutIntecEuro('DSGC', 2)).toBe(360);
+        expect(coutIntecEuro('dsgc-2026', 1)).toBe(180);
+        expect(coutIntecEuro('DGC', 0)).toBe(0);
+        expect(coutIntecEuro('AUTRE', 2)).toBeNull();
     });
 
     it('calcule le montant dû d’une nouvelle inscription : nombre d’UE × tarif du diplôme', async () => {

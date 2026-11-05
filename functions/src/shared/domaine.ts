@@ -55,6 +55,15 @@ export function montantDuSelonTarif(codeFormation: string | null | undefined, nb
 }
 
 /**
+ * Coût INTEC d'une inscription en euros = nombre d'UE × tarif INTEC du diplôme (160 € DGC, 180 € DSGC) ;
+ * c'est aussi ce que BUMEX règle, en euros et sans marge, pour un étudiant qu'il finance. Null si le diplôme n'a pas de tarif connu.
+ */
+export function coutIntecEuro(codeFormation: string | null | undefined, nbUe: number): number | null {
+    const diplome = diplomeTarife(codeFormation);
+    return diplome ? TARIFS_UE[diplome].intecEuro * nbUe : null;
+}
+
+/**
  * Écart entre le montant dû saisi et le tarif (nombre d'UE × tarif du diplôme) :
  * positif si le montant saisi dépasse le tarif, négatif s'il est inférieur ; null si le diplôme n'a pas de tarif connu.
  * La remise n'entre pas dans le calcul : elle se saisit à part.
