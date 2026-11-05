@@ -242,7 +242,30 @@ async function importerClasseurConfirme() {
             <p class="mt-1 text-sm text-gray-500">Consultez la page officielle de l’INTEC pour vérifier si les dates de cette année ont été publiées.</p>
         </div>
         <div v-else>
-            <div class="overflow-x-auto">
+            <!-- Téléphone : une carte par épreuve. -->
+            <ul class="divide-y divide-gray-100 sm:hidden">
+                <li v-for="e in calendrierIntec" :key="e.codeUE" class="flex gap-3 px-4 py-4">
+                    <span class="flex w-12 shrink-0 flex-col items-center self-start overflow-hidden rounded-xl bg-surface text-center ring-1 ring-gray-200">
+                        <span class="w-full bg-insec-600 py-0.5 text-[9.5px] font-semibold tracking-wider text-white uppercase">{{ e.dateFr.split(' ')[1]?.slice(0, 4) }}</span>
+                        <span class="py-0.5 font-titre text-base leading-6 font-bold text-gray-900">{{ e.dateFr.split(' ')[0] }}</span>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                        <strong class="block text-[15px] font-semibold text-gray-900">{{ e.diplôme }} · UE {{ e.codeUE }}</strong>
+                        <span class="block text-xs text-gray-500">{{ e.intitule }}</span>
+                        <span class="mt-1.5 flex flex-wrap gap-1.5">
+                            <span class="pastille bg-insec-50 text-insec-700 ring-insec-600/15"><i class="fa-regular fa-clock text-[10px]"></i>{{ e.heure }} Paris</span>
+                            <span class="pastille bg-emerald-50 text-emerald-700 ring-emerald-600/15"><i class="fa-regular fa-clock text-[10px]"></i>{{ heureNouakchottDepuisParis(e.date, e.heure) }} Nouakchott</span>
+                        </span>
+                        <span v-if="!e.ue" class="mt-1.5 block text-xs text-amber-700">UE non trouvée dans le référentiel local</span>
+                        <RouterLink
+                            v-if="e.ue && anneeCalendrierIntec"
+                            :to="{ path: '/examens/nouveau', query: { source: 'intec', ue: e.codeUE, annee: anneeCalendrierIntec, dateHeure: e.dateHeure, session: 'Normale' } }"
+                            class="bouton-secondaire mt-3 w-full"
+                        >Suivre l’épreuve</RouterLink>
+                    </span>
+                </li>
+            </ul>
+            <div class="overflow-x-auto max-sm:hidden">
                 <table class="tableau">
                     <thead><tr><th>Date et heure</th><th>Diplôme / UE INTEC</th><th>UE locale</th><th class="text-right">Suivi INSEC</th></tr></thead>
                     <tbody>
@@ -294,7 +317,20 @@ async function importerClasseurConfirme() {
             </div>
         </div>
         <Chargement :chargement="chargement" :erreur="erreur">
-            <div class="carte overflow-x-auto">
+            <ul v-if="examens.length" class="carte divide-y divide-gray-100 overflow-hidden sm:hidden">
+                <li v-for="e in affiches" :key="e.id">
+                    <RouterLink :to="`/examens/${e.id}`" class="flex items-center gap-3 px-4 py-3.5 transition active:bg-gray-50">
+                        <span class="min-w-0 flex-1">
+                            <strong class="block text-[15px] font-semibold text-gray-900">{{ formation(e.formationId)?.code }} · {{ ue(e.ueId)?.code }}</strong>
+                            <span class="block truncate text-xs text-gray-500">{{ ue(e.ueId)?.libelle }}</span>
+                            <span class="mt-1 block text-xs font-medium text-gray-700">{{ horaireExamen(e.dateExamen) }}</span>
+                            <span class="mt-0.5 block text-xs text-gray-500">{{ e.session }} · {{ e.salle || 'Salle à définir' }} · {{ e.nbConvoques }} convoqué(s)</span>
+                        </span>
+                        <i class="fa-solid fa-chevron-right text-xs text-gray-300"></i>
+                    </RouterLink>
+                </li>
+            </ul>
+            <div :class="['carte overflow-x-auto', examens.length && 'max-sm:hidden']">
                 <table class="tableau">
                     <thead><tr><th>Date et heure</th><th>Diplôme / UE</th><th>Session</th><th>Salle</th><th>Convoqués</th><th>Statut</th></tr></thead>
                     <tbody>

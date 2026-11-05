@@ -11,7 +11,7 @@ watch(() => [flash.texte, flash.type], () => {
 </script>
 
 <template>
-    <div class="pointer-events-none fixed inset-x-0 bottom-0 z-[70] flex justify-center p-4 sm:inset-x-auto sm:right-0 sm:justify-end sm:p-6" aria-live="polite">
+    <div class="pointer-events-none fixed inset-x-0 bottom-0 z-[70] flex justify-center p-4 max-lg:bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:right-0 sm:justify-end sm:p-6" aria-live="polite">
         <Transition
             enter-active-class="transition duration-300 ease-out"
             enter-from-class="opacity-0 translate-y-3 scale-95"

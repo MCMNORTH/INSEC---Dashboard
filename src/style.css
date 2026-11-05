@@ -300,7 +300,8 @@
 
 /* ——— Tableaux ——— */
 @utility tableau {
-    @apply w-full border-collapse text-sm;
+    /* relative : les textes réservés aux lecteurs d'écran (sr-only) restent dans le tableau et n'élargissent pas la page. */
+    @apply relative w-full border-collapse text-sm;
     & thead tr {
         @apply border-b border-gray-200 bg-gray-50/80 text-left;
     }
@@ -338,4 +339,48 @@
 }
 @utility pastille {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset;
+}
+
+/* ——— Téléphone et tablette ———
+   Règles limitées aux écrans de moins de 1024 px (et, pour les tableaux et en-têtes, de moins de 640 px) :
+   l'affichage ordinateur n'est jamais concerné. */
+@media (max-width: 1023.98px) {
+    /* Aucune page ne doit pouvoir défiler de côté (Safari réduirait alors toute la page). */
+    body {
+        overflow-x: clip;
+    }
+}
+/* Écran tactile : champs en 16 px, sinon l'iPhone zoome dès qu'on touche un champ. */
+@media (max-width: 1023.98px) and (pointer: coarse) {
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
+    select,
+    textarea {
+        font-size: 16px;
+    }
+}
+@media (max-width: 639.98px) {
+    /* En-tête de bloc : le texte garde une largeur lisible, les boutons passent dessous si besoin. */
+    .panneau-entete > :first-child,
+    .flex-wrap > .min-w-0.flex-1 {
+        min-width: min(100%, 12rem);
+    }
+    /* Tableaux : cellules plus serrées et première colonne fixe pendant le défilement horizontal. */
+    .tableau th,
+    .tableau td {
+        padding-inline: 0.75rem;
+    }
+    .tableau :is(th, td):first-child {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background-color: var(--color-surface);
+        box-shadow: inset -1px 0 0 var(--color-gray-100);
+    }
+    .tableau thead th:first-child {
+        background-color: var(--color-gray-50);
+    }
+    .en-tete-page {
+        margin-bottom: 1.25rem;
+        gap: 0.875rem;
+    }
 }
