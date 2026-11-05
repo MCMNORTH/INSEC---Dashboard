@@ -114,23 +114,27 @@ async function quitter() {
 <template>
     <header class="sticky top-0 z-30 border-b border-gray-200/70 bg-fond/80 backdrop-blur-xl supports-[backdrop-filter]:bg-fond/70">
         <div class="mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:px-6 lg:px-10">
-            <button type="button" class="bouton-icone -ml-1 text-gray-600 lg:hidden" aria-label="Ouvrir le menu" @click="$emit('menu')">
+            <!-- Sur téléphone et tablette, le menu s'ouvre depuis la barre d'onglets du bas. -->
+            <button type="button" class="bouton-icone -ml-1 hidden text-gray-600" aria-label="Ouvrir le menu" @click="$emit('menu')">
                 <i class="fa-solid fa-bars-staggered text-lg"></i>
             </button>
 
-            <nav aria-label="Fil d’Ariane" class="flex min-w-0 items-center gap-2 text-sm">
+            <nav aria-label="Fil d’Ariane" class="flex min-w-0 items-center gap-2 text-sm max-sm:text-[15px]">
+                <RouterLink v-if="fil.page && fil.rubrique" :to="fil.rubrique.vers" class="bouton-icone -ml-2 shrink-0 text-gray-600 sm:hidden" :aria-label="`Retour : ${fil.rubrique.libelle}`">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </RouterLink>
                 <span v-if="fil.groupe" class="hidden text-gray-400 sm:inline">{{ fil.groupe }}</span>
                 <span v-if="fil.groupe" class="hidden sm:inline"><i class="fa-solid fa-chevron-right text-[9px] text-gray-300"></i></span>
                 <RouterLink
                     v-if="fil.rubrique"
                     :to="fil.rubrique.vers"
-                    :class="['flex min-w-0 items-center gap-2 truncate font-semibold transition', fil.page ? 'text-gray-500 hover:text-gray-900' : 'text-gray-900']"
+                    :class="['flex min-w-0 items-center gap-2 truncate font-semibold transition', fil.page ? 'text-gray-500 hover:text-gray-900 max-sm:hidden' : 'text-gray-900']"
                 >
                     <i :class="['fa-solid text-[13px] text-insec-500', fil.rubrique.icone]"></i>
                     <span class="truncate">{{ fil.rubrique.libelle }}</span>
                 </RouterLink>
                 <template v-if="fil.page">
-                    <i class="fa-solid fa-chevron-right text-[9px] text-gray-300"></i>
+                    <span class="contents max-sm:hidden"><i class="fa-solid fa-chevron-right text-[9px] text-gray-300"></i></span>
                     <span class="truncate font-semibold text-gray-900">{{ fil.page }}</span>
                 </template>
             </nav>
@@ -149,7 +153,8 @@ async function quitter() {
                     <i class="fa-solid fa-magnifying-glass"></i>
                 </button>
 
-                <BoutonTheme />
+                <!-- Sur téléphone, l'apparence se règle dans le menu du compte. -->
+                <BoutonTheme class="max-sm:hidden" />
 
                 <RouterLink to="/alertes" class="bouton-icone relative h-10 w-10" :aria-label="nonLues ? `${nonLues} alerte(s) non lue(s)` : 'Alertes'">
                     <i class="fa-regular fa-bell text-[17px]"></i>

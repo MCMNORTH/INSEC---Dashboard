@@ -457,7 +457,7 @@ const totauxFinanciers = computed(() => ({
                         <i class="fa-solid fa-magnifying-glass pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-[13px] text-gray-400"></i>
                         <input v-model="recherche" type="search" placeholder="Rechercher un étudiant…" class="champ pl-10" aria-label="Rechercher un étudiant" />
                     </span>
-                    <button v-if="retardsAnnee && peutModifier" type="button" class="bouton-secondaire text-red-600" :disabled="envoi" @click="relancerTous">
+                    <button v-if="retardsAnnee && peutModifier" type="button" class="bouton-secondaire text-red-600 max-sm:w-full" :disabled="envoi" @click="relancerTous">
                         <i class="fa-regular fa-paper-plane text-xs"></i>Relancer les {{ retardsAnnee }} retard(s)
                     </button>
                 </div>
@@ -480,7 +480,39 @@ const totauxFinanciers = computed(() => ({
                     </button>
                 </div>
 
-                <div class="overflow-x-auto">
+                <!-- Téléphone : une carte par dossier, à toucher pour l’ouvrir. -->
+                <ul class="divide-y divide-gray-100 sm:hidden">
+                    <li v-for="ligne in lignesAffichees" :key="ligne.dossier.id">
+                        <button type="button" class="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left transition active:bg-gray-50" @click="ouvrir(ligne.etudiant.id, ligne.dossier.id)">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-insec-50 text-xs font-bold text-insec-700 ring-1 ring-insec-100">
+                                {{ `${ligne.etudiant.nom?.[0] ?? ''}${ligne.etudiant.prenom?.[0] ?? ''}`.toUpperCase() }}
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="flex items-baseline justify-between gap-2">
+                                    <strong class="truncate text-[15px] font-semibold text-gray-900">{{ ligne.etudiant.nom }} {{ ligne.etudiant.prenom }}</strong>
+                                    <span v-if="ligne.dossier.financeur === 'bumex'" class="shrink-0 text-xs font-semibold text-emerald-700"><i class="fa-solid fa-building-columns mr-1 text-[10px]"></i>BUMEX</span>
+                                    <span v-else class="shrink-0 text-sm font-semibold text-gray-900 tabular-nums">{{ montant(soldeRestant(ligne.dossier)) }} <span class="text-[11px] font-medium text-gray-400">MRU</span></span>
+                                </span>
+                                <span class="mt-0.5 flex items-center justify-between gap-2 text-xs text-gray-500">
+                                    <span class="truncate">{{ formation(ligne.dossier.formationId)?.code }} · {{ ligne.dossier.ueIds.length }} UE<template v-if="ligne.dossier.financeur !== 'bumex'"> · {{ montant(ligne.dossier.totalVerse ?? 0) }} versés</template></span>
+                                    <BadgeStatut :statut="statutLigne(ligne.dossier)" />
+                                </span>
+                                <span v-if="ligne.dossier.financeur !== 'bumex'" class="mt-2 block h-1 overflow-hidden rounded-full bg-gray-100">
+                                    <span
+                                        :class="['block h-full rounded-full', pourcentagePaye(ligne.dossier) >= 100 ? 'bg-emerald-500' : montantEnRetard(ligne.dossier) > 0 ? 'bg-red-500' : 'bg-insec-500']"
+                                        :style="{ width: `${pourcentagePaye(ligne.dossier)}%` }"
+                                    ></span>
+                                </span>
+                                <span v-if="ligne.dossier.financeur !== 'bumex' && montantEnRetard(ligne.dossier) > 0" class="mt-1 block text-[11px] text-red-600">dont {{ montant(montantEnRetard(ligne.dossier)) }} MRU en retard</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-right text-xs text-gray-300"></i>
+                        </button>
+                    </li>
+                    <li v-if="!lignesAffichees.length" class="px-4 py-12 text-center text-sm text-gray-500">
+                        {{ lignesEtudiants.length ? 'Aucun dossier ne correspond à ce filtre.' : `Aucune inscription pour ${annee(anneeEtudiants)?.libelle ?? anneeEtudiants}.` }}
+                    </li>
+                </ul>
+                <div class="overflow-x-auto max-sm:hidden">
                     <table class="tableau">
                         <thead>
                             <tr>
@@ -568,8 +600,9 @@ const totauxFinanciers = computed(() => ({
                             role="dialog"
                             aria-modal="true"
                             :aria-label="`Dossier financier de ${selectionne.prenom} ${selectionne.nom}`"
-                            class="flex max-h-[94vh] w-full max-w-4xl animate-surgir flex-col overflow-hidden rounded-t-3xl bg-surface shadow-[0_24px_64px_-12px_rgb(0_0_0/0.35)] sm:rounded-3xl"
+                            class="flex max-h-[94vh] w-full max-w-4xl animate-surgir flex-col overflow-hidden rounded-t-3xl bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_24px_64px_-12px_rgb(0_0_0/0.35)] max-sm:max-h-[92dvh] sm:rounded-3xl"
                         >
+                            <span class="mx-auto mt-2.5 block h-1 w-10 shrink-0 rounded-full bg-gray-300 sm:hidden" aria-hidden="true"></span>
                             <!-- En-tête : identité, inscriptions, fermeture -->
                             <header class="flex items-start gap-4 border-b border-gray-100 px-5 pt-5 pb-4 sm:px-7">
                                 <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-insec-600 font-titre text-base font-bold text-white">
@@ -639,27 +672,27 @@ const totauxFinanciers = computed(() => ({
                                 <template v-else>
                                     <!-- Chiffres clés -->
                                     <section class="px-5 pt-5 sm:px-7">
-                                        <div class="grid grid-cols-3 gap-3">
-                                            <div class="rounded-2xl bg-gray-50 p-4 ring-1 ring-gray-100">
+                                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                                            <div class="rounded-2xl bg-gray-50 p-3 ring-1 ring-gray-100 sm:p-4">
                                                 <p class="text-xs text-gray-500">Net à payer</p>
-                                                <p class="mt-1 font-titre text-xl font-bold text-gray-900 tabular-nums sm:text-2xl">{{ montant(montantNet(inscription)) }}</p>
+                                                <p class="mt-1 font-titre text-base font-bold text-gray-900 tabular-nums max-sm:whitespace-nowrap sm:text-2xl">{{ montant(montantNet(inscription)) }}</p>
                                                 <p class="mt-0.5 text-[11px] text-gray-400">
                                                     MRU<template v-if="inscription.montantRemise"> · remise {{ montant(inscription.montantRemise) }}</template>
                                                 </p>
                                             </div>
-                                            <div class="rounded-2xl bg-emerald-50/70 p-4 ring-1 ring-emerald-100">
+                                            <div class="rounded-2xl bg-emerald-50/70 p-3 ring-1 ring-emerald-100 sm:p-4">
                                                 <p class="text-xs text-emerald-700">Versé</p>
-                                                <p class="mt-1 font-titre text-xl font-bold text-emerald-700 tabular-nums sm:text-2xl">{{ montant(inscription.totalVerse) }}</p>
+                                                <p class="mt-1 font-titre text-base font-bold text-emerald-700 tabular-nums max-sm:whitespace-nowrap sm:text-2xl">{{ montant(inscription.totalVerse) }}</p>
                                                 <p class="mt-0.5 text-[11px] text-emerald-700/70">MRU</p>
                                             </div>
-                                            <div v-if="montantARembourser(inscription) > 0" class="rounded-2xl bg-sky-50/70 p-4 ring-1 ring-sky-100">
+                                            <div v-if="montantARembourser(inscription) > 0" class="rounded-2xl bg-sky-50/70 p-3 ring-1 ring-sky-100 sm:p-4">
                                                 <p class="text-xs text-sky-800">À rembourser</p>
-                                                <p class="mt-1 font-titre text-xl font-bold text-sky-800 tabular-nums sm:text-2xl">{{ montant(montantARembourser(inscription)) }}</p>
+                                                <p class="mt-1 font-titre text-base font-bold text-sky-800 tabular-nums max-sm:whitespace-nowrap sm:text-2xl">{{ montant(montantARembourser(inscription)) }}</p>
                                                 <p class="mt-0.5 text-[11px] text-sky-800/70">MRU · {{ inscription.statut === 'annulée' ? 'inscription annulée' : 'trop-perçu' }}</p>
                                             </div>
-                                            <div v-else :class="['rounded-2xl p-4 ring-1', montantEnRetard(inscription) > 0 ? 'bg-red-50/70 ring-red-100' : 'bg-amber-50/70 ring-amber-100']">
+                                            <div v-else :class="['rounded-2xl p-3 ring-1 sm:p-4', montantEnRetard(inscription) > 0 ? 'bg-red-50/70 ring-red-100' : 'bg-amber-50/70 ring-amber-100']">
                                                 <p :class="['text-xs', montantEnRetard(inscription) > 0 ? 'text-red-700' : 'text-amber-800']">Reste à payer</p>
-                                                <p :class="['mt-1 font-titre text-xl font-bold tabular-nums sm:text-2xl', montantEnRetard(inscription) > 0 ? 'text-red-700' : 'text-amber-800']">{{ montant(soldeRestant(inscription)) }}</p>
+                                                <p :class="['mt-1 font-titre text-base font-bold tabular-nums max-sm:whitespace-nowrap sm:text-2xl', montantEnRetard(inscription) > 0 ? 'text-red-700' : 'text-amber-800']">{{ montant(soldeRestant(inscription)) }}</p>
                                                 <p :class="['mt-0.5 text-[11px]', montantEnRetard(inscription) > 0 ? 'text-red-700/80' : 'text-amber-800/70']">
                                                     MRU<template v-if="montantEnRetard(inscription) > 0"> · {{ montant(montantEnRetard(inscription)) }} en retard</template>
                                                 </p>
@@ -672,7 +705,7 @@ const totauxFinanciers = computed(() => ({
                                                 <strong class="tabular-nums">{{ inscription.ueIds.length }} UE × {{ montant(tarifUe(inscription) ?? 0) }} = {{ montant(tarifDe(inscription) ?? 0) }} MRU</strong>
                                                 {{ ' ' }}<span class="text-amber-800/80">({{ ecartDe(inscription)! > 0 ? '+' : '' }}{{ montant(ecartDe(inscription)!) }})</span>.
                                             </span>
-                                            <button v-if="peutModifier" type="button" class="bouton-secondaire min-h-0 py-1.5 text-xs" @click="appliquerTarif">Utiliser le tarif</button>
+                                            <button v-if="peutModifier" type="button" class="bouton-secondaire min-h-0 py-1.5 text-xs max-sm:min-h-10 max-sm:w-full" @click="appliquerTarif">Utiliser le tarif</button>
                                         </div>
                                         <div class="mt-4 flex items-center gap-3">
                                             <span class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
@@ -688,12 +721,12 @@ const totauxFinanciers = computed(() => ({
                                         <!-- Actions -->
                                         <div class="mt-4 flex flex-wrap items-center gap-2">
                                             <template v-if="aRole('admin', 'super_admin')">
-                                                <button type="button" class="bouton-secondaire" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))">
+                                                <button type="button" class="bouton-secondaire max-sm:flex-1" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))">
                                                     <i class="fa-solid fa-file-pdf text-xs text-red-500"></i>Facture PDF
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    class="bouton-secondaire"
+                                                    class="bouton-secondaire max-sm:flex-1"
                                                     :disabled="envoi || !emailEtudiantValide"
                                                     :title="emailEtudiantValide ? `Envoyer à ${selectionne.email}` : 'Adresse e-mail absente ou invalide'"
                                                     @click="envoyerDocument('facture', inscription.id, 'la facture', selectionne.email ?? '')"
@@ -702,7 +735,7 @@ const totauxFinanciers = computed(() => ({
                                             <button
                                                 v-if="montantEnRetard(inscription) > 0 && peutModifier"
                                                 type="button"
-                                                class="bouton-danger"
+                                                class="bouton-danger max-sm:w-full"
                                                 :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
                                                 @click="relancer"
                                             ><i class="fa-regular fa-bell text-xs"></i>{{ inscription.derniereRelanceLe === aujourdhui() ? 'Déjà relancé aujourd’hui' : 'Relancer par e-mail' }}</button>
@@ -890,46 +923,46 @@ const totauxFinanciers = computed(() => ({
                 </label>
             </div>
 
-            <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Chiffres clés de l’année">
-                <article class="carte p-5">
+            <section class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-label="Chiffres clés de l’année">
+                <article class="carte p-4 max-sm:last:col-span-2 sm:p-5">
                     <div class="flex items-start justify-between gap-3">
                         <p class="text-[13px] font-medium text-gray-500">Étudiants inscrits · {{ carte?.libelle ?? anneeSynthese }}</p>
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-700 text-white shadow-sm"><i class="fa-solid fa-users text-[13px]"></i></span>
+                        <span class="flex h-9 w-9 shrink-0 max-sm:hidden items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-700 text-white shadow-sm"><i class="fa-solid fa-users text-[13px]"></i></span>
                     </div>
-                    <p class="mt-3 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ carte?.etudiants ?? 0 }}</p>
+                    <p class="mt-3 font-titre text-2xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.75rem]">{{ carte?.etudiants ?? 0 }}</p>
                     <p class="mt-2.5 text-xs text-gray-500">{{ totauxFinanciers.unites }} UE · {{ carte?.nbEtudiants ?? 0 }} à leur charge · {{ carte?.nbBumex ?? 0 }} BUMEX</p>
                 </article>
-                <article class="carte p-5">
+                <article class="carte p-4 max-sm:last:col-span-2 sm:p-5">
                     <div class="flex items-start justify-between gap-3">
                         <p class="text-[13px] font-medium text-gray-500">Facture estimée de l’INTEC</p>
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-sky-400 to-sky-600 text-white shadow-sm"><i class="fa-solid fa-euro-sign text-[13px]"></i></span>
+                        <span class="flex h-9 w-9 shrink-0 max-sm:hidden items-center justify-center rounded-xl bg-linear-to-br from-sky-400 to-sky-600 text-white shadow-sm"><i class="fa-solid fa-euro-sign text-[13px]"></i></span>
                     </div>
-                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ euros(totauxFinanciers.coutIntecEuro) }}</p>
+                    <p class="mt-3 font-titre text-xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.5rem]">{{ euros(totauxFinanciers.coutIntecEuro) }}</p>
                     <p class="mt-2.5 text-xs text-gray-500">{{ totauxFinanciers.coutIntecMru === null ? 'Équivalent MRU à calculer après saisie du taux' : `≈ ${montant(totauxFinanciers.coutIntecMru)} MRU` }}</p>
                 </article>
-                <article class="carte p-5">
+                <article class="carte p-4 max-sm:last:col-span-2 sm:p-5">
                     <div class="flex items-start justify-between gap-3">
                         <p class="text-[13px] font-medium text-gray-500">Tarif prévu · étudiants payeurs</p>
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-slate-400 to-slate-600 text-white shadow-sm"><i class="fa-solid fa-receipt text-[13px]"></i></span>
+                        <span class="flex h-9 w-9 shrink-0 max-sm:hidden items-center justify-center rounded-xl bg-linear-to-br from-slate-400 to-slate-600 text-white shadow-sm"><i class="fa-solid fa-receipt text-[13px]"></i></span>
                     </div>
-                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ montant(totauxFinanciers.tarifEtudiantsMru) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></p>
+                    <p class="mt-3 font-titre text-xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.5rem]">{{ montant(totauxFinanciers.tarifEtudiantsMru) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></p>
                     <p class="mt-2.5 text-xs text-gray-500">Recette externe théorique selon le nombre d’UE</p>
                 </article>
-                <article class="carte p-5">
+                <article class="carte p-4 max-sm:last:col-span-2 sm:p-5">
                     <div class="flex items-start justify-between gap-3">
                         <p class="text-[13px] font-medium text-gray-500">Financement BUMEX · interne</p>
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm"><i class="fa-solid fa-building-columns text-[13px]"></i></span>
+                        <span class="flex h-9 w-9 shrink-0 max-sm:hidden items-center justify-center rounded-xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm"><i class="fa-solid fa-building-columns text-[13px]"></i></span>
                     </div>
-                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ euros(totauxFinanciers.financementBumexEuro) }}</p>
+                    <p class="mt-3 font-titre text-xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.5rem]">{{ euros(totauxFinanciers.financementBumexEuro) }}</p>
                     <p class="mt-2.5 text-xs text-gray-500">{{ totauxFinanciers.financementBumexMru === null ? 'Équivalent MRU à calculer après saisie du taux' : `≈ ${montant(totauxFinanciers.financementBumexMru)} MRU` }}</p>
                     <p class="mt-1 text-xs text-gray-400">Tarif INTEC par UE, payé en euros, sans marge</p>
                 </article>
-                <article class="carte p-5">
+                <article class="carte p-4 max-sm:last:col-span-2 sm:p-5">
                     <div class="flex items-start justify-between gap-3">
                         <p class="text-[13px] font-medium text-gray-500">Marge des étudiants payeurs</p>
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-emerald-600 text-white shadow-sm"><i class="fa-solid fa-arrow-trend-up text-[13px]"></i></span>
+                        <span class="flex h-9 w-9 shrink-0 max-sm:hidden items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-emerald-600 text-white shadow-sm"><i class="fa-solid fa-arrow-trend-up text-[13px]"></i></span>
                     </div>
-                    <p class="mt-3 font-titre text-[1.5rem] leading-none font-bold tracking-tight text-emerald-700 tabular-nums">
+                    <p class="mt-3 font-titre text-xl leading-none font-bold tracking-tight text-emerald-700 tabular-nums sm:text-[1.5rem]">
                         <template v-if="totauxFinanciers.margeEtudiantsMru === null">—</template>
                         <template v-else>{{ montant(totauxFinanciers.margeEtudiantsMru) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></template>
                     </p>

@@ -136,40 +136,40 @@ async function supprimer() {
         </div>
     </header>
 
-    <section class="mb-6 grid gap-4 sm:grid-cols-3" aria-label="Résumé des inscriptions pour l’année sélectionnée">
-        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-5 text-left transition hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'inscrits' && 'ring-2 ring-emerald-500/30']" @click="filtreInscription = 'inscrits'">
+    <section class="mb-6 grid grid-cols-3 gap-2 sm:gap-4" aria-label="Résumé des inscriptions pour l’année sélectionnée">
+        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-3 text-left transition sm:p-5 hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'inscrits' && 'ring-2 ring-emerald-500/30']" @click="filtreInscription = 'inscrits'">
             <div>
-                <p class="text-[13px] font-medium text-gray-500">Inscrits à l’INSEC</p>
-                <p class="mt-2 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ inscritsAnnee }}</p>
+                <p class="text-[11px] font-medium text-gray-500 max-sm:leading-tight sm:text-[13px]">Inscrits à l’INSEC</p>
+                <p class="mt-2 font-titre text-2xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.75rem]">{{ inscritsAnnee }}</p>
             </div>
-            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-emerald-600 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-user-check text-sm"></i></span>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br max-sm:hidden from-emerald-400 to-emerald-600 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-user-check text-sm"></i></span>
         </button>
-        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-5 text-left transition hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'non-actifs' && 'ring-2 ring-amber-500/30']" @click="filtreInscription = 'non-actifs'">
+        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-3 text-left transition sm:p-5 hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'non-actifs' && 'ring-2 ring-amber-500/30']" @click="filtreInscription = 'non-actifs'">
             <div>
-                <p class="text-[13px] font-medium text-gray-500">Dossiers annuels à vérifier</p>
-                <p class="mt-2 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ dossiersAverifierAnnee }}</p>
+                <p class="text-[11px] font-medium text-gray-500 max-sm:leading-tight sm:text-[13px]">Dossiers annuels à vérifier</p>
+                <p class="mt-2 font-titre text-2xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.75rem]">{{ dossiersAverifierAnnee }}</p>
             </div>
-            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-user-clock text-sm"></i></span>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br max-sm:hidden from-amber-400 to-orange-500 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-user-clock text-sm"></i></span>
         </button>
-        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-5 text-left transition hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'dossiers-annee' && 'ring-2 ring-insec-500/30']" @click="filtreInscription = 'dossiers-annee'">
+        <button type="button" :class="['carte group flex cursor-pointer items-center justify-between p-3 text-left transition sm:p-5 hover:-translate-y-0.5 hover:shadow-flottant', filtreInscription === 'dossiers-annee' && 'ring-2 ring-insec-500/30']" @click="filtreInscription = 'dossiers-annee'">
             <div>
-                <p class="text-[13px] font-medium text-gray-500">Étudiants suivis cette année</p>
-                <p class="mt-2 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">{{ etudiantsAvecDossierAnnee }}</p>
+                <p class="text-[11px] font-medium text-gray-500 max-sm:leading-tight sm:text-[13px]">Étudiants suivis cette année</p>
+                <p class="mt-2 font-titre text-2xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.75rem]">{{ etudiantsAvecDossierAnnee }}</p>
             </div>
-            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-insec-500 to-insec-700 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-users text-sm"></i></span>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br max-sm:hidden from-insec-500 to-insec-700 text-white shadow-sm" aria-hidden="true"><i class="fa-solid fa-users text-sm"></i></span>
         </button>
     </section>
 
     <div class="carte mb-4 flex flex-wrap items-center gap-2 p-3">
-        <div class="relative min-w-[220px] flex-1">
+        <div class="relative min-w-[220px] flex-1 max-sm:w-full">
             <i class="fa-solid fa-magnifying-glass pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-[13px] text-gray-400"></i>
             <input v-model="recherche" type="search" placeholder="Rechercher un étudiant par nom ou e-mail…" class="champ pl-10" aria-label="Rechercher" />
         </div>
-        <select v-model="formationId" class="champ w-auto" aria-label="Formation pour l’année sélectionnée">
+        <select v-model="formationId" class="champ w-auto max-sm:w-full" aria-label="Formation pour l’année sélectionnée">
             <option value="">Toutes les formations</option>
             <option v-for="f in formationsActives" :key="f.id" :value="f.id">{{ f.code }} · {{ f.nom }}</option>
         </select>
-        <select v-model="filtreInscription" class="champ w-auto" aria-label="Filtrer par inscription">
+        <select v-model="filtreInscription" class="champ w-auto max-sm:w-full" aria-label="Filtrer par inscription">
             <option value="dossiers-annee">Dossiers de l’année</option>
             <option value="inscrits">Inscrits cette année</option>
             <option value="non-actifs">Dossiers annuels à vérifier</option>
@@ -213,7 +213,26 @@ async function supprimer() {
             <button v-if="!etudiantsAvecDossierAnnee && filtreInscription !== 'annuaire'" class="bouton-secondaire mt-5" @click="filtreInscription = 'annuaire'">Afficher l’annuaire complet</button>
             <button v-else class="bouton-secondaire mt-5" @click="effacerFiltres">Effacer la recherche et les filtres</button>
         </section>
-        <div v-else class="carte overflow-x-auto">
+        <!-- Téléphone : une carte par étudiant, à toucher pour ouvrir sa fiche. -->
+        <ul v-if="filtres.length" class="carte divide-y divide-gray-100 overflow-hidden sm:hidden">
+            <li v-for="e in affiches" :key="e.id">
+                <RouterLink :to="`/etudiants/${e.id}`" class="flex items-center gap-3 px-4 py-3.5 transition active:bg-gray-50">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-insec-50 text-xs font-bold text-insec-700 ring-1 ring-insec-100">{{ `${e.prenom?.[0] ?? ''}${e.nom?.[0] ?? ''}`.toUpperCase() }}</span>
+                    <span class="min-w-0 flex-1">
+                        <strong class="block truncate text-[15px] font-semibold text-gray-900">{{ e.nom }} {{ e.prenom }}</strong>
+                        <span class="mt-1 flex flex-wrap items-center gap-1.5">
+                            <span v-for="i in inscriptionsPour(e.id)" :key="i.id" class="inline-flex rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold text-gray-700">{{ formation(i.formationId)?.code ?? 'Formation inconnue' }}</span>
+                            <span :class="['inline-flex items-center gap-1 text-xs', situationInscription(e.id).inscrit ? 'text-emerald-700' : situationInscription(e.id).aDossier ? 'text-amber-700' : 'text-gray-500']">
+                                <span :class="['h-1.5 w-1.5 rounded-full', situationInscription(e.id).inscrit ? 'bg-emerald-500' : situationInscription(e.id).aDossier ? 'bg-amber-500' : 'bg-gray-400']"></span>
+                                {{ situationInscription(e.id).inscrit ? 'Inscrit' : situationInscription(e.id).aDossier ? 'À vérifier' : 'Aucun dossier' }}
+                            </span>
+                        </span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right text-xs text-gray-300"></i>
+                </RouterLink>
+            </li>
+        </ul>
+        <div v-if="filtres.length" class="carte overflow-x-auto max-sm:hidden">
             <table class="tableau">
                 <thead><tr><th>Nom & prénom</th><th>E-mail</th><th>Formation cette année</th><th>Statut pour l’année</th><th>Situation</th><th v-if="estAdmin" class="text-right">Actions</th></tr></thead>
                 <tbody>

@@ -193,20 +193,20 @@ const cartes = (t: Tableau) => [
 
     <Chargement :chargement="chargement && !tableau" :erreur="erreur">
         <template v-if="tableau">
-            <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]" :class="{ 'opacity-60 transition': chargement }" aria-label="Chiffres clés">
+            <section class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))] sm:gap-4" :class="{ 'opacity-60 transition': chargement }" aria-label="Chiffres clés">
                 <RouterLink
                     v-for="carte in cartes(tableau)"
                     :key="carte.libelle"
                     :to="carte.lien"
-                    class="carte group relative overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-flottant"
+                    class="carte group relative overflow-hidden p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-flottant max-sm:last:odd:col-span-2 sm:p-5"
                 >
                     <div class="flex items-start justify-between gap-3">
                         <p class="text-[13px] font-medium text-gray-500">{{ carte.libelle }}</p>
-                        <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-sm', carte.teinte]">
+                        <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-sm max-sm:hidden', carte.teinte]">
                             <i :class="['fa-solid text-[13px]', carte.icone]"></i>
                         </span>
                     </div>
-                    <p class="mt-3 font-titre text-[1.75rem] leading-none font-bold tracking-tight text-gray-900 tabular-nums">
+                    <p class="mt-3 font-titre text-2xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.75rem]">
                         {{ carte.valeur }}<span v-if="carte.unite" class="ml-1 text-sm font-semibold text-gray-400">{{ carte.unite }}</span>
                     </p>
                     <p class="mt-2.5 flex items-center justify-between gap-2 text-xs text-gray-500">
@@ -219,7 +219,7 @@ const cartes = (t: Tableau) => [
             <div v-if="tableau.montantEnRetard > 0" class="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-red-200/80 bg-linear-to-r from-red-50 to-surface p-4 sm:px-5">
                 <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"><i class="fa-solid fa-triangle-exclamation"></i></span>
                 <p class="min-w-0 flex-1 text-sm text-red-900"><strong class="font-semibold">{{ montant(tableau.montantEnRetard) }} MRU</strong> de paiements sont en retard.</p>
-                <RouterLink to="/finances" class="bouton-secondaire">Consulter les finances <i class="fa-solid fa-arrow-right text-xs"></i></RouterLink>
+                <RouterLink to="/finances" class="bouton-secondaire max-sm:w-full">Consulter les finances <i class="fa-solid fa-arrow-right text-xs"></i></RouterLink>
             </div>
 
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -313,7 +313,7 @@ const cartes = (t: Tableau) => [
                                     <span class="pastille bg-emerald-50 text-emerald-700 ring-emerald-600/15"><i class="fa-regular fa-clock text-[10px]"></i>{{ heureNouakchottDepuisParis(e.date, e.heure) }} Nouakchott</span>
                                 </span>
                             </span>
-                            <RouterLink :to="lienSuiviIntec(e)" class="bouton-secondaire">Ouvrir le suivi</RouterLink>
+                            <RouterLink :to="lienSuiviIntec(e)" class="bouton-secondaire max-sm:w-full">Ouvrir le suivi</RouterLink>
                         </li>
                     </ul>
                     <p v-else class="px-6 py-8 text-sm text-gray-500">Les épreuves de ce calendrier sont passées. Consultez le document INTEC pour les prochaines dates publiées.</p>

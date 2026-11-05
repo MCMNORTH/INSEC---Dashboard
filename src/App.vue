@@ -7,6 +7,7 @@ import BarreSuperieure from './composants/BarreSuperieure.vue';
 import Dialogue from './composants/Dialogue.vue';
 import MarqueInsec from './composants/MarqueInsec.vue';
 import MessageFlash from './composants/MessageFlash.vue';
+import NavigationMobile from './composants/NavigationMobile.vue';
 import PaletteCommandes from './composants/PaletteCommandes.vue';
 import { aRole, session } from './session';
 
@@ -53,7 +54,7 @@ const recherche = ref(false);
         <BarreLaterale v-model:reduite="menuReduit" v-model:ouverte-mobile="menuMobile" />
         <div class="flex min-w-0 flex-1 flex-col">
             <BarreSuperieure @menu="menuMobile = true" @recherche="recherche = true" />
-            <main class="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+            <main class="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 max-lg:pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10">
                 <RouterView v-slot="{ Component }">
                     <div :key="route.path" class="animate-apparition">
                         <component :is="Component" />
@@ -61,6 +62,7 @@ const recherche = ref(false);
                 </RouterView>
             </main>
         </div>
+        <NavigationMobile :menu-ouvert="menuMobile" @menu="menuMobile = !menuMobile" />
         <PaletteCommandes v-model="recherche" />
     </div>
     <!-- Comptes hors équipe INSEC (anciens rôles étudiant/enseignant) : seule la page « Accès refusé » s'affiche. -->
