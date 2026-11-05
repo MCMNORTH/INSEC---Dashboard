@@ -35,7 +35,8 @@ export const cleEmailEtudiant = (email: string) => `etudiant-email:${email}`;
 
 /**
  * Vérifie que l'année académique existe et que les UE choisies appartiennent au diplôme
- * et à l'année de parcours sélectionnés (lectures uniquement).
+ * (lectures uniquement). Un étudiant peut suivre des UE de plusieurs années du diplôme la même
+ * année scolaire (choix permis par l'INTEC) ; l'année de parcours indique son année principale.
  * Renvoie le montant dû au tarif du diplôme (nombre d'UE × tarif), 0 si le diplôme n'a pas de tarif.
  */
 export async function controlerInscription(tx: Transaction, v: ChampsInscription): Promise<number> {
@@ -47,12 +48,11 @@ export async function controlerInscription(tx: Transaction, v: ChampsInscription
     );
     if (!formation.exists) erreurChamp('formationId', 'Diplôme inconnu.');
     if (!annee.exists) erreurChamp('anneeId', 'Année académique inconnue.');
-    const conformes = ues.filter(
-        (ue) => ue.exists && ue.get('formationId') === v.formationId && ue.get('anneeParcours') === v.anneeParcours,
-    );
-    if (v.anneeParcours > (formation.get('dureeAnnees') ?? 1) || conformes.length !== v.ueIds.length) {
-        erreurChamp('ueIds', 'Les UE choisies doivent appartenir au diplôme et à l’année de parcours sélectionnés.');
+    if (v.anneeParcours > (formation.get('dureeAnnees') ?? 1)) {
+        erreurChamp('anneeParcours', 'L’année de parcours dépasse la durée du diplôme.');
     }
+    const conformes = ues.filter((ue) => ue.exists && ue.get('formationId') === v.formationId);
+    if (conformes.length !== v.ueIds.length) erreurChamp('ueIds', 'Les UE choisies doivent appartenir au diplôme sélectionné.');
     return montantDuSelonTarif(formation.get('code') ?? v.formationId, v.ueIds.length) ?? 0;
 }
 

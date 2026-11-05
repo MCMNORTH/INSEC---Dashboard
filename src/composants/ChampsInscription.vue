@@ -18,10 +18,19 @@ const valeurs = defineModel<ValeursInscription>({ required: true });
 const { formationsActives, annees, anneeCourante, ues, formation } = useReferentiel();
 
 const duree = computed(() => formation(valeurs.value.formationId)?.dureeAnnees ?? 3);
+// Toutes les UE du diplôme sont proposées, groupées par année : un étudiant peut suivre des UE
+// de plusieurs années la même année scolaire (choix permis par l'INTEC).
 const uesProposees = computed(() =>
-    ues.value.filter((u) => u.active !== false && u.formationId === valeurs.value.formationId && u.anneeParcours === Number(valeurs.value.anneeParcours)),
+    ues.value
+        .filter((u) => u.active !== false && u.formationId === valeurs.value.formationId)
+        .sort((a, b) => (a.anneeParcours ?? 0) - (b.anneeParcours ?? 0) || String(a.code).localeCompare(String(b.code))),
 );
-// Comme dans le formulaire d'origine : changer de diplôme ou d'année décoche les UE devenues incompatibles.
+const groupesUe = computed(() => {
+    const groupes = new Map<number, typeof uesProposees.value>();
+    for (const ue of uesProposees.value) groupes.set(ue.anneeParcours ?? 0, [...(groupes.get(ue.anneeParcours ?? 0) ?? []), ue]);
+    return [...groupes.entries()];
+});
+// Changer de diplôme décoche les UE devenues incompatibles.
 watch(uesProposees, (liste) => {
     const permises = new Set(liste.map((u) => u.id));
     valeurs.value.ueIds = valeurs.value.ueIds.filter((id) => permises.has(id));
@@ -76,9 +85,12 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
             <p class="text-[13px] font-medium text-gray-700">UE suivies</p>
             <span v-if="uesProposees.length" class="pastille bg-insec-50 text-insec-700 ring-insec-600/15">{{ valeurs.ueIds.length }} / {{ uesProposees.length }} sélectionnée(s)</span>
         </div>
-        <div v-if="uesProposees.length" class="grid gap-2.5 md:grid-cols-2">
+        <div v-if="uesProposees.length" class="space-y-4">
+          <div v-for="[anneeUe, liste] in groupesUe" :key="anneeUe">
+            <p class="mb-2 text-xs font-semibold tracking-wide text-gray-500 uppercase">UE de l’année {{ anneeUe }}</p>
+            <div class="grid gap-2.5 md:grid-cols-2">
             <label
-                v-for="ue in uesProposees"
+                v-for="ue in liste"
                 :key="ue.id"
                 class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-surface p-3 text-sm shadow-xs transition hover:border-gray-300 has-[:checked]:border-insec-400 has-[:checked]:bg-insec-50/60 has-[:checked]:ring-1 has-[:checked]:ring-insec-400/40"
             >
@@ -89,10 +101,12 @@ const STATUTS = [['active', 'Active'], ['terminée', 'Terminée'], ['suspendue',
                     <span class="mt-0.5 block text-xs text-gray-500">{{ ue.credits }} ECTS</span>
                 </span>
             </label>
+            </div>
+          </div>
         </div>
         <div v-else class="flex items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/60 p-4 text-sm text-gray-500">
             <i class="fa-solid fa-circle-info text-gray-400"></i>
-            Choisissez d’abord le diplôme et l’année de parcours.
+            Choisissez d’abord le diplôme.
         </div>
         <p v-if="erreurs.ueIds" class="mt-1 block text-xs text-red-600">{{ erreurs.ueIds }}</p>
     </div>

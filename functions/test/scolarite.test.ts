@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant, creerInscription, modifierEtudiant, modifierInscription, supprimerEtudiant } from '../src/handlers/etudiants.js';
 import { creerExamen, enregistrerPresencesExamen } from '../src/handlers/examens.js';
 import { ajouterVersement } from '../src/handlers/finances.js';
+import { montantDuSelonTarif } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
 
 const etudiantValide = {
@@ -30,10 +31,17 @@ describe('Étudiants et inscriptions', () => {
         expect(audit[0]).toMatchObject({ acteurId: admin.uid, adresseIp: '10.0.0.1', operation: 'creerEtudiant' });
     });
 
-    it('refuse une UE qui n’appartient pas au diplôme et à l’année choisis', async () => {
+    it('refuse une UE d’un autre diplôme et une année de parcours au-delà de la durée du diplôme', async () => {
         await attendreErreur(appeler(creerEtudiant, { ...etudiantValide, ueIds: ['TEC211'] }, admin), 'invalid-argument', 'ueIds');
-        await attendreErreur(appeler(creerEtudiant, { ...etudiantValide, ueIds: ['TEC112'] }, admin), 'invalid-argument', 'ueIds');
+        await attendreErreur(appeler(creerEtudiant, { ...etudiantValide, anneeParcours: 4, ueIds: ['TEC111'] }, admin), 'invalid-argument', 'anneeParcours');
         expect(await liste('etudiants')).toHaveLength(0);
+    });
+
+    it('accepte des UE de plusieurs années du même diplôme dans une inscription, au tarif du nombre d’UE', async () => {
+        await appeler(creerEtudiant, { ...etudiantValide, anneeParcours: 1, ueIds: ['TEC111', 'TEC119', 'TEC112'] }, admin);
+        const [inscription] = await liste('inscriptions');
+        expect(inscription).toMatchObject({ anneeParcours: 1, ueIds: ['TEC111', 'TEC119', 'TEC112'] });
+        expect(inscription.montantDu).toBe(montantDuSelonTarif('DGC', 3));
     });
 
     it('refuse un e-mail déjà utilisé', async () => {
