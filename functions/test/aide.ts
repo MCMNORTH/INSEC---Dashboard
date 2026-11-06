@@ -20,8 +20,10 @@ export async function referentiel(): Promise<void> {
     const lot = db.batch();
     lot.set(db.collection('formations').doc('DGC'), { code: 'DGC', nom: 'DGC', libelle: 'Diplôme de gestion et de comptabilité', dureeAnnees: 3, active: true });
     lot.set(db.collection('formations').doc('DSGC'), { code: 'DSGC', nom: 'DSGC', libelle: 'Diplôme supérieur de gestion et de comptabilité', dureeAnnees: 2, active: true });
+    lot.set(db.collection('formations').doc('CS'), { code: 'CS', nom: 'CS', libelle: 'Certificats de spécialisation', dureeAnnees: 1, active: true });
     const ues: [string, string, number, number][] = [
         ['TEC111', 'DGC', 1, 14], ['TEC119', 'DGC', 1, 14], ['TEC112', 'DGC', 2, 14], ['TEC211', 'DSGC', 1, 20],
+        ['TEC212', 'DSGC', 1, 15], ['TEC215', 'DSGC', 2, 15], ['TEC712', 'CS', 1, 0], ['TEC715', 'CS', 1, 0],
     ];
     ues.forEach(([code, formationId, anneeParcours, credits], ordre) =>
         lot.set(db.collection('ues').doc(code), { code, libelle: `UE ${code}`, formationId, anneeParcours, credits, ordre, active: true }),

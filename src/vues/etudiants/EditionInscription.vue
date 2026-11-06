@@ -19,6 +19,7 @@ const { donnee: etudiant, chargement: chargementEtudiant } = useDocument<Etudian
 
 const valeurs = ref<ValeursInscription | null>(props.inscriptionId ? null : {
     formationId: '', anneeId: '', anneeParcours: '', dateInscription: aujourdhui(), numeroIntec: '', financeur: 'etudiant', ueIds: [],
+    validationAcquis: 'aucune', ueDispenseesIds: [],
 });
 // Valeurs lues à l'ouverture : le serveur refuse si une autre personne les a changées entre-temps.
 let attendu: Record<string, unknown> | null = null;
@@ -31,6 +32,7 @@ watch(inscription, (i) => {
         valeurs.value = {
             formationId: i.formationId, anneeId: i.anneeId, anneeParcours: i.anneeParcours, dateInscription: i.dateInscription,
             numeroIntec: i.numeroIntec ?? '', statut: i.statut, financeur: i.financeur ?? 'etudiant', ueIds: [...i.ueIds],
+            validationAcquis: i.validationAcquis ?? 'aucune', ueDispenseesIds: [...(i.ueDispenseesIds ?? [])],
         };
     }
 }, { immediate: true });

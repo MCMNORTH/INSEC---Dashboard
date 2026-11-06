@@ -53,6 +53,10 @@ export interface Inscription {
     numeroIntec: string | null;
     statut: string;
     ueIds: string[];
+    /** Validation des acquis facturée avec l'inscription (absent sur les anciennes inscriptions = « aucune »). */
+    validationAcquis?: 'aucune' | 'VES' | 'VAPP' | 'VAPP+VES';
+    /** UE dispensées par décision VES : ni suivies ni facturées. */
+    ueDispenseesIds?: string[];
     montantDu: number;
     montantRemise: number;
     noteFinanciere: string | null;
