@@ -5,7 +5,7 @@ import { operation, refuser } from '../lib/contexte.js';
 import { col, controlerModificationConcurrente, exiger, libererUnique, verifierUnique, type Doc } from '../lib/donnees.js';
 import { bucket, db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, valeursAttendues, z } from '../lib/validation.js';
-import { montantDuSelonTarif, ROLES_ADMIN, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
+import { montantDuSelonTarif, ROLES_ADMIN, STATUTS_ETUDIANT, STATUTS_INSCRIPTION, uesEnDoublonVes, VALIDATIONS_ACQUIS } from '../shared/domaine.js';
 
 const emailOptionnel = z.preprocess(
     (valeur) => (typeof valeur === 'string' && valeur.trim() === '' ? null : valeur),
@@ -27,8 +27,10 @@ const champsInscription = z.object({
     anneeParcours: s.entier(1, 10),
     dateInscription: s.dateOptionnelle(),
     numeroIntec: s.texteOptionnel(100),
-    ueIds: z.array(s.id()).min(1, 'sélectionnez au moins une UE.').max(50),
+    ueIds: z.array(s.id()).max(50),
     financeur: s.choix(['etudiant', 'bumex'] as const).optional(),
+    validationAcquis: s.choix(VALIDATIONS_ACQUIS).optional(),
+    ueDispenseesIds: z.array(s.id()).max(50).optional(),
 });
 type ChampsInscription = z.output<typeof champsInscription>;
 
@@ -38,14 +40,24 @@ export const cleEmailEtudiant = (email: string) => `etudiant-email:${email}`;
  * Vérifie que l'année académique existe et que les UE choisies appartiennent au diplôme
  * (lectures uniquement). Un étudiant peut suivre des UE de plusieurs années du diplôme la même
  * année scolaire (choix permis par l'INTEC) ; l'année de parcours indique son année principale.
- * Renvoie le montant dû au tarif du diplôme (nombre d'UE × tarif), 0 si le diplôme n'a pas de tarif.
+ * Les UE dispensées par VES appartiennent aussi au diplôme et ne peuvent pas être suivies la même année (non-cumul).
+ * Renvoie le montant dû au tarif (UE suivies × tarif + validation des acquis), 0 si le diplôme n'a pas de tarif.
  */
 export async function controlerInscription(tx: Transaction, v: ChampsInscription): Promise<number> {
+    const dispensees = v.ueDispenseesIds ?? [];
+    if (!v.ueIds.length && (v.validationAcquis ?? 'aucune') === 'aucune') {
+        erreurChamp('ueIds', 'Sélectionnez au moins une UE, ou indiquez une validation des acquis (VES / VAPP).');
+    }
     if (new Set(v.ueIds).size !== v.ueIds.length) erreurChamp('ueIds', 'Une UE est sélectionnée plusieurs fois.');
+    if (new Set(dispensees).size !== dispensees.length) erreurChamp('ueDispenseesIds', 'Une UE dispensée est sélectionnée plusieurs fois.');
+    if (uesEnDoublonVes(v.ueIds, dispensees).length) {
+        erreurChamp('ueDispenseesIds', 'Une UE dispensée par VES ne peut pas être suivie la même année : retirez-la des UE suivies.');
+    }
+    const toutesUes = [...v.ueIds, ...dispensees];
     const [formation, annee, ...ues] = await tx.getAll(
         col.formations().doc(v.formationId),
         col.annees().doc(v.anneeId),
-        ...v.ueIds.map((id) => col.ues().doc(id)),
+        ...toutesUes.map((id) => col.ues().doc(id)),
     );
     if (!formation.exists) erreurChamp('formationId', 'Diplôme inconnu.');
     if (!annee.exists) erreurChamp('anneeId', 'Année académique inconnue.');
@@ -53,8 +65,8 @@ export async function controlerInscription(tx: Transaction, v: ChampsInscription
         erreurChamp('anneeParcours', 'L’année de parcours dépasse la durée du diplôme.');
     }
     const conformes = ues.filter((ue) => ue.exists && ue.get('formationId') === v.formationId);
-    if (conformes.length !== v.ueIds.length) erreurChamp('ueIds', 'Les UE choisies doivent appartenir au diplôme sélectionné.');
-    return montantDuSelonTarif(formation.get('code') ?? v.formationId, v.ueIds.length) ?? 0;
+    if (conformes.length !== toutesUes.length) erreurChamp('ueIds', 'Les UE choisies doivent appartenir au diplôme sélectionné.');
+    return montantDuSelonTarif(formation.get('code') ?? v.formationId, v.ueIds.length, v.validationAcquis) ?? 0;
 }
 
 export function attributsInscription(v: ChampsInscription, statut: string) {
@@ -67,6 +79,8 @@ export function attributsInscription(v: ChampsInscription, statut: string) {
         statut,
         ueIds: v.ueIds,
         financeur: v.financeur ?? 'etudiant',
+        validationAcquis: v.validationAcquis ?? 'aucune',
+        ueDispenseesIds: v.ueDispenseesIds ?? [],
     };
 }
 
@@ -245,7 +259,7 @@ export const modifierInscription = operation('modifierInscription', ROLES_ADMIN,
             erreurChamp('formationId', 'Une inscription active existe déjà pour ce diplôme et cette année scolaire.');
         }
         // Le montant suit le tarif quand les UE changent, sauf s'il a été fixé à la main par la finance.
-        const ancienTarif = montantDuSelonTarif(avant.formationId, (avant.ueIds ?? []).length) ?? 0;
+        const ancienTarif = montantDuSelonTarif(avant.formationId, (avant.ueIds ?? []).length, avant.validationAcquis) ?? 0;
         const montantAuTarif = (avant.montantDu ?? 0) === 0 || avant.montantDu === ancienTarif;
         const apres = {
             ...attributsInscription(v, v.statut),

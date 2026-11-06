@@ -87,7 +87,11 @@ firebase deploy --project insec-bd390
 > Section à compléter par l’utilisateur. Exemples de points à préciser :
 
 - Calendrier d’inscription INTEC (dates limites, pièces exigées) : _à compléter_
-- Règles de tarification par UE (INTEC / INSEC) et modalités de paiement : _à compléter_
+- Règles de tarification (source unique : `TARIFS_UE` et `TARIFS_VALIDATION` dans `functions/src/shared/domaine.ts`) :
+  - UE DGC : 160 € INTEC / 16 000 MRU ; UE DSGC : 180 € / 18 000 MRU ; certificat de spécialisation (TEC 712, 714, 715, 716, 761) : 280 € / 23 000 MRU (grille tarifaire INTEC signée, correction à l’INTEC) ;
+  - validation des acquis, frais d’instruction : VES ou VAPP 70 € / 5 500 MRU ; VAPP + VES du même candidat 100 € / 8 000 MRU ;
+  - une UE dispensée par VES n’est ni suivie ni facturée, et ne peut pas être suivie la même année (non-cumul INTEC).
+- Modalités de paiement : _à compléter_
 - Organisation des examens : réception des sujets, convocations, feuilles de présence, surveillance, retour des copies à l’INTEC (délais, bordereau) : _à compléter_
 - Publication des résultats et diffusion aux étudiants : _à compléter_
 - Convention INTEC – INSEC (renouvellement, obligations) : _à compléter_

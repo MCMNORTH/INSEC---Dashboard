@@ -14,7 +14,7 @@ import type { Etudiant } from '../../types';
 const router = useRouter();
 const { envoi, erreurs, soumettre } = useFormulaire();
 const identite = ref<Identite>({ nom: '', prenom: '', email: '', dateNaissance: '', telephone: '', statut: 'Actif' });
-const inscription = ref<ValeursInscription>({ formationId: '', anneeId: '', anneeParcours: '', dateInscription: '', numeroIntec: '', financeur: 'etudiant', ueIds: [] });
+const inscription = ref<ValeursInscription>({ formationId: '', anneeId: '', anneeParcours: '', dateInscription: '', numeroIntec: '', financeur: 'etudiant', ueIds: [], validationAcquis: 'aucune', ueDispenseesIds: [] });
 const noteFinanciere = ref('');
 const { donnees: annuaire, chargement: chargementAnnuaire, erreur: erreurAnnuaire } = useRequete<Etudiant>(() => query(collection(db, 'etudiants'), orderBy('nom')));
 const normaliser = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');

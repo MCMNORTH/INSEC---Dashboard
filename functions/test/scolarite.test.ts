@@ -44,6 +44,37 @@ describe('Étudiants et inscriptions', () => {
         expect(inscription.montantDu).toBe(montantDuSelonTarif('DGC', 3));
     });
 
+    it('facture la VES avec les UE suivies et refuse une UE à la fois suivie et dispensée (non-cumul)', async () => {
+        const dsgc = { ...etudiantValide, formationId: 'DSGC', ueIds: ['TEC211', 'TEC212'], validationAcquis: 'VES', ueDispenseesIds: ['TEC215'] };
+        await attendreErreur(
+            appeler(creerEtudiant, { ...dsgc, ueIds: ['TEC211', 'TEC215'] }, admin),
+            'invalid-argument', 'ueDispenseesIds',
+        );
+        await appeler(creerEtudiant, dsgc, admin);
+        const [inscription] = await liste('inscriptions');
+        expect(inscription).toMatchObject({ validationAcquis: 'VES', ueDispenseesIds: ['TEC215'], ueIds: ['TEC211', 'TEC212'] });
+        // 2 UE DSGC (2 × 18 000) + VES (5 500) ; l'UE dispensée n'est pas facturée.
+        expect(inscription.montantDu).toBe(41500);
+    });
+
+    it('inscrit aux certificats de spécialisation au tarif du certificat, et accepte une VAPP seule', async () => {
+        await appeler(creerEtudiant, { ...etudiantValide, formationId: 'CS', ueIds: ['TEC712', 'TEC715'] }, admin);
+        expect((await liste('inscriptions'))[0].montantDu).toBe(46000);
+        await appeler(creerEtudiant, { ...etudiantValide, email: 'autre@example.com', ueIds: [], validationAcquis: 'VAPP' }, admin);
+        const vapp = (await liste('inscriptions')).find((i) => i.validationAcquis === 'VAPP');
+        expect(vapp?.montantDu).toBe(5500);
+        // Sans UE ni validation des acquis, l'inscription est vide : refusée.
+        await attendreErreur(appeler(creerEtudiant, { ...etudiantValide, email: 'vide@example.com', ueIds: [] }, admin), 'invalid-argument', 'ueIds');
+    });
+
+    it('refuse aux rôles non autorisés d’enregistrer une validation des acquis', async () => {
+        for (const role of ['finance', 'consultation'] as const) {
+            const autre = await acteur(role);
+            await attendreErreur(appeler(creerEtudiant, { ...etudiantValide, validationAcquis: 'VES' }, autre), 'permission-denied');
+        }
+        expect(await liste('inscriptions')).toHaveLength(0);
+    });
+
     it('refuse un e-mail déjà utilisé', async () => {
         await appeler(creerEtudiant, etudiantValide, admin);
         await attendreErreur(appeler(creerEtudiant, { ...etudiantValide, email: 'awa@example.com' }, admin), 'already-exists', 'email');

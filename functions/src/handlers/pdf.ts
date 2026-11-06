@@ -10,8 +10,8 @@ import { db, FieldValue, FUSEAU } from '../lib/firebase.js';
 import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email.js';
 import { s, valider, z } from '../lib/validation.js';
 import {
-    dateDuJour, etatEcheances, formaterMontant, horaireExamen, montantDuSelonTarif, montantEnLettres, montantNet, numeroFormate, resultatValide,
-    ROLES_ADMIN, soldeRestant, statutPaiement,
+    dateDuJour, diplomeTarife, etatEcheances, formaterMontant, horaireExamen, montantDuSelonTarif, montantEnLettres, montantNet, numeroFormate, resultatValide,
+    ROLES_ADMIN, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, validationDe,
 } from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
 
@@ -508,27 +508,56 @@ async function facture(id: string, acteur?: Acteur) {
             : null;
     const { numero: reference, emiseLe } = await numeroterFacture(id, acteur);
     const codesUe = ues.map((u) => u.get('code')).filter(Boolean);
-    // Quantité × prix unitaire quand le montant suit le tarif du diplôme ; sinon un forfait.
+    const dispensees = inscription.ueDispenseesIds?.length
+        ? await db.getAll(...inscription.ueDispenseesIds.map((u: string) => col.ues().doc(u)))
+        : [];
+    const codesDispenses = dispensees.map((u) => u.get('code')).filter(Boolean);
+    const validation = validationDe(inscription.validationAcquis);
+    const tarifValidation = TARIFS_VALIDATION[validation];
+    // Une ligne par prestation (UE ou certificats, validation des acquis) quand le montant suit le tarif ; sinon un forfait.
     const montantDu = Number(inscription.montantDu ?? 0);
-    const tarif = codesUe.length ? montantDuSelonTarif(formation.code, codesUe.length) : null;
-    const auTarif = tarif !== null && tarif === montantDu;
-    const quantite = auTarif ? `${codesUe.length} UE` : '1';
-    const prixUnitaire = auTarif ? mru(montantDu / codesUe.length) : mru(montantDu);
+    const diplome = diplomeTarife(formation.code);
+    const tarif = codesUe.length || validation !== 'aucune' ? montantDuSelonTarif(formation.code, codesUe.length, validation) : null;
+    const auTarif = diplome !== null && tarif !== null && tarif === montantDu;
+    const estCertificat = diplome === 'CS';
+    const detailFormation = {
+        stack: [
+            { text: estCertificat ? 'Certificats de spécialisation' : `Frais de formation · ${formation.code}`, bold: true },
+            { text: `${formation.libelle} · année ${annee.libelle}`, fontSize: 8.5, color: GRIS, margin: [0, 2, 0, 0] },
+            ...(codesUe.length ? [{ text: `${estCertificat ? 'Certificats' : 'UE'} : ${codesUe.join(', ')}`, fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
+            ...(!auTarif ? [{ text: 'Montant forfaitaire', fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
+        ],
+    };
+    const ligneValidation = {
+        stack: [
+            { text: `Frais d’instruction · ${tarifValidation.libelle}`, bold: true },
+            { text: 'Dossier transmis par l’INSEC au service de la validation des acquis de l’INTEC', fontSize: 8.5, color: GRIS, margin: [0, 2, 0, 0] },
+        ],
+    };
+    const lignesTarif: unknown[][] = auTarif && diplome
+        ? [
+              ...(codesUe.length
+                  ? [[detailFormation, `${codesUe.length} ${estCertificat ? 'certif.' : 'UE'}`, mru(TARIFS_UE[diplome].mru), mru(TARIFS_UE[diplome].mru * codesUe.length)]]
+                  : []),
+              ...(validation !== 'aucune' ? [[ligneValidation, '1', mru(tarifValidation.mru), mru(tarifValidation.mru)]] : []),
+          ]
+        : [[detailFormation, '1', mru(montantDu), mru(montantDu)]];
 
     const lignesFacture: unknown[][] = [
-        [
-            {
-                stack: [
-                    { text: `Frais de formation · ${formation.code}`, bold: true },
-                    { text: `${formation.libelle} · année ${annee.libelle}`, fontSize: 8.5, color: GRIS, margin: [0, 2, 0, 0] },
-                    ...(codesUe.length ? [{ text: `UE : ${codesUe.join(', ')}`, fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
-                    ...(!auTarif ? [{ text: 'Montant forfaitaire', fontSize: 8.5, color: GRIS, margin: [0, 1, 0, 0] }] : []),
-                ],
-            },
-            quantite,
-            prixUnitaire,
-            mru(montantDu),
-        ],
+        ...lignesTarif,
+        ...(codesDispenses.length
+            ? [[
+                  {
+                      stack: [
+                          { text: 'UE dispensées par VES', bold: true },
+                          { text: `${codesDispenses.join(', ')} · non suivies, non facturées`, fontSize: 8.5, color: GRIS, margin: [0, 2, 0, 0] },
+                      ],
+                  },
+                  `${codesDispenses.length} UE`,
+                  mru(0),
+                  mru(0),
+              ]]
+            : []),
         ...(remise > 0 ? [['Remise accordée', '', '', `− ${mru(remise)}`]] : []),
     ];
 

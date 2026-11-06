@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { formaterMontant, TARIFS_UE } from '@shared/domaine';
 import { date } from '../format';
 import { useReferentiel } from '../referentiel';
 import type { Formation } from '../types';
 
 const { formationsActives, ues } = useReferentiel();
+// Les certificats de spécialisation ont leur propre section (ils ne sont pas des diplômes).
+const diplomes = computed(() => formationsActives.value.filter((f) => f.code !== 'CS'));
 
 const certificatsSpecialisation = [
     { code: 'TEC 712', libelle: 'Audit et contrôle légal des comptes' },
@@ -25,7 +29,7 @@ const credits = (f: Formation, annee: number) => uesDe(f, annee).reduce((t, u) =
         </div>
     </header>
     <div class="space-y-6">
-        <section v-for="f in formationsActives" :key="f.id" class="carte overflow-hidden">
+        <section v-for="f in diplomes" :key="f.id" class="carte overflow-hidden">
             <header class="relative flex flex-wrap items-start justify-between gap-4 overflow-hidden bg-insec-600 px-6 py-5 text-white">
                 <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_120%_at_0%_0%,rgb(255_255_255/0.16),transparent_60%)]"></div>
                 <div class="relative">
@@ -69,7 +73,8 @@ const credits = (f: Formation, annee: number) => uesDe(f, annee).reduce((t, u) =
             <div>
                 <p class="surtitre text-[10.5px]">Formations couvertes par la convention INSEC–CNAM</p>
                 <h2 class="titre-section mt-1">Certificats de spécialisation</h2>
-                <p class="mt-0.5 max-w-2xl text-xs text-gray-500">Un certificat correspond à une UE de spécialisation, préparée sur une année universitaire. Ce sont des certificats non diplômants.</p>
+                <p class="mt-0.5 max-w-2xl text-xs text-gray-500">Un certificat correspond à une UE de spécialisation, préparée sur une année universitaire. Ce sont des certificats non diplômants.
+                    Tarif : <strong class="text-gray-700">{{ formaterMontant(TARIFS_UE.CS.mru) }} MRU</strong> par certificat ({{ TARIFS_UE.CS.intecEuro }} € reversés à l’INTEC).</p>
             </div>
             <a href="https://intec.cnam.fr/certificats-de-specialisation-291170.kjsp" target="_blank" rel="noopener noreferrer" class="bouton-secondaire">Catalogue officiel INTEC <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i></a>
         </header>

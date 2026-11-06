@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
     coutIntecEuro, diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
-    montantEnRetard, montantNet, ROLES_FINANCE, soldeRestant, statutPaiement, TARIFS_UE, totalEcheances,
+    montantEnRetard, montantNet, ROLES_FINANCE, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, totalEcheances,
 } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
@@ -69,14 +69,14 @@ const STYLE_ECHEANCE: Record<EtatEcheance, { pastille: string; icone: string }> 
     'En retard': { pastille: 'bg-red-50 text-red-600', icone: 'fa-triangle-exclamation' },
     'À venir': { pastille: 'bg-gray-100 text-gray-500', icone: 'fa-calendar' },
 };
-// Comparaison du montant dû saisi avec le tarif (nombre d'UE × tarif du diplôme) ; sans objet pour BUMEX.
+// Comparaison du montant dû saisi avec le tarif (nombre d'UE × tarif du diplôme + validation des acquis) ; sans objet pour BUMEX.
 const codeDe = (d: Inscription) => formation(d.formationId)?.code ?? d.formationId;
 const tarifUe = (d: Inscription) => {
     const diplome = diplomeTarife(codeDe(d));
     return diplome ? TARIFS_UE[diplome].mru : null;
 };
-const tarifDe = (d: Inscription) => montantDuSelonTarif(codeDe(d), d.ueIds?.length ?? 0);
-const ecartDe = (d: Inscription) => (d.financeur === 'bumex' ? null : ecartAuTarif(codeDe(d), d.ueIds?.length ?? 0, d.montantDu));
+const tarifDe = (d: Inscription) => montantDuSelonTarif(codeDe(d), d.ueIds?.length ?? 0, d.validationAcquis);
+const ecartDe = (d: Inscription) => (d.financeur === 'bumex' ? null : ecartAuTarif(codeDe(d), d.ueIds?.length ?? 0, d.montantDu, d.validationAcquis));
 function appliquerTarif() {
     const tarif = inscription.value ? tarifDe(inscription.value) : null;
     if (tarif === null) return;
@@ -382,8 +382,8 @@ const detailsFinanciers = computed(() => {
         const diplome = diplomeTarife(code);
         const tarif = diplome ? { diplome, intec: TARIFS_UE[diplome].intecEuro, mru: TARIFS_UE[diplome].mru } : null;
         const unites = dossier.ueIds?.length ?? 0;
-        const coutEuro = coutIntecEuro(code, unites);
-        const tarifMru = tarif ? tarif.mru * unites : null;
+        const coutEuro = coutIntecEuro(code, unites, dossier.validationAcquis);
+        const tarifMru = montantDuSelonTarif(code, unites, dossier.validationAcquis);
         const coutIntecMru = coutEuro !== null && tauxEuroMru.value !== null ? Math.round(coutEuro * tauxEuroMru.value) : null;
         const financeurBumex = dossier.financeur === 'bumex';
         const margeTheorique = !financeurBumex && tarifMru !== null && coutIntecMru !== null ? tarifMru - coutIntecMru : null;
@@ -1000,25 +1000,27 @@ const totauxFinanciers = computed(() => ({
                 <section class="carte overflow-hidden" aria-labelledby="tarification-ue">
                     <header class="panneau-entete">
                         <div>
-                            <h2 id="tarification-ue" class="titre-section">Tarifs convenus par UE</h2>
+                            <h2 id="tarification-ue" class="titre-section">Tarifs convenus</h2>
                             <p class="mt-0.5 text-xs text-gray-500">L’INSEC facture en MRU et règle l’INTEC en euros. Pour un étudiant payeur, la marge affichée est une estimation avant les autres charges de l’INSEC.</p>
                         </div>
                     </header>
-                    <div class="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 sm:p-6">
-                        <article class="rounded-xl bg-gray-50/70 p-4 ring-1 ring-gray-100">
-                            <h3 class="flex items-center gap-2 font-semibold text-gray-900"><span class="pastille bg-insec-600 text-white ring-insec-600">DGC</span></h3>
+                    <div class="grid grid-cols-1 gap-3 p-5 sm:grid-cols-3 sm:p-6">
+                        <article v-for="d in (['DGC', 'DSGC', 'CS'] as const)" :key="d" class="rounded-xl bg-gray-50/70 p-4 ring-1 ring-gray-100">
+                            <h3 class="flex items-center gap-2 font-semibold text-gray-900"><span class="pastille bg-insec-600 text-white ring-insec-600">{{ d === 'CS' ? 'Certificat' : d }}</span></h3>
                             <dl class="mt-3 space-y-2 text-sm">
-                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ TARIFS_UE.DGC.intecEuro }} € / UE</dd></div>
-                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">Tarif en MRU</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ montant(TARIFS_UE.DGC.mru) }} MRU / UE</dd></div>
+                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ TARIFS_UE[d].intecEuro }} € / {{ d === 'CS' ? 'certificat' : 'UE' }}</dd></div>
+                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">Tarif en MRU</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ montant(TARIFS_UE[d].mru) }} MRU / {{ d === 'CS' ? 'certificat' : 'UE' }}</dd></div>
                             </dl>
                         </article>
-                        <article class="rounded-xl bg-gray-50/70 p-4 ring-1 ring-gray-100">
-                            <h3 class="flex items-center gap-2 font-semibold text-gray-900"><span class="pastille bg-insec-600 text-white ring-insec-600">DSGC</span></h3>
-                            <dl class="mt-3 space-y-2 text-sm">
-                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ TARIFS_UE.DSGC.intecEuro }} € / UE</dd></div>
-                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">Tarif en MRU</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ montant(TARIFS_UE.DSGC.mru) }} MRU / UE</dd></div>
-                            </dl>
-                        </article>
+                    </div>
+                    <div class="border-t border-gray-100 px-5 pt-4 pb-5 sm:px-6">
+                        <h3 class="text-sm font-semibold text-gray-900">Validation des acquis (frais d’instruction)</h3>
+                        <dl class="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+                            <div v-for="v in (['VES', 'VAPP', 'VAPP+VES'] as const)" :key="v" class="rounded-xl bg-gray-50/70 p-3 ring-1 ring-gray-100">
+                                <dt class="font-semibold text-gray-900">{{ v === 'VAPP+VES' ? 'VAPP + VES' : v }}</dt>
+                                <dd class="mt-1 text-gray-500 tabular-nums">{{ TARIFS_VALIDATION[v].intecEuro }} € à l’INTEC · <strong class="text-gray-900">{{ montant(TARIFS_VALIDATION[v].mru) }} MRU</strong></dd>
+                            </div>
+                        </dl>
                     </div>
                 </section>
             </div>

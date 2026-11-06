@@ -4,7 +4,7 @@ import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere, traiter
 import { genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import {
-    coutIntecEuro, ecartAuTarif, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
+    coutIntecEuro, ecartAuTarif, uesEnDoublonVes, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
     soldeRestant, statutPaiement,
 } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
@@ -175,6 +175,24 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         expect(coutIntecEuro('dsgc-2026', 1)).toBe(180);
         expect(coutIntecEuro('DGC', 0)).toBe(0);
         expect(coutIntecEuro('AUTRE', 2)).toBeNull();
+    });
+
+    it('tarife les certificats de spécialisation et la validation des acquis (VES, VAPP)', () => {
+        // Certificat : 280 € reversés à l'INTEC, 23 000 MRU facturés à l'étudiant.
+        expect(coutIntecEuro('CS', 2)).toBe(560);
+        expect(montantDuSelonTarif('CS', 2)).toBe(46000);
+        expect(montantDuSelonTarif('DGC', 1)).toBe(16000);
+        // VES ou VAPP : 70 € / 5 500 MRU ; VAPP + VES : 100 € / 8 000 MRU, ajoutés au prix des UE.
+        expect(coutIntecEuro('DSGC', 3, 'VES')).toBe(610);
+        expect(montantDuSelonTarif('DSGC', 3, 'VES')).toBe(59500);
+        expect(montantDuSelonTarif('DSGC', 0, 'VAPP')).toBe(5500);
+        expect(coutIntecEuro('DGC', 0, 'VAPP+VES')).toBe(100);
+        expect(montantDuSelonTarif('DGC', 2, 'VAPP+VES')).toBe(40000);
+        // Valeur inconnue ou absente : aucune validation facturée.
+        expect(montantDuSelonTarif('DGC', 1, 'autre')).toBe(16000);
+        expect(ecartAuTarif('DSGC', 3, 59500, 'VES')).toBe(0);
+        expect(uesEnDoublonVes(['TEC211', 'TEC215'], ['TEC215', 'TEC217'])).toEqual(['TEC215']);
+        expect(uesEnDoublonVes(['TEC211'], undefined)).toEqual([]);
     });
 
     it('calcule le montant dû d’une nouvelle inscription : nombre d’UE × tarif du diplôme', async () => {

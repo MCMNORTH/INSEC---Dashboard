@@ -33,44 +33,84 @@ export const TAILLE_MAX_PIECE = 5 * 1024 * 1024;
 
 export type StatutPaiement = 'Soldé' | 'Partiel' | 'Impayé' | 'À chiffrer' | 'Annulée' | 'Pris en charge BUMEX';
 
-/** Tarifs par UE : prix INSEC facturé à l'étudiant (MRU) et coût reversé à l'INTEC (euros). */
+/**
+ * Tarifs par UE (ou par certificat) : prix INSEC facturé à l'étudiant (MRU) et coût reversé à l'INTEC (euros).
+ * Coûts INTEC : grille tarifaire signée (correction à l'INTEC) ; un certificat de spécialisation (CS) compte comme une UE.
+ */
 export const TARIFS_UE = {
     DGC: { mru: 16_000, intecEuro: 160 },
     DSGC: { mru: 18_000, intecEuro: 180 },
+    CS: { mru: 23_000, intecEuro: 280 },
 } as const;
 export type DiplomeTarife = keyof typeof TARIFS_UE;
 
-/** Diplôme tarifé correspondant au code d'une formation (DSGC est testé avant DGC). */
+/** Libellés courts des catalogues tarifés, pour l'affichage. */
+export const LIBELLES_TARIFS: Record<DiplomeTarife, string> = {
+    DGC: 'UE du DGC',
+    DSGC: 'UE du DSGC',
+    CS: 'Certificat de spécialisation',
+};
+
+/**
+ * Validation des acquis demandée par l'INSEC pour l'étudiant (frais d'instruction réglés à l'INTEC) :
+ * 70 € par dispositif, 100 € pour une VAPP et une VES du même candidat.
+ */
+export const VALIDATIONS_ACQUIS = ['aucune', 'VES', 'VAPP', 'VAPP+VES'] as const;
+export type ValidationAcquis = (typeof VALIDATIONS_ACQUIS)[number];
+export const TARIFS_VALIDATION: Record<ValidationAcquis, { mru: number; intecEuro: number; libelle: string }> = {
+    aucune: { mru: 0, intecEuro: 0, libelle: 'Aucune' },
+    VES: { mru: 5_500, intecEuro: 70, libelle: 'VES (validation des études supérieures)' },
+    VAPP: { mru: 5_500, intecEuro: 70, libelle: 'VAPP (validation des acquis personnels et professionnels)' },
+    'VAPP+VES': { mru: 8_000, intecEuro: 100, libelle: 'VAPP + VES' },
+};
+
+/** Validation des acquis connue, « aucune » par défaut (anciennes inscriptions sans le champ). */
+export function validationDe(valeur: string | null | undefined): ValidationAcquis {
+    return (VALIDATIONS_ACQUIS as readonly string[]).includes(valeur ?? '') ? (valeur as ValidationAcquis) : 'aucune';
+}
+
+/** Diplôme tarifé correspondant au code d'une formation (DSGC est testé avant DGC ; « CS » pour les certificats de spécialisation). */
 export function diplomeTarife(codeFormation: string | null | undefined): DiplomeTarife | null {
     const code = (codeFormation ?? '').toUpperCase();
     if (code.includes('DSGC')) return 'DSGC';
     if (code.includes('DGC')) return 'DGC';
+    if (code === 'CS' || code.startsWith('CS-') || code.includes('CERTIF')) return 'CS';
     return null;
 }
 
-/** Montant dû d'une inscription = nombre d'UE × tarif du diplôme ; null si le diplôme n'a pas de tarif connu. */
-export function montantDuSelonTarif(codeFormation: string | null | undefined, nbUe: number): number | null {
+/**
+ * Montant dû d'une inscription = nombre d'UE × tarif du diplôme + frais de validation des acquis ;
+ * null si le diplôme n'a pas de tarif connu. Les UE dispensées par VES ne sont pas comptées (elles ne sont pas suivies).
+ */
+export function montantDuSelonTarif(codeFormation: string | null | undefined, nbUe: number, validation?: string | null): number | null {
     const diplome = diplomeTarife(codeFormation);
-    return diplome ? TARIFS_UE[diplome].mru * nbUe : null;
+    return diplome ? TARIFS_UE[diplome].mru * nbUe + TARIFS_VALIDATION[validationDe(validation)].mru : null;
 }
 
 /**
- * Coût INTEC d'une inscription en euros = nombre d'UE × tarif INTEC du diplôme (160 € DGC, 180 € DSGC) ;
+ * Coût INTEC d'une inscription en euros = nombre d'UE × tarif INTEC (160 € DGC, 180 € DSGC, 280 € certificat)
+ * + frais d'instruction de la validation des acquis (70 € ou 100 €) ;
  * c'est aussi ce que BUMEX règle, en euros et sans marge, pour un étudiant qu'il finance. Null si le diplôme n'a pas de tarif connu.
  */
-export function coutIntecEuro(codeFormation: string | null | undefined, nbUe: number): number | null {
+export function coutIntecEuro(codeFormation: string | null | undefined, nbUe: number, validation?: string | null): number | null {
     const diplome = diplomeTarife(codeFormation);
-    return diplome ? TARIFS_UE[diplome].intecEuro * nbUe : null;
+    return diplome ? TARIFS_UE[diplome].intecEuro * nbUe + TARIFS_VALIDATION[validationDe(validation)].intecEuro : null;
 }
 
 /**
- * Écart entre le montant dû saisi et le tarif (nombre d'UE × tarif du diplôme) :
+ * Écart entre le montant dû saisi et le tarif (nombre d'UE × tarif du diplôme + validation des acquis) :
  * positif si le montant saisi dépasse le tarif, négatif s'il est inférieur ; null si le diplôme n'a pas de tarif connu.
  * La remise n'entre pas dans le calcul : elle se saisit à part.
  */
-export function ecartAuTarif(codeFormation: string | null | undefined, nbUe: number, montantDu: number | null | undefined): number | null {
-    const tarif = montantDuSelonTarif(codeFormation, nbUe);
+export function ecartAuTarif(codeFormation: string | null | undefined, nbUe: number, montantDu: number | null | undefined, validation?: string | null): number | null {
+    const tarif = montantDuSelonTarif(codeFormation, nbUe, validation);
     return tarif === null ? null : (montantDu ?? 0) - tarif;
+}
+
+/** UE à la fois suivies et dispensées par VES : interdit (règle de non-cumul de l'INTEC). */
+export function uesEnDoublonVes(ueIds: readonly string[], ueDispenseesIds: readonly string[] | null | undefined): string[] {
+    const dispensees = new Set(ueDispenseesIds ?? []);
+    return ueIds.filter((id) => dispensees.has(id));
 }
 
 export interface Echeance {

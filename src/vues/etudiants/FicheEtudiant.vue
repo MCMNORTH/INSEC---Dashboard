@@ -122,7 +122,9 @@ const progression = (i: Inscription) => {
                         <div class="px-5 py-4 sm:px-6">
                             <div class="flex flex-wrap gap-2">
                                 <span v-for="ueId in i.ueIds" :key="ueId" class="pastille bg-insec-50 py-1 text-insec-800 ring-insec-600/15"><strong class="font-semibold">{{ ue(ueId)?.code ?? ueId }}</strong> {{ ue(ueId)?.libelle }}</span>
-                                <span v-if="!i.ueIds.length" class="pastille bg-amber-50 text-amber-800 ring-amber-600/20"><i class="fa-solid fa-triangle-exclamation text-[10px]"></i>Aucune UE renseignée.</span>
+                                <span v-for="ueId in i.ueDispenseesIds ?? []" :key="`dispense-${ueId}`" class="pastille bg-emerald-50 py-1 text-emerald-800 ring-emerald-600/15"><strong class="font-semibold">{{ ue(ueId)?.code ?? ueId }}</strong> dispensée (VES)</span>
+                                <span v-if="i.validationAcquis && i.validationAcquis !== 'aucune'" class="pastille bg-violet-50 py-1 text-violet-800 ring-violet-600/15"><i class="fa-solid fa-scale-balanced text-[10px]"></i>{{ i.validationAcquis === 'VAPP+VES' ? 'VAPP + VES' : i.validationAcquis }} facturée</span>
+                                <span v-if="!i.ueIds.length && !(i.validationAcquis && i.validationAcquis !== 'aucune')" class="pastille bg-amber-50 text-amber-800 ring-amber-600/20"><i class="fa-solid fa-triangle-exclamation text-[10px]"></i>Aucune UE renseignée.</span>
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/60 px-5 py-3 text-sm sm:px-6">

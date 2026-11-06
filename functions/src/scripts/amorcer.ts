@@ -18,6 +18,11 @@ const FORMATIONS = [
         code: 'DSGC', nom: 'DSGC', libelle: 'Diplôme supérieur de gestion et de comptabilité', dureeAnnees: 2, niveauDiplome: 'Bac +5', creditsTotal: 120,
         active: true, sourceUrl: 'https://intec.cnam.fr/diplome-superieur-de-gestion-et-de-comptabilite-dsgc--200729.kjsp', sourceVerifieeLe: '2026-09-20',
     },
+    {
+        // Certificats non diplômants ouverts par la convention : chaque certificat est préparé et facturé comme une UE.
+        code: 'CS', nom: 'CS', libelle: 'Certificats de spécialisation', dureeAnnees: 1, niveauDiplome: 'Certificat', creditsTotal: 0,
+        active: true, sourceUrl: 'https://intec.cnam.fr/certificats-de-specialisation-291170.kjsp', sourceVerifieeLe: '2026-11-06',
+    },
 ];
 
 const CATALOGUE: Record<string, [string, string, number, number][]> = {
@@ -34,6 +39,12 @@ const CATALOGUE: Record<string, [string, string, number, number][]> = {
         ['TEC213', 'Contrôle de gestion et stratégie', 20, 1], ['TEC214', 'Comptabilité et audit', 20, 2],
         ['TEC215', "Management des systèmes d'information", 15, 2], ['TEC217', 'Mémoire professionnel', 15, 2],
         ['TEC218', 'Anglais des affaires', 15, 2],
+    ],
+    CS: [
+        ['TEC712', 'Audit et contrôle légal des comptes', 0, 1], ['TEC714', 'Gestion des associations', 0, 1],
+        ['TEC715', 'Comptabilité internationale', 0, 1],
+        ['TEC716', 'Gestion comptable et financière des collectivités territoriales', 0, 1],
+        ['TEC761', 'Audit des systèmes d’information', 0, 1],
     ],
 };
 
