@@ -122,6 +122,29 @@ describe('Étudiants et inscriptions', () => {
         expect(await liste('resultats')).toHaveLength(1);
     });
 
+    it('ne supprime un étudiant avec versements que sur demande du super-administrateur, avec un motif tracé', async () => {
+        const { id } = await appeler(creerEtudiant, etudiantValide, admin);
+        const [inscription] = await liste('inscriptions');
+        await appeler(ajouterVersement, { inscriptionId: inscription.id, montant: 1000, dateVersement: '2026-09-20', statut: 'Validée', modePaiement: 'Espèces' }, admin);
+        await appeler(ajouterVersement, { inscriptionId: inscription.id, montant: 500, dateVersement: '2026-09-21', statut: 'En attente', modePaiement: 'Espèces' }, admin);
+        const superAdmin = await acteur('super_admin');
+        // Sans « forcer », la protection reste en place, même pour le super-administrateur.
+        await attendreErreur(appeler(supprimerEtudiant, { id }, superAdmin), 'failed-precondition');
+        // Un administrateur ne peut pas forcer ; le motif est obligatoire.
+        await attendreErreur(appeler(supprimerEtudiant, { id, forcer: true, motif: 'Dossier de test' }, admin), 'permission-denied');
+        await attendreErreur(appeler(supprimerEtudiant, { id, forcer: true }, superAdmin), 'invalid-argument', 'motif');
+        expect(await liste('versements')).toHaveLength(2);
+
+        const { message } = await appeler(supprimerEtudiant, { id, forcer: true, motif: 'Dossier de test' }, superAdmin);
+        expect(message).toContain('2 versement(s)');
+        expect(await doc(`etudiants/${id}`)).toBeUndefined();
+        expect(await liste('inscriptions')).toHaveLength(0);
+        expect(await liste('versements')).toHaveLength(0);
+        const audit = (await liste('journalAudit')).filter((e) => e.action === 'deleted');
+        expect(audit.filter((e) => e.modele === 'Versement' && e.avant?.motifSuppression === 'Dossier de test')).toHaveLength(2);
+        expect(audit.some((e) => e.modele === 'Etudiant' && e.avant?.motifSuppression === 'Dossier de test')).toBe(true);
+    });
+
     it('supprime un étudiant sans historique financier et ses inscriptions', async () => {
         const { id } = await appeler(creerEtudiant, etudiantValide, admin);
         await appeler(supprimerEtudiant, { id }, admin);

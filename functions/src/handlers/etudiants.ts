@@ -1,4 +1,5 @@
 import type { Transaction } from 'firebase-admin/firestore';
+import { HttpsError } from 'firebase-functions/v2/https';
 import { auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
 import { col, controlerModificationConcurrente, exiger, libererUnique, verifierUnique, type Doc } from '../lib/donnees.js';
@@ -128,14 +129,30 @@ export const modifierEtudiant = operation('modifierEtudiant', ROLES_ADMIN, async
     return { message: 'Identité mise à jour sans modifier l’historique.' };
 });
 
+/**
+ * Supprime un étudiant et ses inscriptions. Avec des versements, la suppression est refusée, sauf au
+ * super-administrateur qui la force avec un motif (dossier de test, doublon) : les versements sont alors
+ * supprimés aussi, chacun tracé dans le journal d'audit avec le motif.
+ */
 export const supprimerEtudiant = operation('supprimerEtudiant', ROLES_ADMIN, async (donnees, acteur) => {
-    const { id } = valider(z.object({ id: s.id() }), donnees);
+    const { id, forcer, motif } = valider(z.object({
+        id: s.id(),
+        forcer: z.boolean().optional(),
+        motif: z.string().trim().max(500).optional(),
+    }), donnees);
     const chemins: string[] = [];
+    let versementsSupprimes = 0;
     await db.runTransaction(async (tx) => {
         const ref = col.etudiants().doc(id);
         const etudiant = await exiger(tx, ref, 'Étudiant introuvable.');
-        const versements = await tx.get(col.versements().where('etudiantId', '==', id).limit(1));
-        if (!versements.empty) refuser('Impossible de supprimer cet étudiant : un historique financier existe.');
+        const versements = await tx.get(col.versements().where('etudiantId', '==', id));
+        if (!versements.empty) {
+            if (!forcer) refuser('Impossible de supprimer cet étudiant : un historique financier existe.');
+            if (acteur.role !== 'super_admin') {
+                throw new HttpsError('permission-denied', 'Seul le super-administrateur peut supprimer un étudiant qui a des versements.');
+            }
+            if (!motif || motif.length < 5) erreurChamp('motif', 'Indiquez le motif de la suppression (5 caractères au moins).');
+        }
         const [inscriptions, resultats, pieces, comptes] = await Promise.all([
             tx.get(col.inscriptions().where('etudiantId', '==', id)),
             tx.get(col.resultats().where('etudiantId', '==', id)),
@@ -146,6 +163,11 @@ export const supprimerEtudiant = operation('supprimerEtudiant', ROLES_ADMIN, asy
         if (resultats.docs.some((r) => r.get('presence') !== 'Convoqué' || (r.get('note') !== null && r.get('note') !== undefined))) {
             refuser('Impossible de supprimer cet étudiant : il a un historique d’examen (présence ou note). Annulez plutôt son inscription.');
         }
+        for (const v of versements.docs) {
+            tx.delete(v.ref);
+            auditerModele(tx, acteur, 'Versement', v.id, 'deleted', { ...v.data(), motifSuppression: motif }, null);
+        }
+        versementsSupprimes = versements.size;
         const examensTouches = new Map<string, number>();
         resultats.docs.forEach((r) => examensTouches.set(r.get('examenId'), (examensTouches.get(r.get('examenId')) ?? 0) + 1));
         for (const i of inscriptions.docs) {
@@ -161,10 +183,10 @@ export const supprimerEtudiant = operation('supprimerEtudiant', ROLES_ADMIN, asy
         comptes.docs.forEach((c) => tx.update(c.ref, { etudiantId: null }));
         if (etudiant.email) libererUnique(tx, cleEmailEtudiant(etudiant.email));
         tx.delete(ref);
-        auditerModele(tx, acteur, 'Etudiant', id, 'deleted', etudiant, null);
+        auditerModele(tx, acteur, 'Etudiant', id, 'deleted', versementsSupprimes ? { ...etudiant, motifSuppression: motif } : etudiant, null);
     });
     await Promise.all(chemins.map((c) => bucket().file(c).delete({ ignoreNotFound: true })));
-    return { message: 'Étudiant supprimé.' };
+    return { message: versementsSupprimes ? `Étudiant supprimé, avec ses ${versementsSupprimes} versement(s).` : 'Étudiant supprimé.' };
 });
 
 export const creerInscription = operation('creerInscription', ROLES_ADMIN, async (donnees, acteur) => {
