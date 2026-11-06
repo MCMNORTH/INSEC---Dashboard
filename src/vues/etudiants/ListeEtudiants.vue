@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ROLES_ADMIN } from '@shared/domaine';
-import { collection, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { appeler } from '../../api';
 import BadgeStatut from '../../composants/BadgeStatut.vue';
 import Chargement from '../../composants/Chargement.vue';
 import ModaleConfirmation from '../../composants/ModaleConfirmation.vue';
+import { demanderMotif } from '../../dialogue';
 import Pagination from '../../composants/Pagination.vue';
 import { useRequete } from '../../donnees';
 import { db } from '../../firebase';
@@ -111,6 +112,25 @@ const { envoi, soumettre } = useFormulaire();
 async function supprimer() {
     const cible = aSupprimer.value;
     if (!cible) return;
+    // Étudiant avec versements : seul le super-administrateur peut forcer la suppression (dossier de test, doublon), avec un motif.
+    if (aRole('super_admin')) {
+        const versements = await getDocs(query(collection(db, 'versements'), where('etudiantId', '==', cible.id), limit(1)));
+        if (!versements.empty) {
+            aSupprimer.value = null;
+            const motif = await demanderMotif({
+                titre: `Supprimer ${cible.nom} ${cible.prenom} et ses versements ?`,
+                message: 'Cet étudiant a des versements. Ils seront supprimés définitivement avec sa fiche et ses inscriptions. La suppression et son motif restent dans le journal d’audit. À réserver aux dossiers de test et aux doublons.',
+                champ: 'Motif de la suppression',
+                indication: 'Ex. dossier créé pour des essais',
+                libelle: 'Supprimer définitivement',
+                ton: 'danger',
+            });
+            if (!motif) return;
+            const resultat = await soumettre(() => appeler('supprimerEtudiant', { id: cible.id, forcer: true, motif }));
+            if (resultat) notifier(resultat.message ?? 'Étudiant supprimé.');
+            return;
+        }
+    }
     const resultat = await soumettre(() => appeler('supprimerEtudiant', { id: cible.id }));
     aSupprimer.value = null;
     if (resultat) notifier(resultat.message ?? 'Étudiant supprimé.');
