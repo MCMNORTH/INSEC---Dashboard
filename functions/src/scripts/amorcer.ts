@@ -3,6 +3,8 @@
  *
  *   Émulateurs : npm run amorcer:local -- --demo
  *   Production : GCLOUD_PROJECT=<projet> SUPER_ADMIN_EMAIL=… SUPER_ADMIN_NOM=… npm run amorcer
+ *   Ajout ciblé : GCLOUD_PROJECT=<projet> npm run amorcer -- --formations=CS
+ *     (n'écrit que les formations listées et leurs UE : le reste du référentiel n'est pas touché)
  *   Après création, le super-administrateur définit son mot de passe via « Mot de passe oublié ».
  */
 import { FieldValue } from 'firebase-admin/firestore';
@@ -50,16 +52,32 @@ const CATALOGUE: Record<string, [string, string, number, number][]> = {
 
 const ANNEES = ['2022-2023', '2023-2024', '2024-2025', '2025-2026', '2026-2027', '2027-2028'];
 
-async function referentiel() {
+/** Codes passés par --formations=A,B ; null = tout le référentiel. */
+function formationsCiblees(): string[] | null {
+    const option = process.argv.find((a) => a.startsWith('--formations='));
+    if (!option) return null;
+    const codes = option.slice('--formations='.length).split(',').map((c) => c.trim().toUpperCase()).filter(Boolean);
+    const inconnus = codes.filter((c) => !FORMATIONS.some((f) => f.code === c));
+    if (!codes.length || inconnus.length) throw new Error(`Formations inconnues : ${inconnus.join(', ') || '(aucune)'}`);
+    return codes;
+}
+
+async function referentiel(cibles: string[] | null) {
     const lot = db.batch();
-    FORMATIONS.forEach((f) => lot.set(db.collection('formations').doc(f.code), f, { merge: true }));
-    Object.entries(CATALOGUE).forEach(([formationId, ues]) =>
+    const retenue = (code: string) => !cibles || cibles.includes(code);
+    FORMATIONS.filter((f) => retenue(f.code)).forEach((f) => lot.set(db.collection('formations').doc(f.code), f, { merge: true }));
+    Object.entries(CATALOGUE).filter(([formationId]) => retenue(formationId)).forEach(([formationId, ues]) =>
         ues.forEach(([code, libelle, credits, anneeParcours], index) =>
             lot.set(db.collection('ues').doc(code), { formationId, code, libelle, credits, anneeParcours, ordre: index + 1, active: true }, { merge: true }),
         ),
     );
-    ANNEES.forEach((libelle) => lot.set(db.collection('annees').doc(libelle), { libelle }, { merge: true }));
+    if (!cibles) ANNEES.forEach((libelle) => lot.set(db.collection('annees').doc(libelle), { libelle }, { merge: true }));
     await lot.commit();
+    if (cibles) {
+        const nbUe = cibles.reduce((total, code) => total + (CATALOGUE[code]?.length ?? 0), 0);
+        console.log(`Référentiel ciblé : ${cibles.join(', ')} (${nbUe} UE) ; le reste n'a pas été modifié.`);
+        return;
+    }
     console.log(`Référentiel : ${FORMATIONS.length} diplômes, ${Object.values(CATALOGUE).flat().length} UE, ${ANNEES.length} années.`);
 }
 
@@ -113,7 +131,9 @@ async function demo() {
 }
 
 async function principal() {
-    await referentiel();
+    const cibles = formationsCiblees();
+    await referentiel(cibles);
+    if (cibles) return;
     const email = process.env.SUPER_ADMIN_EMAIL;
     const nom = process.env.SUPER_ADMIN_NOM;
     if (email && nom) {
