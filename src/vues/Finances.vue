@@ -414,6 +414,19 @@ const totauxFinanciers = computed(() => ({
     margeEtudiantsMru: detailsFinanciers.value.some((ligne) => !ligne.financeurBumex && ligne.margeTheorique === null) ? null : detailsFinanciers.value.filter((ligne) => !ligne.financeurBumex).reduce((total, ligne) => total + (ligne.margeTheorique ?? 0), 0),
     diplomesAControler: detailsFinanciers.value.filter((ligne) => ligne.coutIntecEuro === null).length,
 }));
+// Grille « Tarifs convenus » : une ligne par prestation, marge au taux EUR/MRU enregistré.
+const lignesTarifs = computed(() => {
+    const marge = (mru: number, euro: number) => (tauxEuroMru.value === null ? null : Math.round(mru - euro * tauxEuroMru.value));
+    const diplomes = (['DGC', 'DSGC', 'CS'] as const).map((d) => ({
+        cle: d, libelle: d === 'CS' ? 'Certificat' : d, unite: d === 'CS' ? 'par certificat' : 'par UE',
+        euro: TARIFS_UE[d].intecEuro, mru: TARIFS_UE[d].mru, marge: marge(TARIFS_UE[d].mru, TARIFS_UE[d].intecEuro), validation: false, premiereValidation: false,
+    }));
+    const validations = (['VES', 'VAPP', 'VAPP+VES'] as const).map((v, i) => ({
+        cle: v, libelle: v === 'VAPP+VES' ? 'VAPP + VES' : v, unite: 'par dossier',
+        euro: TARIFS_VALIDATION[v].intecEuro, mru: TARIFS_VALIDATION[v].mru, marge: marge(TARIFS_VALIDATION[v].mru, TARIFS_VALIDATION[v].intecEuro), validation: true, premiereValidation: i === 0,
+    }));
+    return [...diplomes, ...validations];
+});
 // Ce qui reste à l'INSEC une fois la facture INTEC réglée, étudiants BUMEX compris (avant les autres charges).
 const benefice = computed(() => {
     const t = totauxFinanciers.value;
@@ -993,7 +1006,7 @@ const benefice = computed(() => {
                         </p>
                         <p class="text-xs text-gray-600">
                             <template v-if="benefice.net === null">Saisissez le taux EUR/MRU pour calculer le bénéfice.</template>
-                            <template v-else>Ce qui reste une fois la facture INTEC réglée, étudiants BUMEX compris. Avant les autres charges de l’INSEC (salaires, locaux…).</template>
+                            <template v-else>Ce qui reste une fois la facture INTEC réglée, étudiants BUMEX compris.</template>
                         </p>
                     </div>
                     <dl class="divide-y divide-gray-100 p-5 text-sm sm:p-6">
@@ -1021,8 +1034,8 @@ const benefice = computed(() => {
                 </div>
             </section>
 
-            <div class="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <section class="carte overflow-hidden" aria-labelledby="taux-euro-mru">
+            <div class="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-5">
+                <section class="carte overflow-hidden xl:col-span-2" aria-labelledby="taux-euro-mru">
                     <header class="panneau-entete">
                         <div>
                             <h2 id="taux-euro-mru" class="titre-section">Taux de conversion EUR / MRU</h2>
@@ -1048,30 +1061,41 @@ const benefice = computed(() => {
                     </div>
                 </section>
 
-                <section class="carte overflow-hidden" aria-labelledby="tarification-ue">
+                <section class="carte overflow-hidden xl:col-span-3" aria-labelledby="tarification-ue">
                     <header class="panneau-entete">
                         <div>
                             <h2 id="tarification-ue" class="titre-section">Tarifs convenus</h2>
-                            <p class="mt-0.5 text-xs text-gray-500">L’INSEC facture en MRU et règle l’INTEC en euros. Pour un étudiant payeur, la marge affichée est une estimation avant les autres charges de l’INSEC.</p>
+                            <p class="mt-0.5 text-xs text-gray-500">L’INSEC facture en MRU et règle l’INTEC en euros. Marge calculée au taux enregistré.</p>
                         </div>
                     </header>
-                    <div class="grid grid-cols-1 gap-3 p-5 sm:grid-cols-3 sm:p-6">
-                        <article v-for="d in (['DGC', 'DSGC', 'CS'] as const)" :key="d" class="rounded-xl bg-gray-50/70 p-4 ring-1 ring-gray-100">
-                            <h3 class="flex items-center gap-2 font-semibold text-gray-900"><span class="pastille bg-insec-600 text-white ring-insec-600">{{ d === 'CS' ? 'Certificat' : d }}</span></h3>
-                            <dl class="mt-3 space-y-2 text-sm">
-                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">À payer à l’INTEC</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ TARIFS_UE[d].intecEuro }} € / {{ d === 'CS' ? 'certificat' : 'UE' }}</dd></div>
-                                <div class="flex items-baseline justify-between gap-3"><dt class="text-gray-500">Tarif en MRU</dt><dd class="font-semibold text-gray-900 tabular-nums">{{ montant(TARIFS_UE[d].mru) }} MRU / {{ d === 'CS' ? 'certificat' : 'UE' }}</dd></div>
-                            </dl>
-                        </article>
-                    </div>
-                    <div class="border-t border-gray-100 px-5 pt-4 pb-5 sm:px-6">
-                        <h3 class="text-sm font-semibold text-gray-900">Validation des acquis (frais d’instruction)</h3>
-                        <dl class="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-                            <div v-for="v in (['VES', 'VAPP', 'VAPP+VES'] as const)" :key="v" class="rounded-xl bg-gray-50/70 p-3 ring-1 ring-gray-100">
-                                <dt class="font-semibold text-gray-900">{{ v === 'VAPP+VES' ? 'VAPP + VES' : v }}</dt>
-                                <dd class="mt-1 text-gray-500 tabular-nums">{{ TARIFS_VALIDATION[v].intecEuro }} € à l’INTEC · <strong class="text-gray-900">{{ montant(TARIFS_VALIDATION[v].mru) }} MRU</strong></dd>
-                            </div>
-                        </dl>
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[34rem] text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-100 text-left text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                                    <th scope="col" class="px-5 py-3 sm:px-6">Prestation</th>
+                                    <th scope="col" class="px-3 py-3 text-right whitespace-nowrap">INTEC</th>
+                                    <th scope="col" class="px-3 py-3 text-right whitespace-nowrap">Tarif INSEC</th>
+                                    <th scope="col" class="px-5 py-3 text-right whitespace-nowrap sm:px-6">Marge</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="ligne in lignesTarifs" :key="ligne.cle" :class="ligne.premiereValidation ? 'border-t-2 border-gray-100' : ''">
+                                    <th scope="row" class="px-5 py-3 text-left font-normal sm:px-6">
+                                        <span v-if="ligne.premiereValidation" class="mb-1.5 block text-xs font-semibold tracking-wide text-gray-500 uppercase">Validation des acquis · frais d’instruction</span>
+                                        <span class="flex items-center gap-2">
+                                            <span class="pastille" :class="ligne.validation ? 'bg-gray-100 text-gray-700 ring-gray-200' : 'bg-insec-600 text-white ring-insec-600'">{{ ligne.libelle }}</span>
+                                            <span class="text-xs text-gray-500">{{ ligne.unite }}</span>
+                                        </span>
+                                    </th>
+                                    <td class="px-3 py-3 text-right font-semibold whitespace-nowrap text-gray-900 tabular-nums">{{ ligne.euro }} €</td>
+                                    <td class="px-3 py-3 text-right font-semibold whitespace-nowrap text-gray-900 tabular-nums">{{ montant(ligne.mru) }} <span class="text-xs font-medium text-gray-400">MRU</span></td>
+                                    <td class="px-5 py-3 text-right font-semibold whitespace-nowrap tabular-nums sm:px-6" :class="ligne.marge !== null && ligne.marge < 0 ? 'text-red-700' : 'text-emerald-700'">
+                                        <template v-if="ligne.marge === null">—</template>
+                                        <template v-else>{{ montant(ligne.marge) }} <span class="text-xs font-medium text-gray-400">MRU</span></template>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </section>
             </div>
