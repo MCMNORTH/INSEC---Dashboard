@@ -4,7 +4,7 @@ import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere, traiter
 import { genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import {
-    coutIntecEuro, ecartAuTarif, uesEnDoublonVes, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
+    beneficeNetInsec, coutIntecEuro, ecartAuTarif, uesEnDoublonVes, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
     soldeRestant, statutPaiement,
 } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
@@ -245,6 +245,16 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         expect(ecartAuTarif('DSGC', 3, 50000)).toBe(-4000);
         expect(ecartAuTarif('DGC', 1, 0)).toBe(-16000);
         expect(ecartAuTarif('LICENCE', 2, 30000)).toBeNull();
+    });
+
+    it('calcule le bénéfice net de l’INSEC après la facture INTEC et les étudiants BUMEX', () => {
+        // Marge des payeurs 359 700 MRU, étudiants BUMEX 3 760 € × 45 = 169 200 MRU.
+        expect(beneficeNetInsec(359700, 169200)).toBe(190500);
+        // Même résultat que : recette des payeurs − facture INTEC totale.
+        expect(beneficeNetInsec(654000 - 294300, 169200)).toBe(654000 - 463500);
+        expect(beneficeNetInsec(10000, 25000)).toBe(-15000);
+        expect(beneficeNetInsec(null, 169200)).toBeNull();
+        expect(beneficeNetInsec(359700, null)).toBeNull();
     });
 
     it('ne présente jamais un dossier sans montant comme soldé', () => {

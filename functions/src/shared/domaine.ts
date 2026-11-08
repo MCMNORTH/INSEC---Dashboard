@@ -107,6 +107,16 @@ export function ecartAuTarif(codeFormation: string | null | undefined, nbUe: num
     return tarif === null ? null : (montantDu ?? 0) - tarif;
 }
 
+/**
+ * Bénéfice net de l'INSEC sur l'année : marge des étudiants payeurs (tarif MRU − coût INTEC)
+ * moins le coût des étudiants BUMEX, que l'INSEC règle à l'INTEC en euros sans rien facturer.
+ * Équivaut à : recette des étudiants payeurs − facture INTEC totale. Null si une donnée manque (taux EUR/MRU).
+ */
+export function beneficeNetInsec(margeEtudiantsMru: number | null | undefined, coutBumexMru: number | null | undefined): number | null {
+    if (margeEtudiantsMru === null || margeEtudiantsMru === undefined || coutBumexMru === null || coutBumexMru === undefined) return null;
+    return margeEtudiantsMru - coutBumexMru;
+}
+
 /** UE à la fois suivies et dispensées par VES : interdit (règle de non-cumul de l'INTEC). */
 export function uesEnDoublonVes(ueIds: readonly string[], ueDispenseesIds: readonly string[] | null | undefined): string[] {
     const dispensees = new Set(ueDispenseesIds ?? []);

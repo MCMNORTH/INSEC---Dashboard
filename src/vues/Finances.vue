@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-    coutIntecEuro, diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
+    beneficeNetInsec, coutIntecEuro, diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
     montantEnRetard, montantNet, ROLES_FINANCE, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, totalEcheances,
 } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
@@ -414,6 +414,16 @@ const totauxFinanciers = computed(() => ({
     margeEtudiantsMru: detailsFinanciers.value.some((ligne) => !ligne.financeurBumex && ligne.margeTheorique === null) ? null : detailsFinanciers.value.filter((ligne) => !ligne.financeurBumex).reduce((total, ligne) => total + (ligne.margeTheorique ?? 0), 0),
     diplomesAControler: detailsFinanciers.value.filter((ligne) => ligne.coutIntecEuro === null).length,
 }));
+// Ce qui reste à l'INSEC une fois la facture INTEC réglée, étudiants BUMEX compris (avant les autres charges).
+const benefice = computed(() => {
+    const t = totauxFinanciers.value;
+    const net = beneficeNetInsec(t.margeEtudiantsMru, t.financementBumexMru);
+    return {
+        net,
+        recettePayeursMru: t.tarifEtudiantsMru,
+        coutIntecPayeursMru: t.margeEtudiantsMru === null ? null : t.tarifEtudiantsMru - t.margeEtudiantsMru,
+    };
+});
 </script>
 
 
@@ -968,6 +978,47 @@ const totauxFinanciers = computed(() => ({
                     </p>
                     <p class="mt-2.5 text-xs text-gray-500">Estimation avant les autres charges de l’INSEC</p>
                 </article>
+            </section>
+
+            <section class="carte mb-6 overflow-hidden" aria-labelledby="benefice-net-insec">
+                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                    <div class="flex flex-col justify-center gap-2 p-5 sm:p-6" :class="benefice.net !== null && benefice.net < 0 ? 'bg-red-50/70' : 'bg-emerald-50/70'">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm" :class="benefice.net !== null && benefice.net < 0 ? 'bg-linear-to-br from-red-400 to-red-600' : 'bg-linear-to-br from-emerald-400 to-emerald-600'"><i class="fa-solid fa-sack-dollar text-sm"></i></span>
+                            <h2 id="benefice-net-insec" class="font-titre text-base font-bold text-gray-900">Bénéfice net de l’INSEC · {{ carte?.libelle ?? anneeSynthese }}</h2>
+                        </div>
+                        <p class="font-titre text-3xl leading-none font-bold tracking-tight tabular-nums sm:text-[2.25rem]" :class="benefice.net !== null && benefice.net < 0 ? 'text-red-700' : 'text-emerald-700'">
+                            <template v-if="benefice.net === null">—</template>
+                            <template v-else>{{ montant(benefice.net) }}<span class="ml-1 text-base font-semibold text-gray-400">MRU</span></template>
+                        </p>
+                        <p class="text-xs text-gray-600">
+                            <template v-if="benefice.net === null">Saisissez le taux EUR/MRU pour calculer le bénéfice.</template>
+                            <template v-else>Ce qui reste une fois la facture INTEC réglée, étudiants BUMEX compris. Avant les autres charges de l’INSEC (salaires, locaux…).</template>
+                        </p>
+                    </div>
+                    <dl class="divide-y divide-gray-100 p-5 text-sm sm:p-6">
+                        <div class="flex items-baseline justify-between gap-4 py-2">
+                            <dt class="text-gray-600">Recette des étudiants payeurs</dt>
+                            <dd class="font-semibold text-gray-900 tabular-nums">{{ montant(benefice.recettePayeursMru) }} MRU</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-4 py-2">
+                            <dt class="text-gray-600">− Facture INTEC des étudiants payeurs</dt>
+                            <dd class="font-semibold text-gray-900 tabular-nums">{{ benefice.coutIntecPayeursMru === null ? '—' : `${montant(benefice.coutIntecPayeursMru)} MRU` }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-4 py-2">
+                            <dt class="font-medium text-gray-700">= Marge des étudiants payeurs</dt>
+                            <dd class="font-semibold text-emerald-700 tabular-nums">{{ totauxFinanciers.margeEtudiantsMru === null ? '—' : `${montant(totauxFinanciers.margeEtudiantsMru)} MRU` }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-4 py-2">
+                            <dt class="text-gray-600">− Étudiants BUMEX, payés à l’INTEC en euros <span class="text-gray-400">({{ euros(totauxFinanciers.financementBumexEuro) }})</span></dt>
+                            <dd class="font-semibold text-gray-900 tabular-nums">{{ totauxFinanciers.financementBumexMru === null ? '—' : `${montant(totauxFinanciers.financementBumexMru)} MRU` }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-4 pt-3">
+                            <dt class="font-semibold text-gray-900">= Bénéfice net</dt>
+                            <dd class="font-bold tabular-nums" :class="benefice.net !== null && benefice.net < 0 ? 'text-red-700' : 'text-emerald-700'">{{ benefice.net === null ? '—' : `${montant(benefice.net)} MRU` }}</dd>
+                        </div>
+                    </dl>
+                </div>
             </section>
 
             <div class="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
