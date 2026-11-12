@@ -1,4 +1,4 @@
-import { ROLES_ADMIN, ROLES_LECTURE, type Role } from '@shared/domaine';
+import { ROLES_ADMIN, ROLES_LECTURE, ROLES_VISION_ADMIN, type Role } from '@shared/domaine';
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { apresNavigation } from './notifications';
 import { accueil, aRole, session, sessionPrete } from './session';
@@ -14,7 +14,10 @@ declare module 'vue-router' {
     }
 }
 
+// Pages de modification : administration seulement.
 const admin = { roles: ROLES_ADMIN };
+// Pages de l'administration en consultation : aussi « admin_lecture » (actions masquées dans la page).
+const vision = { roles: ROLES_VISION_ADMIN };
 // Pages consultables en lecture seule (finance et consultation compris).
 const lecture = { roles: ROLES_LECTURE };
 
@@ -29,29 +32,29 @@ const routes: RouteRecordRaw[] = [
     { path: '/tableau-de-bord', redirect: () => accueil() },
     { path: '/dashboard', redirect: () => accueil() },
 
-    { path: '/admin/tableau-de-bord', component: () => import('./vues/admin/TableauDeBord.vue'), meta: { ...admin, titre: 'Tableau de bord' } },
+    { path: '/admin/tableau-de-bord', component: () => import('./vues/admin/TableauDeBord.vue'), meta: { ...vision, titre: 'Tableau de bord' } },
     { path: '/candidatures', redirect: '/admin/tableau-de-bord' },
     { path: '/candidatures/:pathMatch(.*)*', redirect: '/admin/tableau-de-bord' },
     { path: '/etudiants', component: () => import('./vues/etudiants/ListeEtudiants.vue'), meta: { ...lecture, titre: 'Étudiants' } },
     { path: '/etudiants/nouveau', component: () => import('./vues/etudiants/NouvelEtudiant.vue'), meta: { ...admin, titre: 'Nouvel étudiant' } },
     { path: '/etudiants/:id', component: () => import('./vues/etudiants/FicheEtudiant.vue'), props: true, meta: { ...lecture, titre: 'Étudiant' } },
     { path: '/etudiants/:id/modifier', component: () => import('./vues/etudiants/ModifierEtudiant.vue'), props: true, meta: { ...admin, titre: 'Modifier l’étudiant' } },
-    { path: '/etudiants/:id/documents', component: () => import('./vues/etudiants/DocumentsEtudiant.vue'), props: true, meta: { ...admin, titre: 'Dossier documentaire' } },
+    { path: '/etudiants/:id/documents', component: () => import('./vues/etudiants/DocumentsEtudiant.vue'), props: true, meta: { ...vision, titre: 'Dossier documentaire' } },
     { path: '/etudiants/:id/inscriptions/nouvelle', component: () => import('./vues/etudiants/EditionInscription.vue'), props: (r) => ({ etudiantId: r.params.id }), meta: { ...admin, titre: 'Nouvelle inscription' } },
     { path: '/inscriptions/:id/modifier', component: () => import('./vues/etudiants/EditionInscription.vue'), props: (r) => ({ inscriptionId: r.params.id }), meta: { ...admin, titre: 'Modifier l’inscription' } },
-    { path: '/formations', component: () => import('./vues/Formations.vue'), meta: { ...admin, titre: 'Diplômes & UE' } },
-    { path: '/examens', component: () => import('./vues/examens/ListeExamens.vue'), meta: { ...admin, titre: 'Examens' } },
+    { path: '/formations', component: () => import('./vues/Formations.vue'), meta: { ...vision, titre: 'Diplômes & UE' } },
+    { path: '/examens', component: () => import('./vues/examens/ListeExamens.vue'), meta: { ...vision, titre: 'Examens' } },
     { path: '/examens/importer-calendrier', component: () => import('./vues/examens/ImporterCalendrierIntec.vue'), meta: { ...admin, titre: 'Importer le calendrier INTEC' } },
     { path: '/examens/nouveau', component: () => import('./vues/examens/NouvelExamen.vue'), meta: { ...admin, titre: 'Suivi local de l’épreuve INTEC' } },
-    { path: '/examens/:id', component: () => import('./vues/examens/FicheExamen.vue'), props: true, meta: { ...admin, titre: 'Examen' } },
+    { path: '/examens/:id', component: () => import('./vues/examens/FicheExamen.vue'), props: true, meta: { ...vision, titre: 'Examen' } },
     { path: '/enseignants', redirect: '/admin/tableau-de-bord' },
     { path: '/enseignants/:pathMatch(.*)*', redirect: '/admin/tableau-de-bord' },
-    { path: '/comptes', component: () => import('./vues/Comptes.vue'), meta: { ...admin, titre: 'Comptes & accès' } },
-    { path: '/communications', component: () => import('./vues/Communications.vue'), meta: { ...admin, titre: 'Communications' } },
-    { path: '/excel', component: () => import('./vues/Excel.vue'), meta: { ...admin, titre: 'Imports & exports' } },
-    { path: '/gestion', component: () => import('./vues/admin/CentreGestion.vue'), meta: { ...admin, titre: 'Centre de gestion' } },
-    { path: '/convention-intec', component: () => import('./vues/admin/ConventionIntec.vue'), meta: { ...admin, titre: 'Convention INTEC' } },
-    { path: '/audit', component: () => import('./vues/Audit.vue'), meta: { ...admin, titre: 'Journal d’audit' } },
+    { path: '/comptes', component: () => import('./vues/Comptes.vue'), meta: { ...vision, titre: 'Comptes & accès' } },
+    { path: '/communications', component: () => import('./vues/Communications.vue'), meta: { ...vision, titre: 'Communications' } },
+    { path: '/excel', component: () => import('./vues/Excel.vue'), meta: { ...vision, titre: 'Imports & exports' } },
+    { path: '/gestion', component: () => import('./vues/admin/CentreGestion.vue'), meta: { ...vision, titre: 'Centre de gestion' } },
+    { path: '/convention-intec', component: () => import('./vues/admin/ConventionIntec.vue'), meta: { ...vision, titre: 'Convention INTEC' } },
+    { path: '/audit', component: () => import('./vues/Audit.vue'), meta: { ...vision, titre: 'Journal d’audit' } },
     { path: '/sauvegardes', component: () => import('./vues/Sauvegardes.vue'), meta: { roles: ['super_admin'], titre: 'Sauvegardes' } },
     { path: '/finances', component: () => import('./vues/Finances.vue'), meta: { ...lecture, titre: 'Finances' } },
     { path: '/alertes', component: () => import('./vues/Alertes.vue'), meta: { titre: 'Alertes' } },

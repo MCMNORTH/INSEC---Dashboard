@@ -16,9 +16,10 @@ service cloud.firestore {
         : get(profil()).data.get('actif', true) != true ? ''
         : get(profil()).data.get('role', request.auth.token.get('role', ''));
     }
-    function admin() { return role() in ['admin', 'super_admin']; }
-    // Lecture seule des étudiants et des finances (le rôle « consultation » ne modifie rien).
-    function lecture() { return role() in ['admin', 'super_admin', 'finance', 'consultation']; }
+    // Tout ce que voit l'administration ; « admin_lecture » voit les mêmes données qu'un administrateur, sans rien modifier.
+    function visionAdmin() { return role() in ['admin', 'super_admin', 'admin_lecture']; }
+    // Lecture seule des étudiants et des finances (« consultation » et « admin_lecture » ne modifient rien).
+    function lecture() { return role() in ['admin', 'super_admin', 'admin_lecture', 'finance', 'consultation']; }
 
     // Référentiel des diplômes, UE et années scolaires.
     match /formations/{id} { allow read: if lecture(); }
@@ -29,15 +30,15 @@ service cloud.firestore {
     match /inscriptions/{id} { allow read: if lecture(); }
     match /versements/{id} { allow read: if lecture(); }
 
-    match /examens/{id} { allow read: if admin(); }
+    match /examens/{id} { allow read: if visionAdmin(); }
     // Les résultats figurent sur la fiche de l'étudiant.
     match /resultats/{id} { allow read: if lecture(); }
-    match /resultatsHistoriques/{id} { allow read: if admin(); }
+    match /resultatsHistoriques/{id} { allow read: if visionAdmin(); }
 
-    match /pieces/{id} { allow read: if admin(); }
+    match /pieces/{id} { allow read: if visionAdmin(); }
 
     match /utilisateurs/{uid} {
-      allow read: if admin() || (connecte() && request.auth.uid == uid);
+      allow read: if visionAdmin() || (connecte() && request.auth.uid == uid);
 
       match /alertes/{cle} {
         allow read: if connecte() && request.auth.uid == uid;
@@ -49,8 +50,8 @@ service cloud.firestore {
       }
     }
 
-    match /journalEmails/{id} { allow read: if admin(); }
-    match /journalAudit/{id} { allow read: if admin(); }
+    match /journalEmails/{id} { allow read: if visionAdmin(); }
+    match /journalAudit/{id} { allow read: if visionAdmin(); }
     match /sauvegardes/{id} { allow read: if role() == 'super_admin'; }
 
     // Collections techniques (unicité, compteurs) : jamais exposées.

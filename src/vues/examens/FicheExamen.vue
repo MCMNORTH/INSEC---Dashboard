@@ -12,9 +12,12 @@ import { horaireExamen, instantDepuisDateHeureParis, nomComplet } from '../../fo
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
 import { useReferentiel } from '../../referentiel';
+import { peutAdministrer } from '../../session';
 import type { Etudiant, Examen, Inscription, Resultat } from '../../types';
 
 const props = defineProps<{ id: string }>();
+// Lecture seule (« admin_lecture ») : suivi, présences et notes visibles ; champs figés, aucun envoi ni enregistrement.
+const admin = peutAdministrer();
 const { ue, annee, formation } = useReferentiel();
 const { donnee: examen, chargement } = useDocument<Examen>(() => `examens/${props.id}`);
 const { donnees: resultats } = useRequete<Resultat>(() => query(collection(db, 'resultats'), where('examenId', '==', props.id)));
@@ -233,7 +236,7 @@ async function envoyerConvocation(r: Resultat) {
                         <h1 class="titre-page mt-1.5">{{ ue(examen.ueId)?.code }} — {{ ue(examen.ueId)?.libelle }}</h1>
                         <span v-if="examen.statut !== 'Planifié'" :class="['pastille mt-2', examen.statut === 'Annulé' ? 'bg-red-50 text-red-700 ring-red-600/15' : 'bg-gray-50 text-gray-600 ring-gray-500/15']">{{ examen.statut }}</span>
                     </div>
-                    <button type="button" class="bouton-secondaire" :disabled="envoi" @click="edition.ouverte ? (edition.ouverte = false) : ouvrirEdition()">
+                    <button v-if="admin" type="button" class="bouton-secondaire" :disabled="envoi" @click="edition.ouverte ? (edition.ouverte = false) : ouvrirEdition()">
                         <i class="fa-solid fa-pen text-xs"></i>{{ edition.ouverte ? 'Fermer' : 'Modifier l’examen' }}
                     </button>
                 </div>
@@ -281,34 +284,34 @@ async function envoyerConvocation(r: Resultat) {
                         <section class="rounded-2xl border border-gray-200 p-4">
                             <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-600 text-[11px] font-bold text-white">1</span>Réception des sujets</h3>
                             <label class="etiquette">Date de réception
-                                <input v-model="preparation.sujetsRecusLe" type="date" class="champ mt-1.5" />
+                                <input :disabled="!admin" v-model="preparation.sujetsRecusLe" type="date" class="champ mt-1.5" />
                             </label>
                             <label class="etiquette mt-3 block">Nombre de lots reçus
-                                <input v-model.number="preparation.nombreSujetsRecus" type="number" min="0" max="500" step="1" class="champ mt-1.5" />
+                                <input :disabled="!admin" v-model.number="preparation.nombreSujetsRecus" type="number" min="0" max="500" step="1" class="champ mt-1.5" />
                             </label>
                             <p class="mt-2 text-xs text-gray-500">Renseignez la date et le nombre de lots ensemble pour confirmer la réception.</p>
                         </section>
                         <section class="rounded-2xl border border-gray-200 p-4">
                             <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-600 text-[11px] font-bold text-white">2</span>Organisation de la salle</h3>
                             <label class="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2.5 text-sm text-gray-700 transition hover:bg-gray-50">
-                                <input v-model="preparation.salleConfirmee" type="checkbox" class="mt-0.5" />
+                                <input :disabled="!admin" v-model="preparation.salleConfirmee" type="checkbox" class="mt-0.5" />
                                 <span>Salle d’examen confirmée</span>
                             </label>
                             <label class="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2.5 text-sm text-gray-700 transition hover:bg-gray-50">
-                                <input v-model="preparation.surveillanceConfirmee" type="checkbox" class="mt-0.5" />
+                                <input :disabled="!admin" v-model="preparation.surveillanceConfirmee" type="checkbox" class="mt-0.5" />
                                 <span>Surveillance organisée</span>
                             </label>
                         </section>
                         <section class="rounded-2xl border border-gray-200 p-4">
                             <h3 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-gray-900"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-insec-600 text-[11px] font-bold text-white">3</span>Retour des copies</h3>
                             <label class="etiquette">Copies rassemblées
-                                <input v-model.number="preparation.nombreCopiesRassemblees" type="number" min="0" :max="candidatsPresents" step="1" class="champ mt-1.5" />
+                                <input :disabled="!admin" v-model.number="preparation.nombreCopiesRassemblees" type="number" min="0" :max="candidatsPresents" step="1" class="champ mt-1.5" />
                             </label>
                             <label class="etiquette mt-3 block">Date d’envoi à l’INTEC
-                                <input v-model="preparation.copiesEnvoyeesLe" type="date" class="champ mt-1.5" />
+                                <input :disabled="!admin" v-model="preparation.copiesEnvoyeesLe" type="date" class="champ mt-1.5" />
                             </label>
                             <label class="etiquette mt-3 block">Référence d’envoi <span class="font-normal text-gray-400">(facultatif)</span>
-                                <input v-model="preparation.referenceEnvoiCopies" maxlength="120" class="champ mt-1.5" />
+                                <input :disabled="!admin" v-model="preparation.referenceEnvoiCopies" maxlength="120" class="champ mt-1.5" />
                             </label>
                         </section>
                     </div>
@@ -322,7 +325,7 @@ async function envoyerConvocation(r: Resultat) {
                     </p>
                     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
                         <p class="flex items-center gap-2 text-xs text-gray-500"><i class="fa-solid fa-shield-halved"></i>Chaque modification est enregistrée dans le journal d’audit.</p>
-                        <button class="bouton-action" :disabled="envoi || incoherenceCopies || incoherenceReceptionSujets">Enregistrer le suivi</button>
+                        <button v-if="admin" class="bouton-action" :disabled="envoi || incoherenceCopies || incoherenceReceptionSujets">Enregistrer le suivi</button>
                     </div>
                 </form>
             </section>
@@ -346,13 +349,13 @@ async function envoyerConvocation(r: Resultat) {
                         title="Télécharger le bordereau d’accompagnement des copies"
                         @click="soumettre(() => telecharger('genererPdf', { type: 'bordereauCopies', id: props.id }))"
                     ><i class="fa-solid fa-file-pdf text-red-500"></i> Bordereau des copies</button>
-                    <button
+                    <button v-if="admin"
                         type="button"
                         class="bouton-principal"
                         :disabled="envoi || !convocables.length || examen.statut === 'Annulé'"
                         @click="envoyerToutesConvocations"
                     ><i class="fa-solid fa-paper-plane"></i> Envoyer les convocations ({{ convocables.length }} à envoyer)</button>
-                    <button
+                    <button v-if="admin"
                         type="button"
                         class="bouton-action"
                         :disabled="envoi || !aPublier.length || examen.statut === 'Annulé'"
@@ -377,7 +380,7 @@ async function envoyerConvocation(r: Resultat) {
                     · Absents <strong class="text-red-700 tabular-nums">{{ resumePresence['Absent'] }}</strong>
                     · Dispensés <strong class="tabular-nums">{{ resumePresence['Dispensé'] }}</strong>
                 </p>
-                <button
+                <button v-if="admin"
                     type="button"
                     class="bouton-principal ml-auto"
                     :disabled="envoi || !presencesEnAttente.length || examen.statut === 'Annulé'"
@@ -396,20 +399,20 @@ async function envoyerConvocation(r: Resultat) {
                         </div>
                     </div>
                     <label class="etiquette text-xs text-gray-500">Présence
-                        <select v-model="valeur(r).presence" class="champ mt-1"><option v-for="p in PRESENCES" :key="p">{{ p }}</option></select>
+                        <select :disabled="!admin" v-model="valeur(r).presence" class="champ mt-1"><option v-for="p in PRESENCES" :key="p">{{ p }}</option></select>
                     </label>
                     <label class="etiquette text-xs text-gray-500">Note / {{ examen.noteSur }}
-                        <input v-model="valeur(r).note" type="number" step="0.01" min="0" :max="examen.noteSur" class="champ mt-1" />
+                        <input :disabled="!admin" v-model="valeur(r).note" type="number" step="0.01" min="0" :max="examen.noteSur" class="champ mt-1" />
                     </label>
-                    <label class="etiquette text-xs text-gray-500">Commentaire <input v-model="valeur(r).commentaire" class="champ mt-1" maxlength="1000" /></label>
-                    <button class="bouton-principal" :disabled="envoi">Enregistrer</button>
+                    <label class="etiquette text-xs text-gray-500">Commentaire <input :disabled="!admin" v-model="valeur(r).commentaire" class="champ mt-1" maxlength="1000" /></label>
+                    <button v-if="admin" class="bouton-principal" :disabled="envoi">Enregistrer</button>
                     <button type="button" class="bouton-secondaire" :disabled="envoi" title="Convocation PDF" @click="soumettre(() => telecharger('genererPdf', { type: 'convocation', id: r.id }))">
                         <i class="fa-solid fa-file-pdf text-red-500"></i> Convocation
                     </button>
                     <p v-if="r.convocationEnvoiStatut === 'Envoyée'" class="flex items-center gap-1.5 text-xs font-medium text-emerald-700 md:col-span-7"><i class="fa-solid fa-circle-check"></i>Convocation envoyée — aucun nouvel envoi ne sera effectué.</p>
                     <p v-else-if="r.convocationEnvoiStatut === 'En cours'" class="flex items-center gap-1.5 text-xs text-insec-700 md:col-span-7"><i class="fa-solid fa-circle-notch fa-spin"></i>Envoi en cours — un nouvel envoi est bloqué.</p>
                     <p v-else-if="r.convocationEnvoiStatut === 'Échec'" class="flex items-center gap-1.5 text-xs text-amber-700 md:col-span-7"><i class="fa-solid fa-triangle-exclamation"></i>Échec du dernier envoi. Vérifiez le journal des communications avant de réessayer.</p>
-                    <button
+                    <button v-if="admin"
                         type="button"
                         class="bouton-secondaire"
                         :disabled="envoi || examen.statut === 'Annulé' || !adresseValide(parEtudiant.get(r.etudiantId)?.email) || r.convocationEnvoiStatut === 'Envoyée' || r.convocationEnvoiStatut === 'En cours'"

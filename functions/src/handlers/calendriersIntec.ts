@@ -3,7 +3,7 @@ import { operation } from '../lib/contexte.js';
 import { col } from '../lib/donnees.js';
 import { db } from '../lib/firebase.js';
 import { erreurChamp, valider, z } from '../lib/validation.js';
-import { ROLES_ADMIN } from '../shared/domaine.js';
+import { ROLES_ADMIN, ROLES_VISION_ADMIN } from '../shared/domaine.js';
 
 const examenCalendrier = z.object({
     codeUE: z.string().regex(/^\d{3}$/),
@@ -22,7 +22,7 @@ const sourceOfficielle = (valeur: string): boolean => {
     }
 };
 
-export const lireCalendriersIntec = operation('lireCalendriersIntec', ROLES_ADMIN, async () => {
+export const lireCalendriersIntec = operation('lireCalendriersIntec', ROLES_VISION_ADMIN, async () => {
     const documents = await col.calendriersIntec().get();
     return {
         calendriers: documents.docs.map((document) => ({

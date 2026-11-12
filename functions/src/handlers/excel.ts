@@ -5,7 +5,7 @@ import { operation, refuser } from '../lib/contexte.js';
 import { col, refUnique, type Doc } from '../lib/donnees.js';
 import { db } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
-import { dateDuJour, dateHeureDansFuseau, FUSEAU_EXAMENS, FUSEAU_LOCAL, montantEnRetard, montantNet, ROLES_ADMIN, soldeRestant, statutPaiement, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
+import { dateDuJour, dateHeureDansFuseau, FUSEAU_EXAMENS, FUSEAU_LOCAL, montantEnRetard, montantNet, ROLES_ADMIN, ROLES_VISION_ADMIN, soldeRestant, statutPaiement, STATUTS_ETUDIANT, STATUTS_INSCRIPTION } from '../shared/domaine.js';
 import { attributsInscription, cleEmailEtudiant, controlerInscription, resumeInscriptions } from './etudiants.js';
 
 type Valeur = string | number | null | undefined;
@@ -161,7 +161,7 @@ const EXPORTS = {
 
 export const exporterExcel = operation(
     'exporterExcel',
-    ROLES_ADMIN,
+    ROLES_VISION_ADMIN,
     async (donnees, acteur) => {
         const { type } = valider(z.object({ type: s.choix(['modele', 'etudiants', 'finances', 'resultats'] as const) }), donnees);
         const [generer, description] = EXPORTS[type];

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TAILLE_MAX_PIECE, TYPES_DOCUMENT_FINANCIER } from '@shared/domaine';
+import { ROLES_FINANCE, TAILLE_MAX_PIECE, TYPES_DOCUMENT_FINANCIER } from '@shared/domaine';
 import { ref as refStockage, uploadBytes } from 'firebase/storage';
 import { computed, ref, watch } from 'vue';
 import { appeler } from '../api';
@@ -7,7 +7,7 @@ import { telecharger } from '../fichiers';
 import { stockage } from '../firebase';
 import { date } from '../format';
 import { notifier } from '../notifications';
-import { session } from '../session';
+import { aRole, session } from '../session';
 
 type TypeDocument = (typeof TYPES_DOCUMENT_FINANCIER)[number];
 interface DocumentFinancier {
@@ -20,6 +20,8 @@ interface DocumentFinancier {
 }
 
 const props = defineProps<{ anneeId: string; libelleAnnee: string }>();
+// L'administration en lecture seule consulte et télécharge les documents, sans dépôt.
+const peutDeposer = aRole(...ROLES_FINANCE);
 
 const RUBRIQUES: { type: TypeDocument; titre: string; aide: string }[] = [
     { type: 'facture-intec', titre: 'Facture annuelle de l’INTEC', aide: 'La facture qui indique le total dû à l’INTEC pour cette année.' },
@@ -113,7 +115,7 @@ const ko = (octets: number) => `${Math.max(1, Math.round(octets / 1024))} Ko`;
                     </li>
                 </ul>
                 <p v-else class="mt-4 text-sm text-gray-400">Aucun document déposé pour cette année.</p>
-                <div class="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-3 transition hover:border-insec-300 hover:bg-insec-50/30">
+                <div v-if="peutDeposer" class="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-3 transition hover:border-insec-300 hover:bg-insec-50/30">
                     <i class="fa-solid fa-cloud-arrow-up text-insec-400"></i>
                     <input type="file" accept="application/pdf" multiple class="min-w-0 flex-1 text-xs text-gray-600" :aria-label="`Choisir ${r.titre}`" @change="choisir(r.type, $event)" />
                     <button type="button" class="bouton-secondaire" :disabled="envoi !== null || !selection[r.type].length" @click="deposer(r.type)">

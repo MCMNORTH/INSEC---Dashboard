@@ -12,9 +12,12 @@ import { db, stockage } from '../../firebase';
 import { date } from '../../format';
 import { useFormulaire } from '../../formulaire';
 import { notifier } from '../../notifications';
+import { peutAdministrer } from '../../session';
 import { useReferentiel } from '../../referentiel';
 import type { Etudiant, Inscription, Piece, Versement } from '../../types';
 
+// Lecture seule (« admin_lecture ») : pièces et documents consultables, sans dépôt ni changement de statut.
+const admin = peutAdministrer();
 const props = defineProps<{ id: string }>();
 const { formation, annee } = useReferentiel();
 const { donnee: etudiant, chargement } = useDocument<Etudiant>(() => `etudiants/${props.id}`);
@@ -92,7 +95,7 @@ const generer = (operation: string, donnees: object) => soumettre(() => telechar
                                 <i class="fa-solid fa-download text-[11px]"></i> Télécharger
                             </button>
                         </div>
-                        <form class="mt-3 flex flex-wrap gap-2 pl-[52px]" @submit.prevent="mettreAJour(piece)">
+                        <form v-if="admin" class="mt-3 flex flex-wrap gap-2 pl-[52px]" @submit.prevent="mettreAJour(piece)">
                             <select v-model="valeur(piece).statut" class="champ w-auto py-2">
                                 <option v-for="s in STATUTS_PIECE" :key="s">{{ s }}</option>
                             </select>
@@ -106,7 +109,7 @@ const generer = (operation: string, donnees: object) => soumettre(() => telechar
                     <p class="mt-3 text-sm text-gray-500">Aucune pièce déposée.</p>
                 </div>
             </section>
-            <aside class="carte overflow-hidden lg:sticky lg:top-24">
+            <aside v-if="admin" class="carte overflow-hidden lg:sticky lg:top-24">
                 <header class="panneau-entete">
                     <div>
                         <h2 class="titre-section">Ajouter une pièce</h2>

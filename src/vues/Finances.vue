@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
     beneficeNetInsec, coutIntecEuro, diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
-    montantEnRetard, montantNet, ROLES_FINANCE, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, totalEcheances,
+    montantEnRetard, montantNet, ROLES_FINANCE, ROLES_VISION_ADMIN, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, totalEcheances,
 } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
@@ -344,6 +344,8 @@ const erreurTaux = ref('');
 const tauxAdmin = computed(() => aRole('admin', 'super_admin'));
 // Le rôle « consultation » voit tout en lecture seule : aucun formulaire ni bouton d'action.
 const peutModifier = computed(() => aRole(...ROLES_FINANCE));
+// L'administration en lecture seule voit les mêmes informations qu'un administrateur (factures, reçus, documents), sans envoi.
+const voitAdmin = computed(() => aRole(...ROLES_VISION_ADMIN));
 const nombreFormate = (v: number) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const euros = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(v);
 const dateTauxFormatee = computed(() => dateTaux.value ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(dateTaux.value)) : null);
@@ -743,11 +745,11 @@ const benefice = computed(() => {
 
                                         <!-- Actions -->
                                         <div class="mt-4 flex flex-wrap items-center gap-2">
-                                            <template v-if="aRole('admin', 'super_admin')">
+                                            <template v-if="voitAdmin">
                                                 <button type="button" class="bouton-secondaire max-sm:flex-1" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))">
                                                     <i class="fa-solid fa-file-pdf text-xs text-red-500"></i>Facture PDF
                                                 </button>
-                                                <button
+                                                <button v-if="tauxAdmin"
                                                     type="button"
                                                     class="bouton-secondaire max-sm:flex-1"
                                                     :disabled="envoi || !emailEtudiantValide"
@@ -820,9 +822,9 @@ const benefice = computed(() => {
                                                             <button type="button" class="cursor-pointer font-semibold text-emerald-700 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Validée')">Valider</button>
                                                             <button type="button" class="cursor-pointer font-semibold text-red-600 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Rejetée')">Rejeter</button>
                                                         </template>
-                                                        <template v-if="aRole('admin', 'super_admin') && v.statut === 'Validée'">
+                                                        <template v-if="voitAdmin && v.statut === 'Validée'">
                                                             <button type="button" class="lien" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))">Reçu PDF</button>
-                                                            <button type="button" class="lien disabled:cursor-not-allowed disabled:opacity-50" :disabled="envoi || !emailEtudiantValide" @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')">Envoyer le reçu</button>
+                                                            <button v-if="tauxAdmin" type="button" class="lien disabled:cursor-not-allowed disabled:opacity-50" :disabled="envoi || !emailEtudiantValide" @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')">Envoyer le reçu</button>
                                                         </template>
                                                         <button v-if="v.statut === 'Validée' && peutModifier" type="button" class="ml-auto cursor-pointer font-medium text-gray-400 hover:text-red-600" :disabled="envoi" @click="annulerVersement(v)">Annuler</button>
                                                     </p>
@@ -1100,13 +1102,13 @@ const benefice = computed(() => {
                 </section>
             </div>
 
-            <DocumentsFinanciers v-if="anneeSynthese && peutModifier" :annee-id="anneeSynthese" :libelle-annee="carte?.libelle ?? anneeSynthese" />
+            <DocumentsFinanciers v-if="anneeSynthese && (peutModifier || voitAdmin)" :annee-id="anneeSynthese" :libelle-annee="carte?.libelle ?? anneeSynthese" />
 
             <p v-if="totauxFinanciers.diplomesAControler" class="mb-4 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
                 <i class="fa-solid fa-triangle-exclamation mt-0.5 text-amber-500"></i>
                 <span>{{ totauxFinanciers.diplomesAControler }} inscription(s) a(ont) un diplôme non reconnu dans le barème; leur coût n’est pas estimé.</span>
             </p>
-            <section v-if="anneeSynthese === '2024-2025' && aRole('admin', 'super_admin')" class="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+            <section v-if="anneeSynthese === '2024-2025' && voitAdmin" class="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
                 <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><i class="fa-solid fa-circle-check text-sm"></i></span>
                 <div>
                     <h2 class="titre-section text-emerald-900">Règlement BUMEX — 2024–2025</h2>

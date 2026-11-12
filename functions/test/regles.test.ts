@@ -42,7 +42,7 @@ beforeEach(async () => {
         await setDoc(doc(db, 'pieces/p1'), { etudiantId: 'e1', type: 'Pièce d’identité' });
         await setDoc(doc(db, 'journalEmails/m1'), { destinataire: 'awa@example.com' });
         // Profils des comptes : les règles lisent le rôle et l'état « actif » dans le profil.
-        for (const [uid, role] of [['u-admin', 'admin'], ['u-super', 'super_admin'], ['u-finance', 'finance'], ['u-consult', 'consultation'], ['u-etudiant', 'etudiant'], ['u-prof', 'enseignant']]) {
+        for (const [uid, role] of [['u-admin', 'admin'], ['u-super', 'super_admin'], ['u-finance', 'finance'], ['u-consult', 'consultation'], ['u-lecture', 'admin_lecture'], ['u-etudiant', 'etudiant'], ['u-prof', 'enseignant']]) {
             await setDoc(doc(db, `utilisateurs/${uid}`), { role, actif: true });
         }
         await setDoc(doc(db, 'utilisateurs/u-desactive'), { role: 'admin', actif: false });
@@ -112,6 +112,22 @@ describe('Règles Firestore', () => {
         await assertSucceeds(getDoc(doc(consult, 'utilisateurs/u-consult')));
     });
 
+    it('ouvre à l’administration en lecture seule tout ce que lit un administrateur, sans aucune écriture', async () => {
+        const lecteur = env.authenticatedContext('u-lecture', jeton('admin_lecture')).firestore();
+        for (const chemin of ['etudiants/e1', 'inscriptions/i1', 'versements/v1', 'resultats/r1', 'formations/DGC', 'ues/TEC111',
+            'pieces/p1', 'examens/x1', 'journalAudit/a1', 'journalEmails/m1', 'utilisateurs/u-admin']) {
+            await assertSucceeds(getDoc(doc(lecteur, chemin)));
+        }
+        await assertSucceeds(getDocs(collection(lecteur, 'utilisateurs')));
+        // Sauvegardes : super-administrateur seulement ; collections techniques jamais exposées.
+        await assertFails(getDoc(doc(lecteur, 'sauvegardes/s1')));
+        await assertFails(getDoc(doc(lecteur, 'uniques/etudiant-email:awa@example.com')));
+        await assertFails(setDoc(doc(lecteur, 'etudiants/e3'), { nom: 'Sy' }));
+        await assertFails(updateDoc(doc(lecteur, 'inscriptions/i1'), { totalVerse: 0 }));
+        await assertFails(updateDoc(doc(lecteur, 'utilisateurs/u-lecture'), { role: 'admin' }));
+        await assertFails(setDoc(doc(lecteur, 'journalAudit/a2'), { action: 'created' }));
+    });
+
     it('coupe immédiatement l’accès d’un compte désactivé ou sans profil, même avec un jeton valide', async () => {
         const desactive = env.authenticatedContext('u-desactive', jeton('admin')).firestore();
         const sansProfil = env.authenticatedContext('u-inconnu', jeton('admin')).firestore();
@@ -170,5 +186,11 @@ describe('Règles Storage', () => {
         await assertFails(uploadBytes(ref(finance, 'finances/2026-2027/facture-intec/u-finance/f.png'), pdf, { contentType: 'image/png' }));
         const eleve = env.authenticatedContext('u-etudiant', jeton('etudiant', { etudiantId: 'e1' })).storage();
         await assertFails(uploadBytes(ref(eleve, 'finances/2026-2027/facture-intec/u-etudiant/f.pdf'), pdf, { contentType: 'application/pdf' }));
+    });
+
+    it('refuse tout dépôt à l’administration en lecture seule', async () => {
+        const lecteur = env.authenticatedContext('u-lecture', jeton('admin_lecture')).storage();
+        await assertFails(uploadBytes(ref(lecteur, 'dossiers/e1/piece.pdf'), pdf, { contentType: 'application/pdf' }));
+        await assertFails(uploadBytes(ref(lecteur, 'finances/2026-2027/facture-intec/u-lecture/f.pdf'), pdf, { contentType: 'application/pdf' }));
     });
 });

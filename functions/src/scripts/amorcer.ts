@@ -127,6 +127,7 @@ async function demo() {
     await compte({ nom: 'Admin Démo', email: 'admin@insec.test', role: 'admin', etudiantId: null, enseignantId: null }, motDePasse);
     await compte({ nom: 'Finance Démo', email: 'finance@insec.test', role: 'finance', etudiantId: null, enseignantId: null }, motDePasse);
     await compte({ nom: 'Consultation Démo', email: 'consultation@insec.test', role: 'consultation', etudiantId: null, enseignantId: null }, motDePasse);
+    await compte({ nom: 'Lecture Démo', email: 'lecture@insec.test', role: 'admin_lecture', etudiantId: null, enseignantId: null }, motDePasse);
     console.log('Données de démonstration créées (mots de passe des comptes démo : voir README, émulateurs uniquement).');
 }
 

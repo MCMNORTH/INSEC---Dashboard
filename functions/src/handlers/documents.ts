@@ -4,11 +4,11 @@ import { col, exiger } from '../lib/donnees.js';
 import { bucket, db } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
 import {
-    MIME_PIECES, ROLES_ADMIN, ROLES_FINANCE, STATUTS_PIECE, TAILLE_MAX_PIECE, TYPES_DOCUMENT_FINANCIER, TYPES_PIECE,
+    MIME_PIECES, ROLES_ADMIN, ROLES_DOCUMENTS_FINANCIERS, ROLES_FINANCE, ROLES_VISION_ADMIN, STATUTS_PIECE, TAILLE_MAX_PIECE, TYPES_DOCUMENT_FINANCIER, TYPES_PIECE,
 } from '../shared/domaine.js';
 
 /** Télécharge le PDF original de la convention, conservé dans le stockage privé. */
-export const telechargerConventionIntec = operation('telechargerConventionIntec', ROLES_ADMIN, async (_donnees, acteur) => {
+export const telechargerConventionIntec = operation('telechargerConventionIntec', ROLES_VISION_ADMIN, async (_donnees, acteur) => {
     const fichier = bucket().file('documents/convention-intec-2024.pdf');
     const [existe] = await fichier.exists();
     if (!existe) introuvable('Le PDF de la convention n’est pas encore disponible.');
@@ -67,7 +67,7 @@ export const enregistrerPiece = operation('enregistrerPiece', ROLES_ADMIN, async
     return { id: ref.id, message: 'Pièce ajoutée au dossier.' };
 });
 
-export const telechargerPiece = operation('telechargerPiece', ROLES_ADMIN, async (donnees, acteur) => {
+export const telechargerPiece = operation('telechargerPiece', ROLES_VISION_ADMIN, async (donnees, acteur) => {
     const { id } = valider(z.object({ id: s.id() }), donnees);
     const piece = await exiger(null, col.pieces().doc(id), 'Document introuvable.');
     const fichier = bucket().file(piece.chemin);
@@ -138,7 +138,7 @@ export const enregistrerDocumentFinancier = operation('enregistrerDocumentFinanc
 });
 
 /** Liste les documents financiers d'une année, dans les deux formats, sans ouvrir la collection au navigateur. */
-export const lireDocumentsFinanciers = operation('lireDocumentsFinanciers', ROLES_FINANCE, async (donnees) => {
+export const lireDocumentsFinanciers = operation('lireDocumentsFinanciers', ROLES_DOCUMENTS_FINANCIERS, async (donnees) => {
     const { anneeId } = valider(z.object({ anneeId: s.id() }), donnees);
     const [actuels, ancien] = await Promise.all([
         col.documentsFinanciers().where('anneeId', '==', anneeId).get(),
@@ -163,7 +163,7 @@ export const lireDocumentsFinanciers = operation('lireDocumentsFinanciers', ROLE
     return { documents: liste.sort((a, b) => String(b.deposeLe ?? '').localeCompare(String(a.deposeLe ?? ''))) };
 });
 
-export const telechargerDocumentFinancier = operation('telechargerDocumentFinancier', ROLES_FINANCE, async (donnees, acteur) => {
+export const telechargerDocumentFinancier = operation('telechargerDocumentFinancier', ROLES_DOCUMENTS_FINANCIERS, async (donnees, acteur) => {
     const v = valider(z.object({ id: s.id(), type: s.choix(TYPES_DOCUMENT_FINANCIER).optional() }), donnees);
     const document = await exiger(null, col.documentsFinanciers().doc(v.id), 'Document financier introuvable.');
     let type: TypeDocumentFinancier;
