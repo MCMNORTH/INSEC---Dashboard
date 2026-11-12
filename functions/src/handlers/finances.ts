@@ -6,7 +6,7 @@ import { mettreEnFileEmail } from '../lib/email.js';
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, valeursAttendues, z } from '../lib/validation.js';
 import {
-    dateDuJour, decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, ROLES_LECTURE,
+    dateDuJour, decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, ROLES_LECTURE, ROLES_VISION_ADMIN,
     soldeRestant, STATUT_VERSEMENT_ANNULE, STATUTS_VERSEMENT, type Echeance, type SituationFinanciere,
 } from '../shared/domaine.js';
 
@@ -337,7 +337,8 @@ export const lireTauxEuroMru = operation('lireTauxEuroMru', ROLES_LECTURE, async
     };
 });
 
-export const modifierTauxEuroMru = operation('modifierTauxEuroMru', ROLES_ADMIN, async (donnees, acteur) => {
+// Taux EUR/MRU : seule modification permise à l'administration en lecture seule (journalisée comme les autres).
+export const modifierTauxEuroMru = operation('modifierTauxEuroMru', ROLES_VISION_ADMIN, async (donnees, acteur) => {
     const v = valider(z.object({ taux: s.nombre(1, 200) }), donnees);
     const ref = tauxEuroMruRef();
     await db.runTransaction(async (tx) => {

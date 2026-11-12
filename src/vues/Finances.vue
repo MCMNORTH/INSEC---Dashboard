@@ -341,10 +341,10 @@ const tauxSaisi = ref<number | null>(null);
 const dateTaux = ref<string | null>(null);
 const chargementTaux = ref(true);
 const erreurTaux = ref('');
-const tauxAdmin = computed(() => aRole('admin', 'super_admin'));
+const estAdmin = computed(() => aRole('admin', 'super_admin'));
 // Le rôle « consultation » voit tout en lecture seule : aucun formulaire ni bouton d'action.
 const peutModifier = computed(() => aRole(...ROLES_FINANCE));
-// L'administration en lecture seule voit les mêmes informations qu'un administrateur (factures, reçus, documents), sans envoi.
+// L'administration en lecture seule voit les mêmes informations qu'un administrateur (factures, reçus, documents), sans envoi ; elle peut en revanche enregistrer le taux EUR/MRU.
 const voitAdmin = computed(() => aRole(...ROLES_VISION_ADMIN));
 const nombreFormate = (v: number) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const euros = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(v);
@@ -749,7 +749,7 @@ const benefice = computed(() => {
                                                 <button type="button" class="bouton-secondaire max-sm:flex-1" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'facture', id: inscription.id }))">
                                                     <i class="fa-solid fa-file-pdf text-xs text-red-500"></i>Facture PDF
                                                 </button>
-                                                <button v-if="tauxAdmin"
+                                                <button v-if="estAdmin"
                                                     type="button"
                                                     class="bouton-secondaire max-sm:flex-1"
                                                     :disabled="envoi || !emailEtudiantValide"
@@ -824,7 +824,7 @@ const benefice = computed(() => {
                                                         </template>
                                                         <template v-if="voitAdmin && v.statut === 'Validée'">
                                                             <button type="button" class="lien" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))">Reçu PDF</button>
-                                                            <button v-if="tauxAdmin" type="button" class="lien disabled:cursor-not-allowed disabled:opacity-50" :disabled="envoi || !emailEtudiantValide" @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')">Envoyer le reçu</button>
+                                                            <button v-if="estAdmin" type="button" class="lien disabled:cursor-not-allowed disabled:opacity-50" :disabled="envoi || !emailEtudiantValide" @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')">Envoyer le reçu</button>
                                                         </template>
                                                         <button v-if="v.statut === 'Validée' && peutModifier" type="button" class="ml-auto cursor-pointer font-medium text-gray-400 hover:text-red-600" :disabled="envoi" @click="annulerVersement(v)">Annuler</button>
                                                     </p>
@@ -1049,7 +1049,7 @@ const benefice = computed(() => {
                         <p class="text-sm text-gray-600">Saisissez le taux réellement appliqué par votre banque ou votre opération de change. Le taux est commun aux années; les montants affichés sont recalculés avec le taux enregistré.</p>
                         <p v-if="!dateTauxFormatee && !chargementTaux" class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900"><i class="fa-solid fa-circle-info mt-0.5 text-amber-500"></i>Aucun taux n’est encore enregistré. Les équivalents en MRU et les marges restent masqués jusqu’à sa saisie.</p>
                         <p v-if="erreurTaux" role="alert" class="mt-3 text-xs text-red-700">{{ erreurTaux }}</p>
-                        <form v-if="tauxAdmin" class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="enregistrerTaux">
+                        <form v-if="voitAdmin" class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="enregistrerTaux">
                             <label class="etiquette">1 EUR =
                                 <span class="relative mt-1.5 block">
                                     <input v-model.number="tauxSaisi" class="champ w-44 pr-14 tabular-nums" type="number" min="1" max="200" step="0.01" required aria-label="Taux MRU par euro" />

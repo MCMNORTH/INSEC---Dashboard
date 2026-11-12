@@ -6,7 +6,7 @@ import { enregistrerPiece, lireDocumentsFinanciers, modifierPiece, telechargerPi
 import { creerEtudiant, modifierEtudiant, supprimerEtudiant } from '../src/handlers/etudiants.js';
 import { creerExamen } from '../src/handlers/examens.js';
 import { exporterExcel, importerEtudiants } from '../src/handlers/excel.js';
-import { ajouterVersement, modifierTauxEuroMru } from '../src/handlers/finances.js';
+import { ajouterVersement, lireTauxEuroMru, modifierTauxEuroMru } from '../src/handlers/finances.js';
 import { envoyerDocumentParEmail, genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import { auth, bucket } from '../src/lib/firebase.js';
@@ -78,7 +78,6 @@ describe('Administrateur (lecture seule)', () => {
             () => appeler(enregistrerPiece, {}, lecteur),
             () => appeler(modifierPiece, {}, lecteur),
             () => appeler(ajouterVersement, {}, lecteur),
-            () => appeler(modifierTauxEuroMru, {}, lecteur),
             () => appeler(envoyerDocumentParEmail, {}, lecteur),
             () => appeler(creerCompte, { nom: 'X', email: 'x@example.com', role: 'consultation' }, lecteur),
             () => appeler(modifierRoleCompte, { uid: admin.uid, role: 'consultation' }, lecteur),
@@ -86,6 +85,16 @@ describe('Administrateur (lecture seule)', () => {
         ];
         for (const appel of refus) await attendreErreur(appel(), 'permission-denied');
         expect(await liste('etudiants')).toHaveLength(1);
+    });
+
+    it('enregistre le taux EUR/MRU (seule modification permise), journalisé ; finance et consultation restent refusées', async () => {
+        await appeler(modifierTauxEuroMru, { taux: 46.5 }, lecteur);
+        expect((await appeler(lireTauxEuroMru, {}, lecteur)).taux).toBe(46.5);
+        expect((await liste('journalAudit')).some((a) => a.acteurId === lecteur.uid && JSON.stringify(a.apres ?? {}).includes('46.5'))).toBe(true);
+        for (const role of ['finance', 'consultation'] as const) {
+            await attendreErreur(appeler(modifierTauxEuroMru, { taux: 50 }, await acteur(role)), 'permission-denied');
+        }
+        await attendreErreur(appeler(modifierTauxEuroMru, { taux: 500 }, lecteur), 'invalid-argument', 'taux');
     });
 
     it('lit une facture déjà émise, mais n’en émet pas de nouvelle (pas de numéro attribué)', async () => {

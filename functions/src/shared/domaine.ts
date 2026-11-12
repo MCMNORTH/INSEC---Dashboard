@@ -11,7 +11,7 @@ export type Role = (typeof ROLES)[number];
 export const ROLES_ADMIN: readonly Role[] = ['admin', 'super_admin'];
 /**
  * Tout ce que voit l'administration, en lecture seule pour « admin_lecture » :
- * mêmes pages qu'un administrateur, sans aucune modification possible.
+ * mêmes pages qu'un administrateur, sans modification possible (seule exception : le taux EUR/MRU).
  */
 export const ROLES_VISION_ADMIN: readonly Role[] = ['admin', 'super_admin', 'admin_lecture'];
 /** Rôles que seul le super-administrateur peut donner, retirer, activer ou désactiver. */
