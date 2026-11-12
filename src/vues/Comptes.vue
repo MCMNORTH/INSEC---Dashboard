@@ -149,7 +149,7 @@ async function basculer(c: Utilisateur) {
                     <li><strong class="text-gray-900">Consultation</strong> : voit les étudiants, leurs fiches et les finances, sans rien modifier.</li>
                     <li><strong class="text-gray-900">Finance</strong> : enregistre les versements, échéanciers et relances ; voit les fiches étudiants.</li>
                     <li><strong class="text-gray-900">Administrateur</strong> : gère tout (étudiants, examens, comptes finance et consultation).</li>
-                    <li><strong class="text-gray-900">Administrateur (lecture seule)</strong> : voit tout ce que voit un administrateur, sans pouvoir rien modifier.</li>
+                    <li><strong class="text-gray-900">Administrateur (lecture seule)</strong> : voit tout ce que voit un administrateur, sans pouvoir rien modifier, sauf le taux de conversion EUR/MRU.</li>
                 </ul>
                 <p class="rounded-xl bg-gray-50 p-3 text-xs leading-5 text-gray-500"><i class="fa-solid fa-circle-info mr-1 text-insec-400"></i>La personne recevra un e-mail pour choisir elle-même son mot de passe.<template v-if="!superAdmin"> Seul le super-administrateur peut créer un compte administrateur, y compris en lecture seule.</template></p>
                 <button class="bouton-action w-full" :disabled="envoi">Créer le compte</button>

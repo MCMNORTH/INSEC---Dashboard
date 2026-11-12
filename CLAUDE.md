@@ -26,7 +26,7 @@ Seule la version Vue + Firebase existe (l’ancien site Laravel et son hébergem
 | Besoin | Technologie |
 | --- | --- |
 | Interface | Vue 3 + TypeScript + Tailwind 4 + Vite (`src/`), SPA servie par **Firebase Hosting** |
-| Comptes | **Firebase Authentication** ; rôles `super_admin`, `admin`, `admin_lecture` (voit tout comme un administrateur, sans rien modifier), `finance`, `consultation` (lecture seule), `enseignant`, `etudiant` — *custom claims* recopiés dans le profil `utilisateurs/{uid}`, qui fait foi pour les règles et les fonctions |
+| Comptes | **Firebase Authentication** ; rôles `super_admin`, `admin`, `admin_lecture` (voit tout comme un administrateur, ne modifie que le taux EUR/MRU), `finance`, `consultation` (lecture seule), `enseignant`, `etudiant` — *custom claims* recopiés dans le profil `utilisateurs/{uid}`, qui fait foi pour les règles et les fonctions |
 | Données | **Cloud Firestore** ; lecture directe protégée par `firestore.rules` |
 | Fichiers | **Cloud Storage** (`storage.rules`) |
 | Règles métier, PDF, Excel, e-mails, audit | **Cloud Functions** 2ᵉ génération, Node.js 22, région **`europe-west1`** (`functions/src/`) |
