@@ -76,6 +76,23 @@ router.beforeEach(async (vers) => {
     return true;
 });
 
+// Après un déploiement, un onglet resté ouvert réclame les anciens fichiers des pages, qui n'existent plus :
+// le serveur renvoie alors index.html et la navigation échouait sans rien afficher (clic « sans effet »).
+// On recharge l'application directement sur la page demandée, une seule fois par minute pour éviter une boucle.
+const ERREUR_CHARGEMENT = /dynamically imported module|Importing a module script failed|Unable to preload|Failed to fetch/i;
+const CLE_RECHARGEMENT = 'insec.rechargementApresDeploiement';
+
+router.onError((erreur, vers) => {
+    if (!ERREUR_CHARGEMENT.test(String((erreur as Error | undefined)?.message ?? erreur))) return;
+    try {
+        if (Date.now() - Number(sessionStorage.getItem(CLE_RECHARGEMENT) ?? 0) < 60_000) return;
+        sessionStorage.setItem(CLE_RECHARGEMENT, String(Date.now()));
+    } catch {
+        // Stockage indisponible : on recharge quand même (le cas d'une boucle reste théorique).
+    }
+    window.location.assign(vers.fullPath);
+});
+
 router.afterEach((vers) => {
     apresNavigation();
     document.title = vers.meta.titre ? `${vers.meta.titre} · INSEC` : 'INSEC Dashboard';
