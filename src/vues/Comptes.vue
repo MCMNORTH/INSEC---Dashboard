@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { libelleRole } from '@shared/domaine';
+import { libelleRole, ROLES_RESERVES_SUPER_ADMIN } from '@shared/domaine';
 import { collection, orderBy, query } from 'firebase/firestore';
 import { computed, reactive } from 'vue';
 import { appeler } from '../api';
@@ -10,11 +10,13 @@ import { useRequete } from '../donnees';
 import { db } from '../firebase';
 import { useFormulaire } from '../formulaire';
 import { notifier } from '../notifications';
-import { aRole, envoyerLienReinitialisation, session } from '../session';
+import { aRole, envoyerLienReinitialisation, peutAdministrer, session } from '../session';
 import type { Utilisateur } from '../types';
 
 const { donnees: comptes, chargement, erreur } = useRequete<Utilisateur>(() => query(collection(db, 'utilisateurs'), orderBy('nom')));
 const superAdmin = aRole('super_admin');
+// Lecture seule (« admin_lecture ») : liste des comptes visible, sans création ni changement.
+const admin = peutAdministrer();
 
 const { envoi, erreurs, soumettre } = useFormulaire();
 const f = reactive({ nom: '', email: '', role: 'consultation' });
@@ -41,11 +43,11 @@ async function creer() {
     Object.assign(f, { nom: '', email: '', role: 'consultation' });
 }
 
-/** Un administrateur ne gère que les comptes finance et consultation ; le super-administrateur gère aussi les administrateurs. */
-const modifiable = (c: Utilisateur) => c.id !== session.uid && (superAdmin || (c.role !== 'admin' && c.role !== 'super_admin'));
+/** Un administrateur ne gère que les comptes finance et consultation ; le super-administrateur gère aussi les administrateurs (y compris en lecture seule). */
+const modifiable = (c: Utilisateur) => admin && c.id !== session.uid && (superAdmin || !ROLES_RESERVES_SUPER_ADMIN.includes(c.role));
 
 /** Rôles proposés pour un compte : l'administrateur ne peut donner que Finance ou Consultation. */
-const rolesPossibles = computed(() => (superAdmin ? ['admin', 'finance', 'consultation'] : ['finance', 'consultation']));
+const rolesPossibles = computed(() => (superAdmin ? ['admin', 'admin_lecture', 'finance', 'consultation'] : ['finance', 'consultation']));
 
 async function changerRole(c: Utilisateur, evenement: Event) {
     const select = evenement.target as HTMLSelectElement;
@@ -76,11 +78,11 @@ async function basculer(c: Utilisateur) {
         <div>
             <p class="surtitre">Administration</p>
             <h1 class="titre-page mt-1.5">Comptes & accès</h1>
-            <p class="sous-titre">Accès de l’équipe INSEC : administration, finance et consultation</p>
+            <p class="sous-titre">Accès de l’équipe INSEC : administration, administration en lecture seule, finance et consultation</p>
         </div>
     </header>
     <div class="grid gap-6 lg:grid-cols-3">
-        <section class="carte overflow-x-auto lg:col-span-2">
+        <section :class="['carte overflow-x-auto', admin ? 'lg:col-span-2' : 'lg:col-span-3']">
             <Chargement :chargement="chargement" :erreur="erreur">
                 <table class="tableau">
                     <thead><tr><th>Compte</th><th>Rôle</th><th>Statut</th></tr></thead>
@@ -110,7 +112,7 @@ async function basculer(c: Utilisateur) {
                                 <button
                                     :class="['pastille cursor-pointer transition disabled:cursor-not-allowed disabled:opacity-70', c.actif ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/15 hover:bg-emerald-100' : 'bg-red-50 text-red-700 ring-red-600/15 hover:bg-red-100']"
                                     :disabled="envoi || !modifiable(c)"
-                                    :title="c.id === session.uid ? 'Vous ne pouvez pas désactiver votre propre compte' : !modifiable(c) ? 'Réservé au super-administrateur' : c.actif ? 'Désactiver' : 'Activer'"
+                                    :title="!admin ? 'Lecture seule' : c.id === session.uid ? 'Vous ne pouvez pas désactiver votre propre compte' : !modifiable(c) ? 'Réservé au super-administrateur' : c.actif ? 'Désactiver' : 'Activer'"
                                     @click="basculer(c)"
                                 ><span :class="['h-1.5 w-1.5 rounded-full', c.actif ? 'bg-emerald-500' : 'bg-red-500']"></span>{{ c.actif ? 'Actif' : 'Désactivé' }}</button>
                             </td>
@@ -119,7 +121,7 @@ async function basculer(c: Utilisateur) {
                 </table>
             </Chargement>
         </section>
-        <aside class="carte self-start overflow-hidden">
+        <aside v-if="admin" class="carte self-start overflow-hidden">
             <header class="panneau-entete">
                 <div>
                     <h2 class="titre-section">Créer un compte</h2>
@@ -140,14 +142,16 @@ async function basculer(c: Utilisateur) {
                         <option value="consultation">Consultation (lecture seule)</option>
                         <option value="finance">Finance</option>
                         <option v-if="superAdmin" value="admin">Administrateur</option>
+                        <option v-if="superAdmin" value="admin_lecture">Administrateur (lecture seule)</option>
                     </select>
                 </label>
                 <ul class="space-y-1.5 rounded-xl border border-gray-100 p-3 text-xs leading-5 text-gray-600">
                     <li><strong class="text-gray-900">Consultation</strong> : voit les étudiants, leurs fiches et les finances, sans rien modifier.</li>
                     <li><strong class="text-gray-900">Finance</strong> : enregistre les versements, échéanciers et relances ; voit les fiches étudiants.</li>
                     <li><strong class="text-gray-900">Administrateur</strong> : gère tout (étudiants, examens, comptes finance et consultation).</li>
+                    <li><strong class="text-gray-900">Administrateur (lecture seule)</strong> : voit tout ce que voit un administrateur, sans pouvoir rien modifier.</li>
                 </ul>
-                <p class="rounded-xl bg-gray-50 p-3 text-xs leading-5 text-gray-500"><i class="fa-solid fa-circle-info mr-1 text-insec-400"></i>La personne recevra un e-mail pour choisir elle-même son mot de passe.<template v-if="!superAdmin"> Seul le super-administrateur peut créer un compte administrateur.</template></p>
+                <p class="rounded-xl bg-gray-50 p-3 text-xs leading-5 text-gray-500"><i class="fa-solid fa-circle-info mr-1 text-insec-400"></i>La personne recevra un e-mail pour choisir elle-même son mot de passe.<template v-if="!superAdmin"> Seul le super-administrateur peut créer un compte administrateur, y compris en lecture seule.</template></p>
                 <button class="bouton-action w-full" :disabled="envoi">Créer le compte</button>
             </form>
         </aside>

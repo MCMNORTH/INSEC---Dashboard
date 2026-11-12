@@ -47,6 +47,7 @@ Comptes créés par `amorcer:local` (émulateurs uniquement) :
 | Administrateur | `admin@insec.test` | `insec-demo-2026` |
 | Finance | `finance@insec.test` | `insec-demo-2026` |
 | Consultation (lecture seule) | `consultation@insec.test` | `insec-demo-2026` |
+| Administrateur (lecture seule) | `lecture@insec.test` | `insec-demo-2026` |
 
 En local, les e-mails sont simulés (journalisés comme envoyés) et l’interface Emulator UI est disponible sur http://127.0.0.1:4000.
 

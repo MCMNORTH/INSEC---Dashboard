@@ -1,7 +1,7 @@
 import { operation, type Acteur } from '../lib/contexte.js';
 import { col, nomComplet, type Doc } from '../lib/donnees.js';
 import { db, FieldValue, Timestamp } from '../lib/firebase.js';
-import { formaterMontant, horaireExamen, montantEnRetard, ROLES_ADMIN, ROLES_FINANCE } from '../shared/domaine.js';
+import { formaterMontant, horaireExamen, montantEnRetard, ROLES_FINANCE, ROLES_VISION_ADMIN } from '../shared/domaine.js';
 
 interface Alerte {
     cle: string;
@@ -31,7 +31,8 @@ function alerteExamen(e: Doc, code: string, lien: string): Alerte {
 export async function calculerAlertes(acteur: Pick<Acteur, 'role' | 'etudiantId' | 'enseignantId'>): Promise<Alerte[]> {
     const alertes: Alerte[] = [];
     const role = acteur.role;
-    if (role && ROLES_FINANCE.includes(role)) {
+    // L'administration en lecture seule voit les mêmes alertes qu'un administrateur.
+    if (role && (ROLES_FINANCE.includes(role) || role === 'admin_lecture')) {
         const inscriptions = (await col.inscriptions().where('statut', '==', 'active').get()).docs
             .map((d) => ({ id: d.id, ...d.data() }))
             .filter((i) => montantEnRetard(i as never) > 0);
@@ -42,7 +43,7 @@ export async function calculerAlertes(acteur: Pick<Acteur, 'role' | 'etudiantId'
             lien: `/finances?etudiant=${i.etudiantId}&inscription=${i.id}`,
         }));
     }
-    if (role && ROLES_ADMIN.includes(role)) {
+    if (role && ROLES_VISION_ADMIN.includes(role)) {
         const pieces = (await col.pieces().where('statut', 'in', ['À vérifier', 'Rejeté']).get()).docs;
         const etudiants = pieces.length ? await db.getAll(...pieces.map((p) => col.etudiants().doc(p.get('etudiantId')))) : [];
         pieces.forEach((p, n) => {

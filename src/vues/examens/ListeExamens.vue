@@ -10,12 +10,15 @@ import { db } from '../../firebase';
 import { heureNouakchottDepuisParis, horaireExamen } from '../../format';
 import { CALENDRIERS_INTEC } from '../../calendrierIntec';
 import { useReferentiel } from '../../referentiel';
+import { peutAdministrer } from '../../session';
 import type { Examen, ResultatHistorique } from '../../types';
 
 interface ExamenOfficiel { codeUE: string; intitule: string; date: string; heure: string; diplome?: 'DGC' | 'DSGC'; diplôme?: 'DGC' | 'DSGC'; dateFr?: string; }
 interface CalendrierImporte { annee: string; source: string; examens: ExamenOfficiel[]; }
 
 const router = useRouter();
+// Lecture seule (« admin_lecture ») : calendrier, suivis et résultats visibles, sans ouverture de suivi ni import.
+const admin = peutAdministrer();
 const { annees, annee, anneeCourante, ue, ues, formation } = useReferentiel();
 const anneeId = ref('');
 watch(anneeCourante, (a) => { if (!anneeId.value && a) anneeId.value = a.id; }, { immediate: true });
@@ -218,7 +221,7 @@ async function importerClasseurConfirme() {
                     <option v-for="a in annees" :key="a.id" :value="a.id">Année {{ a.libelle }}</option>
                 </select>
             </label>
-            <RouterLink to="/examens/importer-calendrier" class="bouton-secondaire"><i class="fa-solid fa-file-import text-xs"></i>Importer un calendrier INTEC</RouterLink>
+            <RouterLink v-if="admin" to="/examens/importer-calendrier" class="bouton-secondaire"><i class="fa-solid fa-file-import text-xs"></i>Importer un calendrier INTEC</RouterLink>
         </div>
     </header>
 
@@ -258,7 +261,7 @@ async function importerClasseurConfirme() {
                         </span>
                         <span v-if="!e.ue" class="mt-1.5 block text-xs text-amber-700">UE non trouvée dans le référentiel local</span>
                         <RouterLink
-                            v-if="e.ue && anneeCalendrierIntec"
+                            v-if="admin && e.ue && anneeCalendrierIntec"
                             :to="{ path: '/examens/nouveau', query: { source: 'intec', ue: e.codeUE, annee: anneeCalendrierIntec, dateHeure: e.dateHeure, session: 'Normale' } }"
                             class="bouton-secondaire mt-3 w-full"
                         >Suivre l’épreuve</RouterLink>
@@ -292,11 +295,11 @@ async function importerClasseurConfirme() {
                             </td>
                             <td class="text-right">
                                 <RouterLink
-                                    v-if="e.ue && anneeCalendrierIntec"
+                                    v-if="admin && e.ue && anneeCalendrierIntec"
                                     :to="{ path: '/examens/nouveau', query: { source: 'intec', ue: e.codeUE, annee: anneeCalendrierIntec, dateHeure: e.dateHeure, session: 'Normale' } }"
                                     class="bouton-secondaire"
                                 >Suivre l’épreuve</RouterLink>
-                                <span v-else class="text-sm text-gray-400">Indisponible</span>
+                                <span v-else class="text-sm text-gray-400">{{ admin ? 'Indisponible' : '—' }}</span>
                             </td>
                         </tr>
                     </tbody>
@@ -355,7 +358,7 @@ async function importerClasseurConfirme() {
                                     <p class="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
                                         Ouvrez le suivi d’une épreuve du calendrier officiel pour gérer les candidats, les convocations, la réception des sujets, la salle et le retour des copies à l’INTEC.
                                     </p>
-                                    <RouterLink to="/examens/importer-calendrier" class="bouton-action mt-5">Consulter le calendrier INTEC</RouterLink>
+                                    <RouterLink v-if="admin" to="/examens/importer-calendrier" class="bouton-action mt-5">Consulter le calendrier INTEC</RouterLink>
                                 </div>
                             </td>
                         </tr>
@@ -400,7 +403,7 @@ async function importerClasseurConfirme() {
                 </section>
             </div>
 
-            <div v-if="anneeId === '2024-2025'" class="mt-5 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+            <div v-if="admin && anneeId === '2024-2025'" class="mt-5 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
                 <label class="etiquette">Classeur Excel de référence
                     <input type="file" accept=".xlsx" class="champ mt-1.5 py-2" @change="lireFichierResultats" />
                 </label>

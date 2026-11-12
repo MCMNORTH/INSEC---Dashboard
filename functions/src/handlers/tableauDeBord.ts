@@ -5,7 +5,7 @@ import { db, Timestamp } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
 import {
     ANNEE_ACADEMIQUE_PAR_DEFAUT, ANNEES_ACADEMIQUES_VISIBLES, estRecouvrable, formaterMontant, horaireExamen, montantEnRetard, montantNet,
-    ROLES_ADMIN, soldeRestant, STATUTS_ETUDIANT,
+    ROLES_VISION_ADMIN, soldeRestant, STATUTS_ETUDIANT,
 } from '../shared/domaine.js';
 
 const arrondi = (v: number, d = 1) => Math.round(v * 10 ** d) / 10 ** d;
@@ -23,7 +23,7 @@ const ORDRE_NIVEAU = { danger: 0, warning: 1, info: 2 } as const;
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 const taux = (valides: number, total: number) => (total ? arrondi((valides / total) * 100) : 0);
 
-export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_ADMIN, async (donnees) => {
+export const tableauDeBordAdmin = operation('tableauDeBordAdmin', ROLES_VISION_ADMIN, async (donnees) => {
     const v = valider(z.object({ anneeId: s.texteOptionnel(50) }), donnees);
     const anneesVisibles = new Set<string>(ANNEES_ACADEMIQUES_VISIBLES);
     const annees = (await col.annees().get()).docs

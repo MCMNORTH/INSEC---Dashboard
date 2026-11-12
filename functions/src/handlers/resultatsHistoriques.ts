@@ -4,7 +4,7 @@ import { introuvable, operation, refuser } from '../lib/contexte.js';
 import { col } from '../lib/donnees.js';
 import { bucket, db } from '../lib/firebase.js';
 import { s, valider, z } from '../lib/validation.js';
-import { ROLES_ADMIN } from '../shared/domaine.js';
+import { ROLES_ADMIN, ROLES_VISION_ADMIN } from '../shared/domaine.js';
 
 const SOURCE = 'Resultat DCG-INSEC 2024-2025.xlsx';
 const MIME_CLASSEUR = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -80,7 +80,7 @@ async function lireClasseur(base64: string, nom: string): Promise<LigneSource[]>
 const payload = z.object({ fichierBase64: s.texte(8_000_000), nomFichier: s.texte(150) });
 
 /** Téléchargement contrôlé du classeur historique depuis le stockage privé, réservé aux administrateurs. */
-export const telechargerClasseurResultatsHistoriques = operation('telechargerClasseurResultatsHistoriques', ROLES_ADMIN, async (_donnees, acteur) => {
+export const telechargerClasseurResultatsHistoriques = operation('telechargerClasseurResultatsHistoriques', ROLES_VISION_ADMIN, async (_donnees, acteur) => {
     const fichier = bucket().file(`documents/${SOURCE}`);
     const [existe] = await fichier.exists();
     if (!existe) introuvable('Le classeur des résultats historiques n’est pas disponible.');

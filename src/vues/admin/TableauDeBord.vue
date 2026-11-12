@@ -5,7 +5,7 @@ import { CALENDRIERS_INTEC, CALENDRIER_INTEC_2026_2027 } from '../../calendrierI
 import { appeler, messageErreur } from '../../api';
 import Chargement from '../../composants/Chargement.vue';
 import { heureNouakchott, heureNouakchottDepuisParis, montant } from '../../format';
-import { session } from '../../session';
+import { peutAdministrer, session } from '../../session';
 
 interface TacheAFaire {
     cle: string;
@@ -68,6 +68,8 @@ const prochainesEpreuvesOfficielles = computed(() => {
     return calendrier.examens.filter((e) => e.date >= aujourdHui).slice(0, 4);
 });
 
+const admin = peutAdministrer();
+
 function lienSuiviIntec(e: (typeof CALENDRIER_INTEC_2026_2027)[number]) {
     return {
         path: '/examens/nouveau',
@@ -101,7 +103,8 @@ const tachesAFaire = computed<TacheAFaire[]>(() => {
     if (!t) return [];
     const calendrier = calendrierIntec.value;
     const dansQuinzeJours = new Date(Date.now() + 15 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-    const sansSuivi: TacheAFaire[] = (calendrier ? prochainesEpreuvesOfficielles.value : [])
+    // Ouvrir un suivi est une modification : pas proposé à l'administration en lecture seule.
+    const sansSuivi: TacheAFaire[] = (calendrier && admin ? prochainesEpreuvesOfficielles.value : [])
         .filter((e) => e.date <= dansQuinzeJours && !t.examensProchains.some((x) => x.ue === `TEC${e.codeUE}`))
         .map((e) => ({
             cle: `suivi-${e.diplôme}-${e.codeUE}`,
@@ -313,7 +316,7 @@ const cartes = (t: Tableau) => [
                                     <span class="pastille bg-emerald-50 text-emerald-700 ring-emerald-600/15"><i class="fa-regular fa-clock text-[10px]"></i>{{ heureNouakchottDepuisParis(e.date, e.heure) }} Nouakchott</span>
                                 </span>
                             </span>
-                            <RouterLink :to="lienSuiviIntec(e)" class="bouton-secondaire max-sm:w-full">Ouvrir le suivi</RouterLink>
+                            <RouterLink v-if="admin" :to="lienSuiviIntec(e)" class="bouton-secondaire max-sm:w-full">Ouvrir le suivi</RouterLink>
                         </li>
                     </ul>
                     <p v-else class="px-6 py-8 text-sm text-gray-500">Les épreuves de ce calendrier sont passées. Consultez le document INTEC pour les prochaines dates publiées.</p>

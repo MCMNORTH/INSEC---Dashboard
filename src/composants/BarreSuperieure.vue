@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ROLES_VISION_ADMIN } from '@shared/domaine';
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { appeler, messageErreur } from '../api';
@@ -190,8 +191,8 @@ async function quitter() {
                         <i class="fa-solid fa-user-xmark"></i>Retirer ma photo
                     </button>
                     <div class="my-1.5 h-px bg-gray-100"></div>
-                    <RouterLink v-if="aRole('admin', 'super_admin')" role="menuitem" to="/tableau-de-bord" class="element-menu"><i class="fa-solid fa-chart-simple"></i>Tableau de bord</RouterLink>
-                    <RouterLink v-if="aRole('admin', 'super_admin')" role="menuitem" to="/gestion" class="element-menu"><i class="fa-solid fa-sliders"></i>Centre de gestion</RouterLink>
+                    <RouterLink v-if="aRole(...ROLES_VISION_ADMIN)" role="menuitem" to="/tableau-de-bord" class="element-menu"><i class="fa-solid fa-chart-simple"></i>Tableau de bord</RouterLink>
+                    <RouterLink v-if="aRole(...ROLES_VISION_ADMIN)" role="menuitem" to="/gestion" class="element-menu"><i class="fa-solid fa-sliders"></i>Centre de gestion</RouterLink>
                     <RouterLink role="menuitem" to="/alertes" class="element-menu">
                         <i class="fa-solid fa-bell"></i>Alertes
                         <span v-if="nonLues" class="ml-auto rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">{{ nonLues }}</span>

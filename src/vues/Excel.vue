@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { appeler } from '../api';
 import { lireEnBase64, telecharger } from '../fichiers';
 import { useFormulaire } from '../formulaire';
+import { peutAdministrer } from '../session';
 
 interface Rapport {
     crees: number;
@@ -15,6 +16,8 @@ interface Rapport {
 }
 
 const { envoi, soumettre } = useFormulaire();
+// Lecture seule (« admin_lecture ») : exports seulement, pas d'import du registre.
+const admin = peutAdministrer();
 const fichier = ref<File | null>(null);
 const champFichier = ref<HTMLInputElement | null>(null);
 const mode = ref<'ignorer' | 'mettre_a_jour'>('ignorer');
@@ -133,8 +136,8 @@ const exports = [
             </details>
         </div>
     </section>
-    <div class="grid gap-6 lg:grid-cols-2">
-        <section class="carte p-6">
+    <div :class="['grid gap-6', admin && 'lg:grid-cols-2']">
+        <section v-if="admin" class="carte p-6">
             <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-emerald-600 text-white shadow-sm"><i class="fa-solid fa-file-arrow-up"></i></div>
             <h2 class="titre-section text-lg">Importer le registre étudiant</h2>
             <p class="mt-1 mb-4 text-sm leading-6 text-gray-500">Le modèle accepte un dossier seul ou une ligne par inscription annuelle; répétez l’identité pour conserver plusieurs années. Les exports reprennent tout l’historique; les erreurs sont signalées ligne par ligne.</p>

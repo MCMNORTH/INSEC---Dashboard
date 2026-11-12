@@ -4,7 +4,7 @@ import { operation, refuser } from '../lib/contexte.js';
 import { col, exiger } from '../lib/donnees.js';
 import { auth, db } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
-import { ROLES_ADMIN, ROLES_CREABLES, type Role } from '../shared/domaine.js';
+import { ROLES_ADMIN, ROLES_CREABLES, ROLES_RESERVES_SUPER_ADMIN, type Role } from '../shared/domaine.js';
 
 export interface ProfilCompte {
     nom: string;
@@ -37,8 +37,8 @@ export async function provisionnerCompte(profil: ProfilCompte, motDePasse?: stri
 
 export const creerCompte = operation('creerCompte', ROLES_ADMIN, async (donnees, acteur) => {
     const v = valider(z.object({ nom: s.texte(255), email: s.email(), role: s.choix(ROLES_CREABLES) }), donnees);
-    if (v.role === 'admin' && acteur.role !== 'super_admin') {
-        throw new HttpsError('permission-denied', 'Seul le super-administrateur peut créer un compte administrateur.');
+    if (ROLES_RESERVES_SUPER_ADMIN.includes(v.role) && acteur.role !== 'super_admin') {
+        throw new HttpsError('permission-denied', 'Seul le super-administrateur peut créer un compte administrateur (y compris en lecture seule).');
     }
     const profil = { nom: v.nom, email: v.email, role: v.role, etudiantId: null, enseignantId: null };
     // Aucun mot de passe n'est choisi par l'administrateur : la personne définit le sien
@@ -61,7 +61,7 @@ export const modifierRoleCompte = operation('modifierRoleCompte', ROLES_ADMIN, a
     const ref = col.utilisateurs().doc(v.uid);
     const compte = await exiger(null, ref, 'Compte introuvable.');
     if (compte.role === 'super_admin') refuser('Le rôle du super-administrateur ne peut pas être modifié.');
-    if ((compte.role === 'admin' || v.role === 'admin') && acteur.role !== 'super_admin') {
+    if ((ROLES_RESERVES_SUPER_ADMIN.includes(compte.role) || ROLES_RESERVES_SUPER_ADMIN.includes(v.role)) && acteur.role !== 'super_admin') {
         throw new HttpsError('permission-denied', 'Seul le super-administrateur peut donner ou retirer le rôle administrateur.');
     }
     if (compte.role === v.role) return { message: 'Ce compte a déjà ce rôle.' };
@@ -97,7 +97,7 @@ export const basculerCompte = operation('basculerCompte', ROLES_ADMIN, async (do
     if (uid === acteur.uid) refuser('Vous ne pouvez pas désactiver votre propre compte.');
     const ref = col.utilisateurs().doc(uid);
     const compte = await exiger(null, ref, 'Compte introuvable.');
-    if ((compte.role === 'super_admin' || compte.role === 'admin') && acteur.role !== 'super_admin') {
+    if (ROLES_RESERVES_SUPER_ADMIN.includes(compte.role) && acteur.role !== 'super_admin') {
         throw new HttpsError('permission-denied', 'Seul le super-administrateur peut activer ou désactiver un compte administrateur.');
     }
     const actif = !compte.actif;

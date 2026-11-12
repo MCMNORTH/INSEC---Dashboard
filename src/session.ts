@@ -1,4 +1,4 @@
-import type { Role } from '@shared/domaine';
+import { ROLES_ADMIN, type Role } from '@shared/domaine';
 import {
     EmailAuthProvider,
     onAuthStateChanged,
@@ -127,6 +127,7 @@ export function accueil(role: Role | null = session.role): string {
     switch (role) {
         case 'admin':
         case 'super_admin':
+        case 'admin_lecture':
             return '/admin/tableau-de-bord';
         case 'finance':
             return '/finances';
@@ -176,3 +177,9 @@ export async function reauthentifier(motDePasse: string): Promise<void> {
     await reauthenticateWithCredential(utilisateur, EmailAuthProvider.credential(utilisateur.email, motDePasse));
     await utilisateur.getIdToken(true);
 }
+
+/**
+ * Le compte peut-il modifier les données de l'administration (étudiants, examens, comptes…) ?
+ * Faux pour « admin_lecture », qui voit les mêmes pages sans aucun bouton d'action.
+ */
+export const peutAdministrer = (): boolean => aRole(...ROLES_ADMIN);

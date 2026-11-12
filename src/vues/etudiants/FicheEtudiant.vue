@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { montantNet, ROLES_ADMIN, soldeRestant, statutPaiement } from '@shared/domaine';
+import { montantNet, ROLES_ADMIN, ROLES_VISION_ADMIN, soldeRestant, statutPaiement } from '@shared/domaine';
 import { collection, query, where } from 'firebase/firestore';
 import { computed } from 'vue';
 import BadgeStatut from '../../composants/BadgeStatut.vue';
@@ -15,6 +15,8 @@ import type { Etudiant, Inscription, Resultat } from '../../types';
 const props = defineProps<{ id: string }>();
 // Pièces déposées et modifications : administration seulement (finance et consultation lisent la fiche).
 const estAdmin = aRole(...ROLES_ADMIN);
+// L'administration en lecture seule consulte aussi le dossier documentaire.
+const voitDossier = aRole(...ROLES_VISION_ADMIN);
 const { formation, annee, annees, ue } = useReferentiel();
 const { donnee: etudiant, chargement } = useDocument<Etudiant>(() => `etudiants/${props.id}`);
 const { donnees: inscriptionsBrutes } = useRequete<Inscription>(() => query(collection(db, 'inscriptions'), where('etudiantId', '==', props.id)));
@@ -66,10 +68,12 @@ const progression = (i: Inscription) => {
                                 <span class="inline-flex items-center gap-1.5"><i class="fa-regular fa-calendar text-xs text-gray-400"></i>Né(e) le {{ date(etudiant.dateNaissance) }}</span>
                             </div>
                         </div>
-                        <div v-if="estAdmin" class="flex flex-wrap gap-2">
+                        <div v-if="voitDossier" class="flex flex-wrap gap-2">
                         <RouterLink :to="`/etudiants/${id}/documents`" class="bouton-secondaire"><i class="fa-regular fa-folder-open text-xs"></i> Dossier documentaire</RouterLink>
+                        <template v-if="estAdmin">
                         <RouterLink :to="`/etudiants/${id}/modifier`" class="bouton-secondaire"><i class="fa-solid fa-pen text-xs"></i> Modifier l’identité</RouterLink>
                         <RouterLink :to="`/etudiants/${id}/inscriptions/nouvelle`" class="bouton-action"><i class="fa-solid fa-plus text-xs"></i> Nouvelle inscription</RouterLink>
+                        </template>
                         </div>
                     </div>
                 </div>

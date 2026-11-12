@@ -11,7 +11,7 @@ import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email
 import { s, valider, z } from '../lib/validation.js';
 import {
     dateDuJour, diplomeTarife, etatEcheances, formaterMontant, horaireExamen, montantDuSelonTarif, montantEnLettres, montantNet, numeroFormate, resultatValide,
-    ROLES_ADMIN, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, validationDe,
+    ROLES_ADMIN, ROLES_VISION_ADMIN, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, validationDe,
 } from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
 
@@ -215,6 +215,10 @@ async function numeroterFacture(inscriptionId: string, acteur?: Acteur): Promise
         const ref = col.inscriptions().doc(inscriptionId);
         const inscription = await exiger(tx, ref, 'Inscription introuvable.');
         if (inscription.numeroFacture) return { numero: String(inscription.numeroFacture), emiseLe: String(inscription.factureEmiseLe ?? dateDuJour()) };
+        // Émettre une facture attribue un numéro : réservé à l'administration (pas à la lecture seule).
+        if (acteur && (!acteur.role || !ROLES_ADMIN.includes(acteur.role))) {
+            throw new HttpsError('failed-precondition', 'Cette facture n’a pas encore été émise : seul un administrateur peut l’émettre.');
+        }
         const [numero, incrementer] = await prochainNumero(tx, 'factures');
         const facture = { numeroFacture: numeroFormate('FAC', numero, new Date()), factureEmiseLe: dateDuJour() };
         incrementer();
@@ -764,7 +768,7 @@ const generateurs: Record<string, (id: string, acteur?: Acteur) => Promise<{ nom
 
 export const genererPdf = operation(
     'genererPdf',
-    ROLES_ADMIN,
+    ROLES_VISION_ADMIN,
     async (donnees, acteur) => {
         const v = valider(z.object({ type: s.choix(['attestation', 'releve', 'convocation', 'recu', 'facture', 'feuillePresence', 'bordereauCopies'] as const), id: s.id() }), donnees);
         return generateurs[v.type](v.id, acteur);
