@@ -4,7 +4,7 @@ import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere, traiter
 import { genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import {
-    beneficeNetInsec, coutIntecEuro, ecartAuTarif, uesEnDoublonVes, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
+    anneeCloturee, beneficeNetInsec, chargesAnnuelles, coutIntecEuro, margeBruteInsec, montantEncaisse, recouvrementAnnee, totalChargesAnnuelles, ecartAuTarif, uesEnDoublonVes, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
     soldeRestant, statutPaiement,
 } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
@@ -247,14 +247,47 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         expect(ecartAuTarif('LICENCE', 2, 30000)).toBeNull();
     });
 
-    it('calcule le bénéfice net de l’INSEC après la facture INTEC et les étudiants BUMEX', () => {
+    it('calcule la marge brute de l’INSEC après la facture INTEC et les étudiants BUMEX', () => {
         // Marge des payeurs 359 700 MRU, étudiants BUMEX 3 760 € × 45 = 169 200 MRU.
-        expect(beneficeNetInsec(359700, 169200)).toBe(190500);
+        expect(margeBruteInsec(359700, 169200)).toBe(190500);
         // Même résultat que : recette des payeurs − facture INTEC totale.
-        expect(beneficeNetInsec(654000 - 294300, 169200)).toBe(654000 - 463500);
-        expect(beneficeNetInsec(10000, 25000)).toBe(-15000);
-        expect(beneficeNetInsec(null, 169200)).toBeNull();
-        expect(beneficeNetInsec(359700, null)).toBeNull();
+        expect(margeBruteInsec(654000 - 294300, 169200)).toBe(654000 - 463500);
+        expect(margeBruteInsec(10000, 25000)).toBe(-15000);
+        expect(margeBruteInsec(null, 169200)).toBeNull();
+        expect(margeBruteInsec(359700, null)).toBeNull();
+    });
+
+    it('déduit le loyer (40 000 MRU par mois, 12 mois) pour obtenir le bénéfice net', () => {
+        expect(chargesAnnuelles()).toEqual([{ cle: 'loyer', libelle: 'Loyer des locaux', mensuelMru: 40000, annuelMru: 480000 }]);
+        expect(totalChargesAnnuelles()).toBe(480000);
+        expect(beneficeNetInsec(159600)).toBe(159600 - 480000);
+        expect(beneficeNetInsec(600000, 480000)).toBe(120000);
+        expect(beneficeNetInsec(null)).toBeNull();
+    });
+
+    it('clôture les années scolaires antérieures à l’année en cours', () => {
+        expect(anneeCloturee('2025-2026', '2026-2027')).toBe(true);
+        expect(anneeCloturee('2024-2025', '2026-2027')).toBe(true);
+        expect(anneeCloturee('2026-2027', '2026-2027')).toBe(false);
+        expect(anneeCloturee('2027-2028', '2026-2027')).toBe(false);
+        expect(anneeCloturee(null)).toBe(false);
+    });
+
+    it('sépare l’encaissé du reste à encaisser, sans compter trop-perçus, annulations ni BUMEX', () => {
+        const base = { montantRemise: 0, echeances: [] as never[] };
+        const recouvrement = recouvrementAnnee([
+            { ...base, montantDu: 32000, totalVerse: 32000 }, // soldé
+            { ...base, montantDu: 16000, totalVerse: 20000 }, // soldé avec 4 000 MRU de trop-perçu à rembourser
+            { ...base, montantDu: 32000, totalVerse: 10000 }, // partiel
+            { ...base, montantDu: 16000, totalVerse: 0 }, // impayé
+            { ...base, montantDu: 16000, totalVerse: 5000, statut: 'annulée' }, // à rembourser : rien d'acquis
+            { ...base, montantDu: 16000, totalVerse: 0, financeur: 'bumex' }, // financement interne, hors recouvrement
+        ]);
+        expect(recouvrement).toEqual({
+            facture: 96000, encaisse: 58000, reste: 38000, taux: 60, soldes: 2, partiels: 1, impayes: 1, aChiffrer: 0,
+        });
+        expect(montantEncaisse({ ...base, montantDu: 16000, totalVerse: 20000 })).toBe(16000);
+        expect(recouvrementAnnee([]).taux).toBe(100);
     });
 
     it('ne présente jamais un dossier sans montant comme soldé', () => {

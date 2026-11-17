@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-    beneficeNetInsec, coutIntecEuro, diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
-    montantEnRetard, montantNet, ROLES_FINANCE, ROLES_VISION_ADMIN, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, totalEcheances,
+    anneeCloturee, beneficeNetInsec, chargesAnnuelles, coutIntecEuro, diplomeTarife, ecartAuTarif, ecartEcheancier, estRecouvrable, etatEcheances, type EtatEcheance, margeBruteInsec, MODES_PAIEMENT, montantARembourser, montantDuSelonTarif,
+    montantEncaisse, montantEnRetard, montantNet, ROLES_FINANCE, recouvrementAnnee, ROLES_VISION_ADMIN, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, totalChargesAnnuelles, totalEcheances,
 } from '@shared/domaine';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
@@ -233,7 +233,9 @@ const couleurStatut = (statut: string) =>
     statut === 'Validée' ? 'text-gray-900' : statut === 'En attente' ? 'text-amber-700' : 'text-gray-400 line-through';
 
 // Relances de paiement (envoi manuel, une par inscription et par jour au maximum).
-const retardsAnnee = computed(() => lignesEtudiants.value.filter(({ dossier }) => montantEnRetard(dossier) > 0).length);
+// Année clôturée : ce qui n'a pas été payé ne le sera plus, on ne relance pas.
+const etudiantsAnneeCloturee = computed(() => anneeCloturee(anneeEtudiants.value));
+const retardsAnnee = computed(() => etudiantsAnneeCloturee.value ? 0 : lignesEtudiants.value.filter(({ dossier }) => montantEnRetard(dossier) > 0).length);
 async function relancer() {
     const i = inscription.value!;
     const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim();
@@ -398,10 +400,12 @@ const detailsFinanciers = computed(() => {
             coutIntecEuro: coutEuro,
             coutIntecMru,
             tarifMru,
-            encaisse: financeurBumex ? null : dossier.totalVerse ?? 0,
+            encaisse: financeurBumex ? null : montantEncaisse(dossier),
             restant: financeurBumex ? null : soldeRestant(dossier),
             bumexRegle: dossier.statutBumex === 'reglee',
             margeTheorique,
+            // Ce que l'étudiant a réellement rapporté : encaissé − coût INTEC (définitif pour une année clôturée).
+            margeRealisee: !financeurBumex && coutIntecMru !== null ? montantEncaisse(dossier) - coutIntecMru : null,
         };
     }).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 });
@@ -414,6 +418,8 @@ const totauxFinanciers = computed(() => ({
     financementBumexEuro: detailsFinanciers.value.filter((ligne) => ligne.financeurBumex).reduce((total, ligne) => total + (ligne.coutIntecEuro ?? 0), 0),
     financementBumexMru: tauxEuroMru.value === null ? null : Math.round(detailsFinanciers.value.filter((ligne) => ligne.financeurBumex).reduce((total, ligne) => total + (ligne.coutIntecEuro ?? 0), 0) * tauxEuroMru.value),
     margeEtudiantsMru: detailsFinanciers.value.some((ligne) => !ligne.financeurBumex && ligne.margeTheorique === null) ? null : detailsFinanciers.value.filter((ligne) => !ligne.financeurBumex).reduce((total, ligne) => total + (ligne.margeTheorique ?? 0), 0),
+    // Facture INTEC des seuls étudiants payeurs (null tant que le taux ou un barème manque).
+    coutIntecPayeursMru: detailsFinanciers.value.some((ligne) => !ligne.financeurBumex && ligne.coutIntecMru === null) ? null : detailsFinanciers.value.filter((ligne) => !ligne.financeurBumex).reduce((total, ligne) => total + (ligne.coutIntecMru ?? 0), 0),
     diplomesAControler: detailsFinanciers.value.filter((ligne) => ligne.coutIntecEuro === null).length,
 }));
 // Grille « Tarifs convenus » : une ligne par prestation, marge au taux EUR/MRU enregistré.
@@ -429,16 +435,27 @@ const lignesTarifs = computed(() => {
     }));
     return [...diplomes, ...validations];
 });
-// Ce qui reste à l'INSEC une fois la facture INTEC réglée, étudiants BUMEX compris (avant les autres charges).
-const benefice = computed(() => {
+// Année clôturée (antérieure à l'année en cours) : seul l'encaissé compte, le reste ne sera jamais perçu.
+const cloturee = computed(() => anneeCloturee(anneeSynthese.value));
+const recouvrement = computed(() => recouvrementAnnee(inscriptionsSynthese.value));
+const charges = chargesAnnuelles();
+/**
+ * Résultat de l'année : recette des étudiants payeurs − facture INTEC (payeurs + BUMEX) = marge brute ;
+ * marge brute − charges fixes (loyer) = bénéfice net. Recette prévue (tarif) pour l'année en cours,
+ * recette encaissée pour une année clôturée.
+ */
+const resultat = computed(() => {
     const t = totauxFinanciers.value;
-    const net = beneficeNetInsec(t.margeEtudiantsMru, t.financementBumexMru);
-    return {
-        net,
-        recettePayeursMru: t.tarifEtudiantsMru,
-        coutIntecPayeursMru: t.margeEtudiantsMru === null ? null : t.tarifEtudiantsMru - t.margeEtudiantsMru,
+    const calculer = (recette: number) => {
+        const margeEtudiants = t.coutIntecPayeursMru === null ? null : recette - t.coutIntecPayeursMru;
+        const margeBrute = margeBruteInsec(margeEtudiants, t.financementBumexMru);
+        return { recette, margeEtudiants, margeBrute, net: beneficeNetInsec(margeBrute, totalChargesAnnuelles()) };
     };
+    const prevu = calculer(t.tarifEtudiantsMru);
+    const realise = calculer(recouvrement.value.encaisse);
+    return { ...(cloturee.value ? realise : prevu), prevu, realise, charges: totalChargesAnnuelles() };
 });
+const rouge = (v: number | null) => v !== null && v < 0;
 </script>
 
 
@@ -486,6 +503,10 @@ const benefice = computed(() => {
                         <i class="fa-regular fa-paper-plane text-xs"></i>Relancer les {{ retardsAnnee }} retard(s)
                     </button>
                 </div>
+                <p v-if="etudiantsAnneeCloturee" class="flex items-start gap-2.5 border-b border-gray-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 sm:px-5">
+                    <i class="fa-solid fa-lock mt-0.5 text-slate-400"></i>
+                    <span>Année {{ anneeEtudiants }} clôturée : les montants non payés ne sont plus attendus et les relances sont désactivées. Les dossiers restent consultables.</span>
+                </p>
 
                 <div class="flex gap-1.5 overflow-x-auto border-b border-gray-100 px-4 py-3 sm:px-5" role="tablist" aria-label="Filtrer par situation de paiement">
                     <button
@@ -758,7 +779,7 @@ const benefice = computed(() => {
                                                 ><i class="fa-regular fa-envelope text-xs"></i>Envoyer la facture</button>
                                             </template>
                                             <button
-                                                v-if="montantEnRetard(inscription) > 0 && peutModifier"
+                                                v-if="montantEnRetard(inscription) > 0 && peutModifier && !etudiantsAnneeCloturee"
                                                 type="button"
                                                 class="bouton-danger max-sm:w-full"
                                                 :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
@@ -946,6 +967,8 @@ const benefice = computed(() => {
                     <i class="fa-regular fa-calendar text-insec-500"></i>Année scolaire
                     <select v-model="anneeSynthese" class="champ w-auto"><option v-for="a in annees" :key="a.id" :value="a.id">{{ a.libelle }}</option></select>
                 </label>
+                <span v-if="cloturee" class="pastille bg-slate-100 text-slate-700 ring-slate-300"><i class="fa-solid fa-lock text-[10px]"></i>Année clôturée · chiffres définitifs</span>
+                <span v-else class="pastille bg-emerald-50 text-emerald-700 ring-emerald-600/20"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Année en cours · encaissements ouverts</span>
             </div>
 
             <section class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5" aria-label="Chiffres clés de l’année">
@@ -967,11 +990,11 @@ const benefice = computed(() => {
                 </article>
                 <article class="carte p-4 max-sm:last:col-span-2 sm:p-5">
                     <div class="flex items-start justify-between gap-3">
-                        <p class="text-[13px] font-medium text-gray-500">Tarif prévu · étudiants payeurs</p>
+                        <p class="text-[13px] font-medium text-gray-500">{{ cloturee ? 'Recette encaissée · étudiants payeurs' : 'Tarif prévu · étudiants payeurs' }}</p>
                         <span class="flex h-9 w-9 shrink-0 max-sm:hidden items-center justify-center rounded-xl bg-linear-to-br from-slate-400 to-slate-600 text-white shadow-sm"><i class="fa-solid fa-receipt text-[13px]"></i></span>
                     </div>
-                    <p class="mt-3 font-titre text-xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.5rem]">{{ montant(totauxFinanciers.tarifEtudiantsMru) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></p>
-                    <p class="mt-2.5 text-xs text-gray-500">Recette externe théorique selon le nombre d’UE</p>
+                    <p class="mt-3 font-titre text-xl leading-none font-bold tracking-tight text-gray-900 tabular-nums sm:text-[1.5rem]">{{ montant(resultat.recette) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></p>
+                    <p class="mt-2.5 text-xs text-gray-500">{{ cloturee ? `Sur ${montant(totauxFinanciers.tarifEtudiantsMru)} MRU prévus au tarif` : 'Recette théorique selon le nombre d’UE' }}</p>
                 </article>
                 <article class="carte p-4 max-sm:last:col-span-2 sm:p-5">
                     <div class="flex items-start justify-between gap-3">
@@ -987,51 +1010,109 @@ const benefice = computed(() => {
                         <p class="text-[13px] font-medium text-gray-500">Marge des étudiants payeurs</p>
                         <span class="flex h-9 w-9 shrink-0 max-sm:hidden items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-emerald-600 text-white shadow-sm"><i class="fa-solid fa-arrow-trend-up text-[13px]"></i></span>
                     </div>
-                    <p class="mt-3 font-titre text-xl leading-none font-bold tracking-tight text-emerald-700 tabular-nums sm:text-[1.5rem]">
-                        <template v-if="totauxFinanciers.margeEtudiantsMru === null">—</template>
-                        <template v-else>{{ montant(totauxFinanciers.margeEtudiantsMru) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></template>
+                    <p class="mt-3 font-titre text-xl leading-none font-bold tracking-tight tabular-nums sm:text-[1.5rem]" :class="rouge(resultat.margeEtudiants) ? 'text-red-700' : 'text-emerald-700'">
+                        <template v-if="resultat.margeEtudiants === null">—</template>
+                        <template v-else>{{ montant(resultat.margeEtudiants) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></template>
                     </p>
-                    <p class="mt-2.5 text-xs text-gray-500">Estimation avant les autres charges de l’INSEC</p>
+                    <p class="mt-2.5 text-xs text-gray-500">{{ cloturee ? 'Réalisée : encaissé − facture INTEC des payeurs' : 'Prévue : tarif − facture INTEC des payeurs' }}</p>
                 </article>
             </section>
 
-            <section class="carte mb-6 overflow-hidden" aria-labelledby="benefice-net-insec">
-                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-                    <div class="flex flex-col justify-center gap-2 p-5 sm:p-6" :class="benefice.net !== null && benefice.net < 0 ? 'bg-red-50/70' : 'bg-emerald-50/70'">
-                        <div class="flex items-center gap-3">
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm" :class="benefice.net !== null && benefice.net < 0 ? 'bg-linear-to-br from-red-400 to-red-600' : 'bg-linear-to-br from-emerald-400 to-emerald-600'"><i class="fa-solid fa-sack-dollar text-sm"></i></span>
-                            <h2 id="benefice-net-insec" class="font-titre text-base font-bold text-gray-900">Bénéfice net de l’INSEC · {{ carte?.libelle ?? anneeSynthese }}</h2>
+            <section class="carte mb-6 overflow-hidden" aria-labelledby="encaissements-annee">
+                <header class="panneau-entete">
+                    <div>
+                        <h2 id="encaissements-annee" class="titre-section">{{ cloturee ? 'Encaissements définitifs' : 'Encaissements des étudiants' }} · {{ carte?.libelle ?? anneeSynthese }}</h2>
+                        <p class="mt-0.5 text-xs text-gray-500">
+                            <template v-if="cloturee">Année terminée : ce qui n’a pas été payé ne sera plus encaissé.</template>
+                            <template v-else>Ce qui est déjà encaissé et ce qui reste à encaisser auprès des étudiants payeurs (hors BUMEX).</template>
+                        </p>
+                    </div>
+                    <span class="pastille tabular-nums" :class="recouvrement.taux >= 100 ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-800 ring-amber-600/20'">{{ recouvrement.taux }} % encaissé</span>
+                </header>
+                <div class="p-5 sm:p-6">
+                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div>
+                            <dt class="text-xs font-medium text-gray-500">Facturé aux étudiants</dt>
+                            <dd class="mt-1 font-titre text-xl font-bold text-gray-900 tabular-nums">{{ montant(recouvrement.facture) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></dd>
                         </div>
-                        <p class="font-titre text-3xl leading-none font-bold tracking-tight tabular-nums sm:text-[2.25rem]" :class="benefice.net !== null && benefice.net < 0 ? 'text-red-700' : 'text-emerald-700'">
-                            <template v-if="benefice.net === null">—</template>
-                            <template v-else>{{ montant(benefice.net) }}<span class="ml-1 text-base font-semibold text-gray-400">MRU</span></template>
+                        <div>
+                            <dt class="text-xs font-medium text-gray-500"><i class="fa-solid fa-circle-check mr-1 text-emerald-500"></i>Déjà encaissé</dt>
+                            <dd class="mt-1 font-titre text-xl font-bold text-emerald-700 tabular-nums">{{ montant(recouvrement.encaisse) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-medium text-gray-500">
+                                <template v-if="cloturee"><i class="fa-solid fa-circle-xmark mr-1 text-red-500"></i>Jamais encaissé · perdu</template>
+                                <template v-else><i class="fa-solid fa-hourglass-half mr-1 text-amber-500"></i>Reste à encaisser</template>
+                            </dt>
+                            <dd class="mt-1 font-titre text-xl font-bold tabular-nums" :class="!recouvrement.reste ? 'text-gray-900' : cloturee ? 'text-red-700' : 'text-amber-700'">{{ montant(recouvrement.reste) }}<span class="ml-1 text-sm font-semibold text-gray-400">MRU</span></dd>
+                        </div>
+                    </dl>
+                    <div class="mt-4 h-2.5 overflow-hidden rounded-full" :class="cloturee ? 'bg-red-100' : 'bg-amber-100'" role="progressbar" :aria-valuenow="recouvrement.taux" aria-valuemin="0" aria-valuemax="100" :aria-label="`${recouvrement.taux} % encaissé`">
+                        <div class="h-full rounded-full bg-emerald-500 transition-all" :style="{ width: `${recouvrement.taux}%` }"></div>
+                    </div>
+                    <p class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                        <span><strong class="text-gray-900 tabular-nums">{{ recouvrement.soldes }}</strong> soldé(s)</span>
+                        <span><strong class="text-gray-900 tabular-nums">{{ recouvrement.partiels }}</strong> partiel(s)</span>
+                        <span><strong class="text-gray-900 tabular-nums">{{ recouvrement.impayes }}</strong> impayé(s)</span>
+                        <span v-if="recouvrement.aChiffrer" class="text-amber-800"><strong class="tabular-nums">{{ recouvrement.aChiffrer }}</strong> sans montant fixé</span>
+                        <span v-if="recouvrement.facture !== totauxFinanciers.tarifEtudiantsMru" class="w-full text-amber-800"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Le facturé ({{ montant(recouvrement.facture) }} MRU) diffère du tarif selon les UE ({{ montant(totauxFinanciers.tarifEtudiantsMru) }} MRU) : remises, frais non fixés ou montants à corriger dans les dossiers.</span>
+                        <span v-if="carte?.nbBumex">· BUMEX : <strong class="text-gray-900 tabular-nums">{{ inscriptionsSynthese.filter((i) => i.financeur === 'bumex' && i.statut !== 'annulée' && i.statutBumex === 'reglee').length }}/{{ carte.nbBumex }}</strong> dossier(s) réglé(s)</span>
+                    </p>
+                </div>
+            </section>
+
+            <section class="carte mb-6 overflow-hidden" aria-labelledby="resultat-insec">
+                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                    <div class="flex flex-col justify-center gap-2 p-5 sm:p-6" :class="rouge(resultat.net) ? 'bg-red-50/70' : 'bg-emerald-50/70'">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm" :class="rouge(resultat.net) ? 'bg-linear-to-br from-red-400 to-red-600' : 'bg-linear-to-br from-emerald-400 to-emerald-600'"><i class="fa-solid fa-sack-dollar text-sm"></i></span>
+                            <h2 id="resultat-insec" class="font-titre text-base font-bold text-gray-900">Bénéfice net {{ cloturee ? 'définitif' : 'prévu' }} de l’INSEC · {{ carte?.libelle ?? anneeSynthese }}</h2>
+                        </div>
+                        <p class="font-titre text-3xl leading-none font-bold tracking-tight tabular-nums sm:text-[2.25rem]" :class="rouge(resultat.net) ? 'text-red-700' : 'text-emerald-700'">
+                            <template v-if="resultat.net === null">—</template>
+                            <template v-else>{{ montant(resultat.net) }}<span class="ml-1 text-base font-semibold text-gray-400">MRU</span></template>
                         </p>
                         <p class="text-xs text-gray-600">
-                            <template v-if="benefice.net === null">Saisissez le taux EUR/MRU pour calculer le bénéfice.</template>
-                            <template v-else>Ce qui reste une fois la facture INTEC réglée, étudiants BUMEX compris.</template>
+                            <template v-if="resultat.net === null">Saisissez le taux EUR/MRU pour calculer la marge et le bénéfice.</template>
+                            <template v-else-if="cloturee">Calculé sur l’argent réellement encaissé, une fois l’INTEC et le loyer payés.</template>
+                            <template v-else>Si tous les étudiants paient ce qui est prévu, une fois l’INTEC et le loyer payés.</template>
                         </p>
+                        <p v-if="resultat.margeBrute !== null" class="text-sm text-gray-700">Marge brute : <strong class="tabular-nums" :class="rouge(resultat.margeBrute) ? 'text-red-700' : 'text-emerald-700'">{{ montant(resultat.margeBrute) }} MRU</strong></p>
                     </div>
                     <dl class="divide-y divide-gray-100 p-5 text-sm sm:p-6">
                         <div class="flex items-baseline justify-between gap-4 py-2">
-                            <dt class="text-gray-600">Recette des étudiants payeurs</dt>
-                            <dd class="font-semibold text-gray-900 tabular-nums">{{ montant(benefice.recettePayeursMru) }} MRU</dd>
+                            <dt class="text-gray-600">Recette des étudiants payeurs <span class="text-gray-400">({{ cloturee ? 'encaissée' : 'prévue' }})</span></dt>
+                            <dd class="font-semibold text-gray-900 tabular-nums">{{ montant(resultat.recette) }} MRU</dd>
                         </div>
                         <div class="flex items-baseline justify-between gap-4 py-2">
                             <dt class="text-gray-600">− Facture INTEC des étudiants payeurs</dt>
-                            <dd class="font-semibold text-gray-900 tabular-nums">{{ benefice.coutIntecPayeursMru === null ? '—' : `${montant(benefice.coutIntecPayeursMru)} MRU` }}</dd>
-                        </div>
-                        <div class="flex items-baseline justify-between gap-4 py-2">
-                            <dt class="font-medium text-gray-700">= Marge des étudiants payeurs</dt>
-                            <dd class="font-semibold text-emerald-700 tabular-nums">{{ totauxFinanciers.margeEtudiantsMru === null ? '—' : `${montant(totauxFinanciers.margeEtudiantsMru)} MRU` }}</dd>
+                            <dd class="font-semibold text-gray-900 tabular-nums">{{ totauxFinanciers.coutIntecPayeursMru === null ? '—' : `${montant(totauxFinanciers.coutIntecPayeursMru)} MRU` }}</dd>
                         </div>
                         <div class="flex items-baseline justify-between gap-4 py-2">
                             <dt class="text-gray-600">− Étudiants BUMEX, payés à l’INTEC en euros <span class="text-gray-400">({{ euros(totauxFinanciers.financementBumexEuro) }})</span></dt>
                             <dd class="font-semibold text-gray-900 tabular-nums">{{ totauxFinanciers.financementBumexMru === null ? '—' : `${montant(totauxFinanciers.financementBumexMru)} MRU` }}</dd>
                         </div>
+                        <div class="flex items-baseline justify-between gap-4 py-2.5">
+                            <dt class="font-semibold text-gray-900">= Marge brute</dt>
+                            <dd class="font-bold tabular-nums" :class="rouge(resultat.margeBrute) ? 'text-red-700' : 'text-emerald-700'">{{ resultat.margeBrute === null ? '—' : `${montant(resultat.margeBrute)} MRU` }}</dd>
+                        </div>
+                        <div v-for="c in charges" :key="c.cle" class="flex items-baseline justify-between gap-4 py-2">
+                            <dt class="text-gray-600">− {{ c.libelle }} <span class="text-gray-400">({{ montant(c.mensuelMru) }} MRU par mois × 12 mois)</span></dt>
+                            <dd class="font-semibold text-gray-900 tabular-nums">{{ montant(c.annuelMru) }} MRU</dd>
+                        </div>
                         <div class="flex items-baseline justify-between gap-4 pt-3">
                             <dt class="font-semibold text-gray-900">= Bénéfice net</dt>
-                            <dd class="font-bold tabular-nums" :class="benefice.net !== null && benefice.net < 0 ? 'text-red-700' : 'text-emerald-700'">{{ benefice.net === null ? '—' : `${montant(benefice.net)} MRU` }}</dd>
+                            <dd class="font-bold tabular-nums" :class="rouge(resultat.net) ? 'text-red-700' : 'text-emerald-700'">{{ resultat.net === null ? '—' : `${montant(resultat.net)} MRU` }}</dd>
                         </div>
+                        <p v-if="!cloturee && resultat.realise.margeBrute !== null" class="mt-3 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+                            <i class="fa-solid fa-circle-info mr-1 text-insec-500"></i>À ce jour, avec les {{ montant(recouvrement.encaisse) }} MRU déjà encaissés :
+                            marge brute <strong class="tabular-nums text-gray-900">{{ montant(resultat.realise.margeBrute) }} MRU</strong>,
+                            bénéfice net <strong class="tabular-nums" :class="rouge(resultat.realise.net) ? 'text-red-700' : 'text-gray-900'">{{ montant(resultat.realise.net ?? 0) }} MRU</strong>.
+                            Électricité et eau seront ajoutées plus tard.
+                        </p>
+                        <p v-else-if="cloturee" class="mt-3 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+                            <i class="fa-solid fa-circle-info mr-1 text-insec-500"></i>Prévu au tarif : {{ montant(totauxFinanciers.tarifEtudiantsMru) }} MRU ; {{ montant(recouvrement.reste) }} MRU n’ont jamais été encaissés. Électricité et eau seront ajoutées plus tard.
+                        </p>
                     </dl>
                 </div>
             </section>
@@ -1120,7 +1201,7 @@ const benefice = computed(() => {
                 <header class="panneau-entete">
                     <div>
                         <h2 class="titre-section">Détail des inscriptions · {{ carte?.libelle ?? anneeSynthese }}</h2>
-                        <p class="mt-0.5 text-xs text-gray-500">Coûts calculés à partir des UE inscrites et du barème du diplôme. Seules les inscriptions de l’année sélectionnée apparaissent ici.</p>
+                        <p class="mt-0.5 text-xs text-gray-500">Coûts calculés à partir des UE inscrites et du barème du diplôme. Seules les inscriptions de l’année sélectionnée apparaissent ici.<template v-if="cloturee"> Année clôturée : la marge est celle réellement encaissée.</template></p>
                     </div>
                 </header>
                 <div class="overflow-x-auto">
@@ -1140,13 +1221,16 @@ const benefice = computed(() => {
                                     </template>
                                     <template v-else>
                                         <strong class="font-semibold text-gray-900">{{ montant(ligne.encaisse ?? 0) }} MRU encaissés</strong>
-                                        <span class="block text-xs text-gray-500">{{ montant(ligne.restant ?? 0) }} MRU restant dus</span>
+                                        <span v-if="!ligne.restant" class="block text-xs text-emerald-700">Soldé</span>
+                                        <span v-else-if="cloturee" class="block text-xs text-red-700">{{ montant(ligne.restant) }} MRU jamais encaissés</span>
+                                        <span v-else class="block text-xs text-gray-500">{{ montant(ligne.restant) }} MRU restant dus</span>
                                     </template>
                                 </td>
                                 <td class="min-w-48 text-sm text-gray-600">
                                     <template v-if="ligne.financeurBumex">Charge financée en interne; aucune marge externe n’est comptabilisée.</template>
-                                    <template v-else-if="ligne.margeTheorique === null">Saisissez le taux EUR/MRU pour estimer la marge.</template>
-                                    <template v-else><strong class="font-semibold text-emerald-700 tabular-nums">{{ montant(ligne.margeTheorique) }} MRU</strong><span class="block text-xs text-gray-500">Marge théorique avant les autres charges</span></template>
+                                    <template v-else-if="ligne.margeTheorique === null || ligne.margeRealisee === null">Saisissez le taux EUR/MRU pour estimer la marge.</template>
+                                    <template v-else-if="cloturee"><strong class="font-semibold tabular-nums" :class="rouge(ligne.margeRealisee) ? 'text-red-700' : 'text-emerald-700'">{{ montant(ligne.margeRealisee) }} MRU</strong><span class="block text-xs text-gray-500">Marge réalisée : encaissé − facture INTEC</span></template>
+                                    <template v-else><strong class="font-semibold text-emerald-700 tabular-nums">{{ montant(ligne.margeTheorique) }} MRU</strong><span class="block text-xs text-gray-500">Marge prévue · {{ montant(ligne.margeRealisee) }} MRU réalisés à ce jour</span></template>
                                 </td>
                             </tr>
                             <tr v-if="!detailsFinanciers.length"><td colspan="6" class="py-12 text-center text-sm text-gray-400">Aucune inscription enregistrée pour {{ carte?.libelle ?? anneeSynthese }}.</td></tr>
