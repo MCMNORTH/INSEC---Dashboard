@@ -118,13 +118,85 @@ export function ecartAuTarif(codeFormation: string | null | undefined, nbUe: num
 }
 
 /**
- * Bénéfice net de l'INSEC sur l'année : marge des étudiants payeurs (tarif MRU − coût INTEC)
+ * Marge brute de l'INSEC sur l'année : marge des étudiants payeurs (recette MRU − coût INTEC)
  * moins le coût des étudiants BUMEX, que l'INSEC règle à l'INTEC en euros sans rien facturer.
- * Équivaut à : recette des étudiants payeurs − facture INTEC totale. Null si une donnée manque (taux EUR/MRU).
+ * Équivaut à : recette des étudiants payeurs − facture INTEC totale, avant les charges de l'INSEC (loyer…).
+ * Null si une donnée manque (taux EUR/MRU).
  */
-export function beneficeNetInsec(margeEtudiantsMru: number | null | undefined, coutBumexMru: number | null | undefined): number | null {
+export function margeBruteInsec(margeEtudiantsMru: number | null | undefined, coutBumexMru: number | null | undefined): number | null {
     if (margeEtudiantsMru === null || margeEtudiantsMru === undefined || coutBumexMru === null || coutBumexMru === undefined) return null;
     return margeEtudiantsMru - coutBumexMru;
+}
+
+/**
+ * Charges fixes de l'INSEC, en MRU par mois. L'électricité et l'eau s'ajouteront ici.
+ * Une année scolaire compte 12 mois de charges.
+ */
+export const CHARGES_MENSUELLES = [
+    { cle: 'loyer', libelle: 'Loyer des locaux', mensuelMru: 40_000 },
+] as const;
+export const MOIS_PAR_ANNEE_SCOLAIRE = 12;
+
+/** Charges fixes d'une année scolaire, poste par poste (montant mensuel × 12 mois). */
+export function chargesAnnuelles(): { cle: string; libelle: string; mensuelMru: number; annuelMru: number }[] {
+    return CHARGES_MENSUELLES.map((c) => ({ ...c, annuelMru: c.mensuelMru * MOIS_PAR_ANNEE_SCOLAIRE }));
+}
+
+/** Total des charges fixes d'une année scolaire, en MRU. */
+export function totalChargesAnnuelles(): number {
+    return chargesAnnuelles().reduce((total, c) => total + c.annuelMru, 0);
+}
+
+/** Bénéfice net de l'INSEC : marge brute moins les charges fixes de l'année. Null si la marge brute est inconnue. */
+export function beneficeNetInsec(margeBruteMru: number | null | undefined, chargesMru: number = totalChargesAnnuelles()): number | null {
+    if (margeBruteMru === null || margeBruteMru === undefined) return null;
+    return margeBruteMru - chargesMru;
+}
+
+/**
+ * Une année scolaire est clôturée quand elle précède l'année en cours : ce qui n'a pas été encaissé
+ * ne le sera plus, et ses chiffres deviennent définitifs (seul l'encaissé compte).
+ */
+export function anneeCloturee(anneeId: string | null | undefined, anneeEnCours: string = ANNEE_ACADEMIQUE_PAR_DEFAUT): boolean {
+    return !!anneeId && anneeId < anneeEnCours;
+}
+
+/**
+ * Montant réellement acquis par l'INSEC sur une inscription : le versé, moins ce qui est à rembourser
+ * (trop-perçu, inscription annulée). Rien pour une inscription prise en charge par BUMEX.
+ */
+export function montantEncaisse(i: SituationFinanciere): number {
+    if (i.financeur === 'bumex') return 0;
+    return Math.max((i.totalVerse ?? 0) - montantARembourser(i), 0);
+}
+
+export interface Recouvrement {
+    /** Montant net facturé aux étudiants payeurs (après remise). */
+    facture: number;
+    /** Montant acquis (versé hors trop-perçu et remboursements). */
+    encaisse: number;
+    /** Reste à encaisser ; pour une année clôturée, montant qui ne sera jamais encaissé. */
+    reste: number;
+    /** Part du facturé déjà encaissée, en % (100 si rien n'est facturé). */
+    taux: number;
+    soldes: number;
+    partiels: number;
+    impayes: number;
+    aChiffrer: number;
+}
+
+/** Recouvrement des étudiants payeurs d'une année (inscriptions annulées et BUMEX exclues du facturé). */
+export function recouvrementAnnee(inscriptions: readonly SituationFinanciere[]): Recouvrement {
+    const payeurs = inscriptions.filter((i) => estRecouvrable(i));
+    const facture = payeurs.reduce((t, i) => t + montantNet(i), 0);
+    const encaisse = inscriptions.reduce((t, i) => t + montantEncaisse(i), 0);
+    const reste = payeurs.reduce((t, i) => t + soldeRestant(i), 0);
+    const compter = (statut: StatutPaiement) => payeurs.filter((i) => statutPaiement(i) === statut).length;
+    return {
+        facture, encaisse, reste,
+        taux: facture > 0 ? Math.min(100, Math.round(((facture - reste) * 100) / facture)) : 100,
+        soldes: compter('Soldé'), partiels: compter('Partiel'), impayes: compter('Impayé'), aChiffrer: compter('À chiffrer'),
+    };
 }
 
 /** UE à la fois suivies et dispensées par VES : interdit (règle de non-cumul de l'INTEC). */
