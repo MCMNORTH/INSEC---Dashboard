@@ -4,7 +4,7 @@ import { ajouterEcheance, ajouterVersement, modifierSituationFinanciere, traiter
 import { genererPdf } from '../src/handlers/pdf.js';
 import { tableauDeBordAdmin } from '../src/handlers/tableauDeBord.js';
 import {
-    anneeCloturee, beneficeNetInsec, chargesAnnuelles, coutIntecEuro, margeBruteInsec, montantEncaisse, recouvrementAnnee, totalChargesAnnuelles, ecartAuTarif, uesEnDoublonVes, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
+    anneeCloturee, beneficeNetInsec, chargesAnnuelles, coutIntecEuro, margeBruteInsec, moisAnneeScolaire, montantEncaisse, recouvrementAnnee, totalChargesAnnuelles, ecartAuTarif, uesEnDoublonVes, ecartEcheancier, etatEcheances, montantARembourser, montantDuSelonTarif, montantEnLettres, montantEnRetard, montantNet, nombreEnLettres,
     soldeRestant, statutPaiement,
 } from '../src/shared/domaine.js';
 import { acteur, appeler, attendreErreur, doc, liste, referentiel, reinitialiser, type ActeurTest } from './aide.js';
@@ -257,12 +257,22 @@ describe('Montant dû au tarif et dossiers non recouvrables', () => {
         expect(margeBruteInsec(359700, null)).toBeNull();
     });
 
-    it('déduit le loyer (40 000 MRU par mois, 12 mois) pour obtenir le bénéfice net', () => {
-        expect(chargesAnnuelles()).toEqual([{ cle: 'loyer', libelle: 'Loyer des locaux', mensuelMru: 40000, annuelMru: 480000 }]);
-        expect(totalChargesAnnuelles()).toBe(480000);
-        expect(beneficeNetInsec(159600)).toBe(159600 - 480000);
-        expect(beneficeNetInsec(600000, 480000)).toBe(120000);
-        expect(beneficeNetInsec(null)).toBeNull();
+    it('déduit le loyer (40 000 MRU par mois) à partir de septembre 2026 seulement', () => {
+        expect(moisAnneeScolaire('2026-2027')).toEqual([
+            '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06', '2027-07', '2027-08',
+        ]);
+        expect(chargesAnnuelles('2026-2027')).toEqual([
+            { cle: 'loyer', libelle: 'Loyer des locaux', mensuelMru: 40000, mois: 12, premierMois: '2026-09', dernierMois: '2027-08', annuelMru: 480000 },
+        ]);
+        expect(totalChargesAnnuelles('2026-2027')).toBe(480000);
+        expect(totalChargesAnnuelles('2027-2028')).toBe(480000);
+        // Aucun loyer avant septembre 2026 : les années passées n'ont pas de charge fixe.
+        expect(chargesAnnuelles('2025-2026')).toEqual([]);
+        expect(totalChargesAnnuelles('2024-2025')).toBe(0);
+        expect(totalChargesAnnuelles('invalide')).toBe(0);
+        expect(beneficeNetInsec(159600, totalChargesAnnuelles('2026-2027'))).toBe(159600 - 480000);
+        expect(beneficeNetInsec(17280, totalChargesAnnuelles('2025-2026'))).toBe(17280);
+        expect(beneficeNetInsec(null, 0)).toBeNull();
     });
 
     it('clôture les années scolaires antérieures à l’année en cours', () => {
