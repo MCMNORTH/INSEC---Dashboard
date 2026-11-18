@@ -1,10 +1,11 @@
+import { HttpsError } from 'firebase-functions/v2/https';
 import { auditerDirect, auditerModele, trace } from '../lib/audit.js';
 import { introuvable, operation } from '../lib/contexte.js';
 import { col, exiger } from '../lib/donnees.js';
-import { bucket, db } from '../lib/firebase.js';
+import { bucket, db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, z } from '../lib/validation.js';
 import {
-    MIME_PIECES, ROLES_ADMIN, ROLES_DOCUMENTS_FINANCIERS, ROLES_FINANCE, ROLES_VISION_ADMIN, STATUTS_PIECE, TAILLE_MAX_PIECE, TYPES_DOCUMENT_FINANCIER, TYPES_PIECE,
+    MIME_PIECES, ROLES_ADMIN, ROLES_DOCUMENTS_FINANCIERS, ROLES_FINANCE, ROLES_GESTION_DOCUMENTS_FINANCIERS, ROLES_VISION_ADMIN, STATUTS_PIECE, TAILLE_MAX_PIECE, TYPES_DOCUMENT_FINANCIER, TYPES_PIECE,
 } from '../shared/domaine.js';
 
 /** Télécharge le PDF original de la convention, conservé dans le stockage privé. */
@@ -113,7 +114,12 @@ export const enregistrerDocumentFinancier = operation('enregistrerDocumentFinanc
         type: s.choix(TYPES_DOCUMENT_FINANCIER),
         chemin: z.string().max(500),
         nomOriginal: s.texte(255),
+        // Document remplacé par ce dépôt (super-administrateur uniquement) : même année et même type.
+        remplace: z.object({ id: s.id(), type: s.choix(TYPES_DOCUMENT_FINANCIER).optional() }).optional(),
     }), donnees);
+    if (v.remplace && !ROLES_GESTION_DOCUMENTS_FINANCIERS.includes(acteur.role as never)) {
+        throw new HttpsError('permission-denied', 'Seul le super-administrateur peut remplacer un document financier.');
+    }
     const prefixe = `finances/${v.anneeId}/${v.type}/${acteur.uid}/`;
     if (!acteur.uid || !v.chemin.startsWith(prefixe) || v.chemin.split('/').includes('..')) {
         erreurChamp('fichier', 'Emplacement de fichier invalide.');
@@ -128,13 +134,20 @@ export const enregistrerDocumentFinancier = operation('enregistrerDocumentFinanc
         await fichier.delete({ ignoreNotFound: true });
         erreurChamp('fichier', 'Seuls les fichiers PDF de 5 Mo maximum sont acceptés.');
     }
+    const remplace = v.remplace ? await localiserDocumentFinancier(v.remplace.id, v.remplace.type) : null;
+    if (remplace && (remplace.anneeId !== v.anneeId || remplace.type !== v.type)) {
+        await fichier.delete({ ignoreNotFound: true });
+        erreurChamp('remplace', 'Le document remplacé doit être de la même année et du même type.');
+    }
     const ref = col.documentsFinanciers().doc();
     const document = { anneeId: v.anneeId, type: v.type, nomOriginal: v.nomOriginal, chemin: v.chemin, mimeType: 'application/pdf', taille };
     const lot = db.batch();
     lot.set(ref, { ...document, ...trace(acteur, true) });
-    auditerModele(lot, acteur, 'DocumentFinancier', ref.id, 'created', null, document);
+    auditerModele(lot, acteur, 'DocumentFinancier', ref.id, 'created', null, remplace ? { ...document, remplace: remplace.id } : document);
+    const archive = remplace ? retirerDansLot(lot, acteur, remplace, `Remplacé par ${v.nomOriginal}`) : null;
     await lot.commit();
-    return { id: ref.id, message: 'Document financier ajouté.' };
+    if (remplace && archive) await archiverFichier(remplace.chemin, archive);
+    return { id: ref.id, message: remplace ? 'Document financier remplacé.' : 'Document financier ajouté.' };
 });
 
 /** Liste les documents financiers d'une année, dans les deux formats, sans ouvrir la collection au navigateur. */
@@ -163,40 +176,79 @@ export const lireDocumentsFinanciers = operation('lireDocumentsFinanciers', ROLE
     return { documents: liste.sort((a, b) => String(b.deposeLe ?? '').localeCompare(String(a.deposeLe ?? ''))) };
 });
 
+interface DocumentFinancierLocalise {
+    id: string;
+    type: TypeDocumentFinancier;
+    anneeId: string;
+    chemin: string;
+    nomOriginal: string;
+    tailleAttendue: number | null;
+    ancienFormat: boolean;
+}
+
+/** Retrouve un document financier (nouveau ou ancien format) et vérifie que son chemin de stockage est attendu. */
+async function localiserDocumentFinancier(id: string, typeDemande?: TypeDocumentFinancier): Promise<DocumentFinancierLocalise> {
+    const document = await exiger(null, col.documentsFinanciers().doc(id), 'Document financier introuvable.');
+    if (estTypeDocument(document.type)) {
+        const type = document.type;
+        if (typeDemande && typeDemande !== type) introuvable('Document financier introuvable.');
+        if (typeof document.anneeId !== 'string' || typeof document.creePar !== 'string') introuvable();
+        const chemin = String(document.chemin ?? '').replace(/\\/g, '/');
+        const prefixe = `finances/${document.anneeId}/${type}/${document.creePar}/`;
+        if (!chemin.startsWith(prefixe) || chemin.split('/').includes('..')) introuvable();
+        return {
+            id, type, anneeId: document.anneeId, chemin, nomOriginal: String(document.nomOriginal ?? 'document.pdf'),
+            tailleAttendue: Number.isFinite(Number(document.taille)) ? Number(document.taille) : null, ancienFormat: false,
+        };
+    }
+    // Ancien format : un document par année (id = année).
+    if (!typeDemande || !FORMAT_ANNEE.test(id)) introuvable('Document financier introuvable.');
+    const type = typeDemande as TypeDocumentFinancier;
+    const fichierAncien = document[CHAMP_ANCIEN[type]] as Record<string, unknown> | undefined;
+    const cheminAttendu = `finances/${id}/${type}.pdf`;
+    if (!fichierAncien || fichierAncien.chemin !== cheminAttendu || fichierAncien.mimeType !== 'application/pdf') {
+        introuvable('Document financier introuvable.');
+    }
+    return {
+        id, type, anneeId: id, chemin: cheminAttendu, nomOriginal: String(fichierAncien!.nomOriginal ?? 'document.pdf'),
+        tailleAttendue: Number.isFinite(Number(fichierAncien!.taille)) ? Number(fichierAncien!.taille) : null, ancienFormat: true,
+    };
+}
+
+/**
+ * Retire un document financier dans un lot (journal d'audit compris) et renvoie le chemin d'archive du PDF.
+ * Le PDF n'est pas effacé : il est déplacé dans archives/, inaccessible depuis l'application mais récupérable.
+ */
+function retirerDansLot(lot: FirebaseFirestore.WriteBatch, acteur: Parameters<typeof auditerModele>[1], d: DocumentFinancierLocalise, motif: string): string {
+    const archive = `archives/finances/${d.anneeId}/${d.type}/${Date.now()}-${d.chemin.split('/').pop()}`;
+    const ref = col.documentsFinanciers().doc(d.id);
+    if (d.ancienFormat) lot.update(ref, { [CHAMP_ANCIEN[d.type]]: FieldValue.delete(), ...trace(acteur) });
+    else lot.delete(ref);
+    auditerModele(lot, acteur, 'DocumentFinancier', d.ancienFormat ? `${d.id}-${d.type}` : d.id, 'deleted',
+        { anneeId: d.anneeId, type: d.type, nomOriginal: d.nomOriginal, chemin: d.chemin }, { motif, archive });
+    return archive;
+}
+
+async function archiverFichier(chemin: string, archive: string): Promise<void> {
+    const fichier = bucket().file(chemin);
+    const [existe] = await fichier.exists();
+    if (existe) await fichier.move(archive);
+}
+
+/** Retire un document financier déposé par erreur (super-administrateur uniquement) ; le PDF est archivé. */
+export const retirerDocumentFinancier = operation('retirerDocumentFinancier', ROLES_GESTION_DOCUMENTS_FINANCIERS, async (donnees, acteur) => {
+    const v = valider(z.object({ id: s.id(), type: s.choix(TYPES_DOCUMENT_FINANCIER).optional() }), donnees);
+    const d = await localiserDocumentFinancier(v.id, v.type);
+    const lot = db.batch();
+    const archive = retirerDansLot(lot, acteur, d, 'Retiré');
+    await lot.commit();
+    await archiverFichier(d.chemin, archive);
+    return { message: 'Document financier retiré.' };
+});
+
 export const telechargerDocumentFinancier = operation('telechargerDocumentFinancier', ROLES_DOCUMENTS_FINANCIERS, async (donnees, acteur) => {
     const v = valider(z.object({ id: s.id(), type: s.choix(TYPES_DOCUMENT_FINANCIER).optional() }), donnees);
-    const document = await exiger(null, col.documentsFinanciers().doc(v.id), 'Document financier introuvable.');
-    let type: TypeDocumentFinancier;
-    let anneeId: string;
-    let chemin: string;
-    let nomOriginal: string;
-    let tailleAttendue: number | null;
-    let ancienFormat = false;
-    if (estTypeDocument(document.type)) {
-        type = document.type;
-        if (v.type && v.type !== type) introuvable('Document financier introuvable.');
-        if (typeof document.anneeId !== 'string' || typeof document.creePar !== 'string') introuvable();
-        anneeId = document.anneeId;
-        chemin = String(document.chemin ?? '').replace(/\\/g, '/');
-        nomOriginal = String(document.nomOriginal ?? 'document.pdf');
-        tailleAttendue = Number.isFinite(Number(document.taille)) ? Number(document.taille) : null;
-        const prefixe = `finances/${anneeId}/${type}/${document.creePar}/`;
-        if (!chemin.startsWith(prefixe) || chemin.split('/').includes('..')) introuvable();
-    } else {
-        // Ancien format : un document par année (id = année).
-        if (!v.type || !FORMAT_ANNEE.test(v.id)) introuvable('Document financier introuvable.');
-        type = v.type;
-        anneeId = v.id;
-        const fichierAncien = document[CHAMP_ANCIEN[type]] as Record<string, unknown> | undefined;
-        const cheminAttendu = `finances/${anneeId}/${type}.pdf`;
-        if (!fichierAncien || fichierAncien.chemin !== cheminAttendu || fichierAncien.mimeType !== 'application/pdf') {
-            introuvable('Document financier introuvable.');
-        }
-        chemin = cheminAttendu;
-        nomOriginal = String(fichierAncien.nomOriginal ?? 'document.pdf');
-        tailleAttendue = Number.isFinite(Number(fichierAncien.taille)) ? Number(fichierAncien.taille) : null;
-        ancienFormat = true;
-    }
+    const { type, anneeId, chemin, nomOriginal, tailleAttendue, ancienFormat } = await localiserDocumentFinancier(v.id, v.type);
     const fichier = bucket().file(chemin);
     const [existe] = await fichier.exists();
     if (!existe) introuvable('Le fichier est introuvable dans le stockage.');

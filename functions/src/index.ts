@@ -4,7 +4,7 @@ export { synchroniserAlertes } from './handlers/alertes.js';
 export { lireCalendriersIntec, importerCalendrierIntec } from './handlers/calendriersIntec.js';
 export { basculerCompte, creerCompte, modifierPhotoProfil, modifierRoleCompte } from './handlers/comptes.js';
 export {
-    enregistrerDocumentFinancier, enregistrerPiece, lireDocumentsFinanciers, modifierPiece, telechargerConventionIntec,
+    enregistrerDocumentFinancier, enregistrerPiece, lireDocumentsFinanciers, modifierPiece, retirerDocumentFinancier, telechargerConventionIntec,
     telechargerDocumentFinancier, telechargerPiece,
 } from './handlers/documents.js';
 export { envoyerEmail } from './handlers/emails.js';
