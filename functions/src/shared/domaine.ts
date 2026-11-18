@@ -21,6 +21,8 @@ export const ROLES_FINANCE: readonly Role[] = ['admin', 'super_admin', 'finance'
 export const ROLES_LECTURE: readonly Role[] = ['admin', 'super_admin', 'admin_lecture', 'finance', 'consultation'];
 /** Documents financiers annuels : déposés par la finance, consultés aussi par l'administration en lecture seule. */
 export const ROLES_DOCUMENTS_FINANCIERS: readonly Role[] = ['admin', 'super_admin', 'admin_lecture', 'finance'];
+/** Retrait et remplacement d'un document financier déjà déposé : réservés au super-administrateur. */
+export const ROLES_GESTION_DOCUMENTS_FINANCIERS: readonly Role[] = ['super_admin'];
 /** Comptes créables depuis l'application : l'équipe INSEC uniquement (le super-administrateur est créé par script). */
 export const ROLES_CREABLES = ['admin', 'admin_lecture', 'finance', 'consultation'] as const;
 

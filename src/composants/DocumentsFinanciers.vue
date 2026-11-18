@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ROLES_FINANCE, TAILLE_MAX_PIECE, TYPES_DOCUMENT_FINANCIER } from '@shared/domaine';
+import { ROLES_FINANCE, ROLES_GESTION_DOCUMENTS_FINANCIERS, TAILLE_MAX_PIECE, TYPES_DOCUMENT_FINANCIER } from '@shared/domaine';
 import { ref as refStockage, uploadBytes } from 'firebase/storage';
 import { computed, ref, watch } from 'vue';
 import { appeler } from '../api';
 import { telecharger } from '../fichiers';
 import { stockage } from '../firebase';
+import { confirmer } from '../dialogue';
 import { date } from '../format';
 import { notifier } from '../notifications';
 import { aRole, session } from '../session';
@@ -22,6 +23,8 @@ interface DocumentFinancier {
 const props = defineProps<{ anneeId: string; libelleAnnee: string }>();
 // L'administration en lecture seule consulte et télécharge les documents, sans dépôt.
 const peutDeposer = aRole(...ROLES_FINANCE);
+// Retirer ou remplacer un document déjà déposé : super-administrateur uniquement (contrôlé aussi côté serveur).
+const peutGerer = aRole(...ROLES_GESTION_DOCUMENTS_FINANCIERS);
 
 const RUBRIQUES: { type: TypeDocument; titre: string; aide: string }[] = [
     { type: 'facture-intec', titre: 'Facture annuelle de l’INTEC', aide: 'La facture qui indique le total dû à l’INTEC pour cette année.' },
@@ -56,20 +59,26 @@ function choisir(type: TypeDocument, evenement: Event) {
     selection.value[type] = Array.from((evenement.target as HTMLInputElement).files ?? []);
 }
 
+const pdfValide = (f: File) => f.type === 'application/pdf' && f.size <= TAILLE_MAX_PIECE;
+async function televerser(type: TypeDocument, f: File, remplace?: DocumentFinancier) {
+    const nom = f.name.normalize('NFD').replace(/[^\w.-]+/g, '-').slice(-80);
+    const chemin = `finances/${props.anneeId}/${type}/${session.uid}/${Date.now()}-${nom}`;
+    await uploadBytes(refStockage(stockage, chemin), f, { contentType: 'application/pdf' });
+    await appeler('enregistrerDocumentFinancier', {
+        anneeId: props.anneeId, type, chemin, nomOriginal: f.name,
+        ...(remplace ? { remplace: { id: remplace.id, ...(remplace.ancienFormat ? { type: remplace.type } : {}) } } : {}),
+    });
+}
+
 async function deposer(type: TypeDocument) {
     const fichiers = selection.value[type];
     if (!fichiers.length) return notifier('Choisissez au moins un document PDF.', { type: 'erreur' });
-    if (fichiers.some((f) => f.type !== 'application/pdf' || f.size > TAILLE_MAX_PIECE)) {
+    if (!fichiers.every(pdfValide)) {
         return notifier('Seuls les fichiers PDF de 5 Mo maximum sont acceptés.', { type: 'erreur' });
     }
     envoi.value = type;
     try {
-        for (const f of fichiers) {
-            const nom = f.name.normalize('NFD').replace(/[^\w.-]+/g, '-').slice(-80);
-            const chemin = `finances/${props.anneeId}/${type}/${session.uid}/${Date.now()}-${nom}`;
-            await uploadBytes(refStockage(stockage, chemin), f, { contentType: 'application/pdf' });
-            await appeler('enregistrerDocumentFinancier', { anneeId: props.anneeId, type, chemin, nomOriginal: f.name });
-        }
+        for (const f of fichiers) await televerser(type, f);
         notifier(fichiers.length > 1 ? 'Tous les documents sélectionnés ont été déposés.' : 'Document financier ajouté.');
         selection.value[type] = [];
         await charger();
@@ -77,6 +86,54 @@ async function deposer(type: TypeDocument) {
         notifier('Le dépôt a échoué. Vérifiez le fichier et réessayez.', { type: 'erreur' });
     } finally {
         envoi.value = null;
+    }
+}
+
+// Remplacement : le nouveau PDF prend la place de l'ancien, qui est archivé (journal d'audit).
+const enCours = ref<string | null>(null);
+const cle = (d: DocumentFinancier) => `${d.id}-${d.type}`;
+async function remplacer(d: DocumentFinancier, evenement: Event) {
+    const champ = evenement.target as HTMLInputElement;
+    const f = champ.files?.[0];
+    champ.value = '';
+    if (!f) return;
+    if (!pdfValide(f)) return notifier('Seuls les fichiers PDF de 5 Mo maximum sont acceptés.', { type: 'erreur' });
+    const ok = await confirmer({
+        titre: 'Remplacer ce document ?',
+        message: 'Le nouveau PDF remplace l’ancien, qui est retiré de la liste (il reste archivé).',
+        details: { 'Document actuel': d.nomOriginal, 'Nouveau document': f.name, 'Année scolaire': props.libelleAnnee },
+        libelle: 'Remplacer',
+    });
+    if (!ok) return;
+    enCours.value = cle(d);
+    try {
+        await televerser(d.type, f, d);
+        notifier('Document financier remplacé.');
+        await charger();
+    } catch {
+        notifier('Le remplacement a échoué. Vérifiez le fichier et réessayez.', { type: 'erreur' });
+    } finally {
+        enCours.value = null;
+    }
+}
+async function retirer(d: DocumentFinancier) {
+    const ok = await confirmer({
+        titre: 'Retirer ce document ?',
+        message: 'Il disparaît de la liste des documents financiers. Le PDF reste archivé et le retrait est inscrit au journal.',
+        details: { Document: d.nomOriginal, 'Année scolaire': props.libelleAnnee },
+        libelle: 'Retirer',
+        ton: 'danger',
+    });
+    if (!ok) return;
+    enCours.value = cle(d);
+    try {
+        await appeler('retirerDocumentFinancier', { id: d.id, ...(d.ancienFormat ? { type: d.type } : {}) });
+        notifier('Document financier retiré.');
+        await charger();
+    } catch {
+        notifier('Le document n’a pas pu être retiré.', { type: 'erreur' });
+    } finally {
+        enCours.value = null;
     }
 }
 
@@ -111,7 +168,18 @@ const ko = (octets: number) => `${Math.max(1, Math.round(octets / 1024))} Ko`;
                             <span class="block truncate font-medium text-gray-800" :title="d.nomOriginal">{{ d.nomOriginal }}</span>
                             <span class="text-xs text-gray-500">{{ ko(d.taille) }}<template v-if="d.deposeLe"> · déposé le {{ date(d.deposeLe) }}</template></span>
                         </span>
-                        <button type="button" class="bouton-icone" title="Télécharger" :aria-label="`Télécharger ${d.nomOriginal}`" @click="telechargerDocument(d)"><i class="fa-solid fa-download text-sm"></i></button>
+                        <span class="flex shrink-0 items-center gap-1">
+                            <i v-if="enCours === cle(d)" class="fa-solid fa-circle-notch fa-spin text-sm text-gray-400" aria-hidden="true"></i>
+                            <button type="button" class="bouton-icone" title="Télécharger" :aria-label="`Télécharger ${d.nomOriginal}`" @click="telechargerDocument(d)"><i class="fa-solid fa-download text-sm"></i></button>
+                            <template v-if="peutGerer">
+                                <label class="bouton-icone cursor-pointer" :class="{ 'pointer-events-none opacity-50': enCours !== null }" title="Remplacer par un autre PDF">
+                                    <i class="fa-solid fa-arrows-rotate text-sm"></i>
+                                    <span class="sr-only">Remplacer {{ d.nomOriginal }}</span>
+                                    <input type="file" accept="application/pdf" class="sr-only" :disabled="enCours !== null" @change="remplacer(d, $event)" />
+                                </label>
+                                <button type="button" class="bouton-icone text-red-600 hover:text-red-700" title="Retirer" :aria-label="`Retirer ${d.nomOriginal}`" :disabled="enCours !== null" @click="retirer(d)"><i class="fa-solid fa-trash-can text-sm"></i></button>
+                            </template>
+                        </span>
                     </li>
                 </ul>
                 <p v-else class="mt-4 text-sm text-gray-400">Aucun document déposé pour cette année.</p>
