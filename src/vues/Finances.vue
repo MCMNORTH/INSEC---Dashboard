@@ -438,7 +438,10 @@ const lignesTarifs = computed(() => {
 // Année clôturée (antérieure à l'année en cours) : seul l'encaissé compte, le reste ne sera jamais perçu.
 const cloturee = computed(() => anneeCloturee(anneeSynthese.value));
 const recouvrement = computed(() => recouvrementAnnee(inscriptionsSynthese.value));
-const charges = chargesAnnuelles();
+// Charges fixes de l'année choisie : le loyer n'existe qu'à partir de septembre 2026.
+const charges = computed(() => chargesAnnuelles(anneeSynthese.value));
+const totalCharges = computed(() => totalChargesAnnuelles(anneeSynthese.value));
+const moisEnLettres = (mois: string) => new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${mois}-01T00:00:00Z`));
 /**
  * Résultat de l'année : recette des étudiants payeurs − facture INTEC (payeurs + BUMEX) = marge brute ;
  * marge brute − charges fixes (loyer) = bénéfice net. Recette prévue (tarif) pour l'année en cours,
@@ -449,11 +452,11 @@ const resultat = computed(() => {
     const calculer = (recette: number) => {
         const margeEtudiants = t.coutIntecPayeursMru === null ? null : recette - t.coutIntecPayeursMru;
         const margeBrute = margeBruteInsec(margeEtudiants, t.financementBumexMru);
-        return { recette, margeEtudiants, margeBrute, net: beneficeNetInsec(margeBrute, totalChargesAnnuelles()) };
+        return { recette, margeEtudiants, margeBrute, net: beneficeNetInsec(margeBrute, totalCharges.value) };
     };
     const prevu = calculer(t.tarifEtudiantsMru);
     const realise = calculer(recouvrement.value.encaisse);
-    return { ...(cloturee.value ? realise : prevu), prevu, realise, charges: totalChargesAnnuelles() };
+    return { ...(cloturee.value ? realise : prevu), prevu, realise };
 });
 const rouge = (v: number | null) => v !== null && v < 0;
 </script>
@@ -1074,8 +1077,8 @@ const rouge = (v: number | null) => v !== null && v < 0;
                         </p>
                         <p class="text-xs text-gray-600">
                             <template v-if="resultat.net === null">Saisissez le taux EUR/MRU pour calculer la marge et le bénéfice.</template>
-                            <template v-else-if="cloturee">Calculé sur l’argent réellement encaissé, une fois l’INTEC et le loyer payés.</template>
-                            <template v-else>Si tous les étudiants paient ce qui est prévu, une fois l’INTEC et le loyer payés.</template>
+                            <template v-else-if="cloturee">Calculé sur l’argent réellement encaissé, une fois l’INTEC{{ charges.length ? ' et le loyer payés' : ' payé (pas de loyer cette année)' }}.</template>
+                            <template v-else>Si tous les étudiants paient ce qui est prévu, une fois l’INTEC{{ charges.length ? ' et le loyer payés' : ' payé' }}.</template>
                         </p>
                         <p v-if="resultat.margeBrute !== null" class="text-sm text-gray-700">Marge brute : <strong class="tabular-nums" :class="rouge(resultat.margeBrute) ? 'text-red-700' : 'text-emerald-700'">{{ montant(resultat.margeBrute) }} MRU</strong></p>
                     </div>
@@ -1097,8 +1100,12 @@ const rouge = (v: number | null) => v !== null && v < 0;
                             <dd class="font-bold tabular-nums" :class="rouge(resultat.margeBrute) ? 'text-red-700' : 'text-emerald-700'">{{ resultat.margeBrute === null ? '—' : `${montant(resultat.margeBrute)} MRU` }}</dd>
                         </div>
                         <div v-for="c in charges" :key="c.cle" class="flex items-baseline justify-between gap-4 py-2">
-                            <dt class="text-gray-600">− {{ c.libelle }} <span class="text-gray-400">({{ montant(c.mensuelMru) }} MRU par mois × 12 mois)</span></dt>
+                            <dt class="text-gray-600">− {{ c.libelle }} <span class="text-gray-400">({{ montant(c.mensuelMru) }} MRU par mois × {{ c.mois }} mois, de {{ moisEnLettres(c.premierMois) }} à {{ moisEnLettres(c.dernierMois) }})</span></dt>
                             <dd class="font-semibold text-gray-900 tabular-nums">{{ montant(c.annuelMru) }} MRU</dd>
+                        </div>
+                        <div v-if="!charges.length" class="flex items-baseline justify-between gap-4 py-2">
+                            <dt class="text-gray-600">− Charges fixes <span class="text-gray-400">(aucune cette année : le loyer commence en septembre 2026)</span></dt>
+                            <dd class="font-semibold text-gray-900 tabular-nums">0 MRU</dd>
                         </div>
                         <div class="flex items-baseline justify-between gap-4 pt-3">
                             <dt class="font-semibold text-gray-900">= Bénéfice net</dt>
@@ -1111,7 +1118,7 @@ const rouge = (v: number | null) => v !== null && v < 0;
                             Électricité et eau seront ajoutées plus tard.
                         </p>
                         <p v-else-if="cloturee" class="mt-3 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
-                            <i class="fa-solid fa-circle-info mr-1 text-insec-500"></i>Prévu au tarif : {{ montant(totauxFinanciers.tarifEtudiantsMru) }} MRU ; {{ montant(recouvrement.reste) }} MRU n’ont jamais été encaissés. Électricité et eau seront ajoutées plus tard.
+                            <i class="fa-solid fa-circle-info mr-1 text-insec-500"></i>Prévu au tarif : {{ montant(totauxFinanciers.tarifEtudiantsMru) }} MRU ; {{ montant(recouvrement.reste) }} MRU n’ont jamais été encaissés.
                         </p>
                     </dl>
                 </div>

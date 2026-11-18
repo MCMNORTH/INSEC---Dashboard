@@ -129,26 +129,52 @@ export function margeBruteInsec(margeEtudiantsMru: number | null | undefined, co
 }
 
 /**
- * Charges fixes de l'INSEC, en MRU par mois. L'électricité et l'eau s'ajouteront ici.
- * Une année scolaire compte 12 mois de charges.
+ * Charges fixes de l'INSEC, en MRU par mois, à partir du mois indiqué (AAAA-MM). L'électricité et l'eau s'ajouteront ici.
+ * Le loyer n'existe que depuis septembre 2026 : les années précédentes n'ont aucune charge fixe.
  */
 export const CHARGES_MENSUELLES = [
-    { cle: 'loyer', libelle: 'Loyer des locaux', mensuelMru: 40_000 },
+    { cle: 'loyer', libelle: 'Loyer des locaux', mensuelMru: 40_000, depuis: '2026-09' },
 ] as const;
+/** Une année scolaire AAAA-BBBB va de septembre AAAA à août BBBB (12 mois). */
 export const MOIS_PAR_ANNEE_SCOLAIRE = 12;
 
-/** Charges fixes d'une année scolaire, poste par poste (montant mensuel × 12 mois). */
-export function chargesAnnuelles(): { cle: string; libelle: string; mensuelMru: number; annuelMru: number }[] {
-    return CHARGES_MENSUELLES.map((c) => ({ ...c, annuelMru: c.mensuelMru * MOIS_PAR_ANNEE_SCOLAIRE }));
+/** Mois (AAAA-MM) d'une année scolaire « AAAA-BBBB », de septembre à août ; vide si l'identifiant est invalide. */
+export function moisAnneeScolaire(anneeId: string | null | undefined): string[] {
+    const debut = Number(/^(\d{4})-\d{4}$/.exec(anneeId ?? '')?.[1]);
+    if (!debut) return [];
+    return Array.from({ length: MOIS_PAR_ANNEE_SCOLAIRE }, (_, k) => ajouterMois(`${debut}-09-01`, k).slice(0, 7));
 }
 
-/** Total des charges fixes d'une année scolaire, en MRU. */
-export function totalChargesAnnuelles(): number {
-    return chargesAnnuelles().reduce((total, c) => total + c.annuelMru, 0);
+export interface ChargeAnnuelle {
+    cle: string;
+    libelle: string;
+    mensuelMru: number;
+    /** Nombre de mois de l'année scolaire où la charge est due. */
+    mois: number;
+    /** Premier et dernier mois facturés (AAAA-MM). */
+    premierMois: string;
+    dernierMois: string;
+    annuelMru: number;
+}
+
+/** Charges fixes d'une année scolaire, poste par poste (montant mensuel × mois dus) ; les postes sans mois dû sont omis. */
+export function chargesAnnuelles(anneeId: string | null | undefined): ChargeAnnuelle[] {
+    const moisAnnee = moisAnneeScolaire(anneeId);
+    return CHARGES_MENSUELLES.flatMap((c) => {
+        const dus = moisAnnee.filter((m) => m >= c.depuis);
+        return dus.length
+            ? [{ cle: c.cle, libelle: c.libelle, mensuelMru: c.mensuelMru, mois: dus.length, premierMois: dus[0], dernierMois: dus[dus.length - 1], annuelMru: c.mensuelMru * dus.length }]
+            : [];
+    });
+}
+
+/** Total des charges fixes d'une année scolaire, en MRU (0 avant septembre 2026). */
+export function totalChargesAnnuelles(anneeId: string | null | undefined): number {
+    return chargesAnnuelles(anneeId).reduce((total, c) => total + c.annuelMru, 0);
 }
 
 /** Bénéfice net de l'INSEC : marge brute moins les charges fixes de l'année. Null si la marge brute est inconnue. */
-export function beneficeNetInsec(margeBruteMru: number | null | undefined, chargesMru: number = totalChargesAnnuelles()): number | null {
+export function beneficeNetInsec(margeBruteMru: number | null | undefined, chargesMru: number): number | null {
     if (margeBruteMru === null || margeBruteMru === undefined) return null;
     return margeBruteMru - chargesMru;
 }
