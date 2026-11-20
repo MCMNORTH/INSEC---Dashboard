@@ -11,7 +11,7 @@ import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email
 import { s, valider, z } from '../lib/validation.js';
 import {
     dateDuJour, diplomeTarife, etatEcheances, formaterMontant, horaireExamen, montantDuSelonTarif, montantEnLettres, montantNet, numeroFormate, resultatValide,
-    ROLES_ADMIN, ROLES_VISION_ADMIN, soldeRestant, statutPaiement, TARIFS_UE, TARIFS_VALIDATION, validationDe,
+    ROLES_ADMIN, ROLES_VISION_ADMIN, soldeRestant, statutPaiement, type SituationFinanciere, TARIFS_UE, TARIFS_VALIDATION, validationDe,
 } from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
 
@@ -828,14 +828,25 @@ async function expedierDocument(
 
     const libelles = { facture: 'Facture d’inscription', recu: 'Reçu de paiement', convocation: 'Convocation à l’examen' };
     const libelle = libelles[type];
+    // Reçu : rappel du paiement et du reste à payer, pour que l'étudiant sache où il en est.
+    const versement = type === 'recu' ? await exiger(null, col.versements().doc(id), 'Versement introuvable.') : null;
+    const detailsRecu: Record<string, string> = versement ? {
+        'Reçu n°': String(versement.numeroRecu ?? '—'),
+        'Montant reçu': `${formaterMontant(Number(versement.montant ?? 0))} MRU`,
+        'Date du paiement': String(versement.dateVersement ?? '').split('-').reverse().join('/'),
+        'Reste à payer à ce jour': `${formaterMontant(soldeRestant(contexte.inscription as unknown as SituationFinanciere))} MRU`,
+    } : {};
     const email: Email = {
         destinataire: contexte.email,
         nomDestinataire: `${contexte.etudiant.prenom ?? ''} ${contexte.etudiant.nom ?? ''}`.trim() || null,
         type: 'Document PDF',
         sujet: `INSEC · ${libelle}`,
         titre: libelle,
-        message: 'Veuillez trouver votre document en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.',
+        message: type === 'recu'
+            ? 'Nous confirmons la bonne réception de votre paiement. Vous trouverez votre reçu en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.'
+            : 'Veuillez trouver votre document en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.',
         details: {
+            ...detailsRecu,
             Document: pdf.nom,
             'Année académique': String(contexte.annee.libelle ?? ''),
             ...(contexte.horaire ? { 'Date et heure de l’épreuve': contexte.horaire } : {}),
@@ -859,6 +870,10 @@ async function expedierDocument(
     const statut = await expedier(journal.id, email, transport, [
         { filename: pdf.nom, content: contenu, contentType: 'application/pdf' },
     ]);
+    // Le dossier affiche quand et à qui le reçu a été envoyé.
+    if (type === 'recu' && statut !== 'Échec') {
+        await col.versements().doc(id).update({ recuEnvoyeLe: FieldValue.serverTimestamp(), recuEnvoyeA: contexte.email, nbEnvoisRecu: FieldValue.increment(1) });
+    }
     return { statut, email, libelle };
 }
 

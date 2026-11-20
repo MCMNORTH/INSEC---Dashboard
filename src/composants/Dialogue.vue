@@ -91,7 +91,7 @@ watch(() => dialogue.ouvert, async (ouvert) => {
                     </label>
 
                     <div class="mt-7 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
-                        <button type="button" class="bouton-secondaire" @click="fermerDialogue(null)">Annuler</button>
+                        <button type="button" class="bouton-secondaire" @click="fermerDialogue(null)">{{ dialogue.options.libelleAnnuler ?? 'Annuler' }}</button>
                         <button
                             ref="boutonConfirmer"
                             type="button"

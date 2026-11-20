@@ -28,6 +28,25 @@ export async function telecharger(operation: string, donnees: object): Promise<v
     enregistrer(await appeler<FichierGenere>(operation, donnees));
 }
 
+/**
+ * Génère un PDF côté serveur et l'ouvre dans un nouvel onglet pour le consulter.
+ * L'onglet est ouvert tout de suite (sinon le navigateur le bloque) ; à défaut, le fichier est téléchargé.
+ */
+export async function ouvrir(operation: string, donnees: object): Promise<void> {
+    const onglet = window.open('', '_blank');
+    try {
+        const fichier = await appeler<FichierGenere>(operation, donnees);
+        if (!onglet) return enregistrer(fichier);
+        const octets = Uint8Array.from(atob(fichier.contenu), (c) => c.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([octets], { type: fichier.mimeType ?? 'application/pdf' }));
+        onglet.location.href = url;
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (erreur) {
+        onglet?.close();
+        throw erreur;
+    }
+}
+
 export function lireEnBase64(fichier: File): Promise<string> {
     return new Promise((resoudre, rejeter) => {
         const lecteur = new FileReader();

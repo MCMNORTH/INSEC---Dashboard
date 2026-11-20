@@ -13,6 +13,8 @@ export interface OptionsDialogue {
     /** Libellé du bouton de confirmation (« Confirmer » par défaut). */
     libelle?: string;
     ton?: TonDialogue;
+    /** Libellé du bouton d'annulation (« Annuler » par défaut). */
+    libelleAnnuler?: string;
 }
 
 export interface OptionsMotif extends OptionsDialogue {
