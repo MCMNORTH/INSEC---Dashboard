@@ -10,10 +10,12 @@ import { db, FieldValue, FUSEAU } from '../lib/firebase.js';
 import { expedier, SMTP_PASSWORD, transportSmtp, type Email } from '../lib/email.js';
 import { s, valider, z } from '../lib/validation.js';
 import {
+    type CoordonneesPaiement, ibanFormate, numeroMobileFormate, ribDepuisIban,
     dateDuJour, diplomeTarife, etatEcheances, formaterMontant, horaireExamen, montantDuSelonTarif, montantEnLettres, montantNet, numeroFormate, resultatValide,
     ROLES_ADMIN, ROLES_VISION_ADMIN, soldeRestant, statutPaiement, type SituationFinanciere, TARIFS_UE, TARIFS_VALIDATION, validationDe,
 } from '../shared/domaine.js';
 import { formaterDateHeure } from './examens.js';
+import { chargerCoordonneesPaiement } from './finances.js';
 
 const require = createRequire(import.meta.url);
 const polices = require('pdfmake/fonts/Roboto.js') as Record<string, Record<string, string>>;
@@ -360,15 +362,17 @@ const HAUTEUR_CACHET = 128;
  * à l’emplacement habituel des signatures. Un espace réservé de même hauteur dans le flux garantit
  * qu’aucun contenu ne passe dessous : s’il ne reste pas assez de place, le bloc passe en bas de la page suivante.
  */
-function blocCachet(mention: string): unknown[] {
+function blocCachet(mention: string | Record<string, unknown>, hauteur = HAUTEUR_CACHET): unknown[] {
     const largeur = PAGE_A4.largeur - MARGES_FINANCIERES.gauche - MARGES_FINANCIERES.droite;
     return [
         // Espace réservé dans le flux, de la hauteur du bloc ancré (passe à la page suivante s'il ne tient pas).
-        { canvas: [{ type: 'rect', x: 0, y: 0, w: 1, h: HAUTEUR_CACHET, color: '#ffffff' }] },
+        { canvas: [{ type: 'rect', x: 0, y: 0, w: 1, h: hauteur, color: '#ffffff' }] },
         {
-            absolutePosition: { x: MARGES_FINANCIERES.gauche, y: PAGE_A4.hauteur - MARGES_FINANCIERES.bas - HAUTEUR_CACHET },
+            absolutePosition: { x: MARGES_FINANCIERES.gauche, y: PAGE_A4.hauteur - MARGES_FINANCIERES.bas - hauteur },
             columns: [
-                { width: largeur - 154, text: mention, fontSize: 8.5, color: GRIS, margin: [0, 40, 0, 0] },
+                typeof mention === 'string'
+                    ? { width: largeur - 154, text: mention, fontSize: 8.5, color: GRIS, margin: [0, 40, 0, 0] }
+                    : { width: largeur - 154, ...mention },
                 {
                     width: 130,
                     stack: [
@@ -380,6 +384,81 @@ function blocCachet(mention: string): unknown[] {
             columnGap: 24,
         },
     ];
+}
+
+/** Hauteur du pied de facture quand l'encadré des moyens de paiement accompagne le cachet. */
+const HAUTEUR_PIED_PAIEMENT = 150;
+
+/**
+ * Encadré « Moyens de paiement » de la facture, placé en bas de la dernière page à gauche du cachet :
+ * virement (titulaire, banque, RIB, IBAN, SWIFT), Bankily / Sedad, espèces au secrétariat,
+ * puis le motif à indiquer pour retrouver le paiement. Seuls les moyens renseignés sont imprimés.
+ */
+export function blocMoyensPaiement(c: CoordonneesPaiement, reference: string, etudiant: string): Record<string, unknown> {
+    const petiteEtiquette = (texte: string, marge: number[] = [0, 0, 0, 3]) => ({ ...etiquette(texte), fontSize: 6.5, margin: marge });
+    const ligne = (libelle: string, valeur: string, gras = false) => ({
+        columns: [
+            { text: libelle, width: 40, color: GRIS, fontSize: 7.5 },
+            { text: valeur, width: '*', bold: gras, fontSize: 8 },
+        ],
+        margin: [0, 0, 0, 1.5],
+    });
+    const rib = c.iban ? ribDepuisIban(c.iban) : null;
+    const virement = c.iban
+        ? [
+              petiteEtiquette('Virement bancaire'),
+              ...(c.titulaire ? [ligne('Titulaire', c.titulaire, true)] : []),
+              ...(c.banque || c.domiciliation ? [ligne('Banque', [c.banque, c.domiciliation].filter(Boolean).join(' · '))] : []),
+              ...(rib ? [ligne('RIB', `${rib.banque} ${rib.agence} ${rib.compte} ${rib.cle}`)] : []),
+              ligne('IBAN', ibanFormate(c.iban), true),
+              ...(c.bic ? [ligne('SWIFT', c.bic)] : []),
+          ]
+        : null;
+    // Un même numéro pour Bankily et Sedad n'est imprimé qu'une fois.
+    const mobiles: [string, string][] = c.bankily && c.bankily === c.sedad
+        ? [['Bankily · Sedad', c.bankily]]
+        : [...(c.bankily ? [['Bankily', c.bankily] as [string, string]] : []), ...(c.sedad ? [['Sedad', c.sedad] as [string, string]] : [])];
+    const aDistance = [
+        ...(mobiles.length
+            ? [
+                  petiteEtiquette('Paiement mobile'),
+                  ...mobiles.flatMap(([service, numero]) => [
+                      { text: service, fontSize: 7.5, color: GRIS },
+                      { text: numeroMobileFormate(numero), fontSize: 12, bold: true, color: MARINE, margin: [0, 0, 0, 5] },
+                  ]),
+              ]
+            : []),
+        petiteEtiquette('Espèces'),
+        { text: 'Au secrétariat de l’INSEC', fontSize: 8 },
+    ];
+    return {
+        table: {
+            widths: ['*'],
+            body: [[{
+                stack: [
+                    { text: 'MOYENS DE PAIEMENT', fontSize: 8, bold: true, color: MARINE, characterSpacing: 1, margin: [0, 0, 0, 6] },
+                    virement
+                        ? { columns: [{ width: '*', stack: virement }, { width: 88, stack: aDistance }], columnGap: 10 }
+                        : { stack: aDistance },
+                    {
+                        text: [
+                            'Motif à indiquer : ',
+                            { text: `${reference} · ${etudiant}`, bold: true },
+                            '. Remettez la preuve du paiement au secrétariat ; seuls les versements validés sont déduits.',
+                        ],
+                        fontSize: 7.5,
+                        color: '#374151',
+                        margin: [0, 6, 0, 0],
+                    },
+                ],
+            }]],
+        },
+        layout: {
+            hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => FILET, vLineColor: () => FILET,
+            fillColor: () => '#f8fafc',
+            paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 9, paddingBottom: () => 9,
+        },
+    };
 }
 
 /** Mention légale du montant en toutes lettres (factures et reçus). */
@@ -511,6 +590,7 @@ async function facture(id: string, acteur?: Acteur) {
             ? 'Inscription annulée : aucun montant n’est dû au titre de cette inscription.'
             : null;
     const { numero: reference, emiseLe } = await numeroterFacture(id, acteur);
+    const coordonnees = await chargerCoordonneesPaiement();
     const codesUe = ues.map((u) => u.get('code')).filter(Boolean);
     const dispensees = inscription.ueDispenseesIds?.length
         ? await db.getAll(...inscription.ueDispenseesIds.map((u: string) => col.ues().doc(u)))
@@ -609,7 +689,10 @@ async function facture(id: string, acteur?: Acteur) {
                   ),
               ]
             : []),
-        ...blocCachet('Seuls les versements validés sont déduits. Merci de rappeler le numéro de la facture lors de chaque règlement.'),
+        // Comment payer (seulement s'il reste quelque chose à régler) : en bas de page, à gauche du cachet.
+        ...(solde > 0 && !mentionStatut
+            ? blocCachet(blocMoyensPaiement(coordonnees, reference, nomEtudiant(etudiant)), HAUTEUR_PIED_PAIEMENT)
+            : blocCachet('Seuls les versements validés sont déduits. Merci de rappeler le numéro de la facture lors de chaque règlement.')),
     ];
     return {
         nom: nomFichier('Facture', nomEtudiant(etudiant), String(annee.libelle ?? '')),
@@ -844,7 +927,9 @@ async function expedierDocument(
         titre: libelle,
         message: type === 'recu'
             ? 'Nous confirmons la bonne réception de votre paiement. Vous trouverez votre reçu en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.'
-            : 'Veuillez trouver votre document en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.',
+            : type === 'facture'
+              ? 'Veuillez trouver votre facture en pièce jointe. Les moyens de paiement (virement, Bankily, Sedad, espèces) y sont indiqués. Pour toute question, contactez le secrétariat de l’INSEC.'
+              : 'Veuillez trouver votre document en pièce jointe. Pour toute question, contactez le secrétariat de l’INSEC.',
         details: {
             ...detailsRecu,
             Document: pdf.nom,

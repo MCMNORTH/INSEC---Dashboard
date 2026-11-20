@@ -9,6 +9,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { appeler } from '../api';
 import BadgeStatut from '../composants/BadgeStatut.vue';
 import Chargement from '../composants/Chargement.vue';
+import CoordonneesPaiement from '../composants/CoordonneesPaiement.vue';
 import DocumentsFinanciers from '../composants/DocumentsFinanciers.vue';
 import { useRequete } from '../donnees';
 import { ouvrir as ouvrirPdf, telecharger } from '../fichiers';
@@ -1244,6 +1245,8 @@ const rouge = (v: number | null) => v !== null && v < 0;
                     </div>
                 </section>
             </div>
+
+            <CoordonneesPaiement v-if="voitAdmin || peutModifier" />
 
             <DocumentsFinanciers v-if="anneeSynthese && (peutModifier || voitAdmin)" :annee-id="anneeSynthese" :libelle-annee="carte?.libelle ?? anneeSynthese" />
 
