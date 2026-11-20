@@ -15,6 +15,8 @@ const LIBELLES: Record<string, string> = {
     motivation: 'Motivation', noteInterne: 'Note interne', role: 'Rôle', motDePasse: 'Mot de passe',
     etudiantId: 'Dossier étudiant', enseignantId: 'Dossier enseignant', type: 'Type', dateExpiration: 'Date d’expiration',
     confirmation: 'Confirmation', mode: 'Mode', dateReglement: 'Date du règlement', motif: 'Motif',
+    titulaire: 'Titulaire du compte', banque: 'Banque', domiciliation: 'Agence', iban: 'IBAN', bic: 'Code SWIFT / BIC',
+    bankily: 'Numéro Bankily', sedad: 'Numéro Sedad',
 };
 
 export function valider<S extends z.ZodType>(schema: S, donnees: unknown): z.output<S> {

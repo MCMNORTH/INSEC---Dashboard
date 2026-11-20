@@ -5,6 +5,7 @@ import { col, controlerModificationConcurrente, exiger, prochainNumero } from '.
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, valeursAttendues, z } from '../lib/validation.js';
 import {
+    bicValide, COORDONNEES_PAIEMENT_VIDES, type CoordonneesPaiement, ibanNormalise, ibanValide, numeroMobileValide, ROLES_COORDONNEES_PAIEMENT,
     dateDuJour, decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, ROLES_LECTURE, ROLES_VISION_ADMIN,
     soldeRestant, STATUT_VERSEMENT_ANNULE, STATUTS_VERSEMENT, type Echeance, type SituationFinanciere,
 } from '../shared/domaine.js';
@@ -304,4 +305,61 @@ export const modifierTauxEuroMru = operation('modifierTauxEuroMru', ROLES_VISION
         modifieLe: modifieLe && typeof modifieLe.toDate === 'function' ? modifieLe.toDate().toISOString() : new Date().toISOString(),
         message: 'Taux EUR/MRU enregistré et journalisé.',
     };
+});
+
+// Coordonnées de paiement imprimées sur les factures (virement, Bankily, Sedad).
+// Réglage en base plutôt que dans le code : le dépôt est public et les numéros peuvent changer.
+const coordonneesPaiementRef = () => db.collection('parametres').doc('coordonneesPaiement');
+const CHAMPS_COORDONNEES = Object.keys(COORDONNEES_PAIEMENT_VIDES) as (keyof CoordonneesPaiement)[];
+
+/** Coordonnées enregistrées (champs vides à null si rien n'est encore saisi). */
+export async function chargerCoordonneesPaiement(): Promise<CoordonneesPaiement> {
+    const document = await coordonneesPaiementRef().get();
+    return Object.fromEntries(CHAMPS_COORDONNEES.map((c) => {
+        const valeur = document.get(c);
+        return [c, typeof valeur === 'string' && valeur.trim() ? valeur : null];
+    })) as unknown as CoordonneesPaiement;
+}
+
+export const lireCoordonneesPaiement = operation('lireCoordonneesPaiement', ROLES_LECTURE, async () => {
+    const document = await coordonneesPaiementRef().get();
+    const modifieLe = document.get('modifieLe');
+    return {
+        coordonnees: await chargerCoordonneesPaiement(),
+        modifieLe: modifieLe && typeof modifieLe.toDate === 'function' ? modifieLe.toDate().toISOString() : null,
+    };
+});
+
+const numeroMobile = () => s.texteOptionnel(20)
+    .refine((v) => v === null || numeroMobileValide(v), 'numéro invalide : 8 chiffres commençant par 2, 3 ou 4.')
+    .transform((v) => (v === null ? null : v.replace(/\s+/g, '')));
+
+/** Enregistre les coordonnées imprimées sur les factures : super-administrateur uniquement, journalisé. */
+export const modifierCoordonneesPaiement = operation('modifierCoordonneesPaiement', ROLES_COORDONNEES_PAIEMENT, async (donnees, acteur) => {
+    const v: CoordonneesPaiement = valider(
+        z.object({
+            titulaire: s.texteOptionnel(120),
+            banque: s.texteOptionnel(120),
+            domiciliation: s.texteOptionnel(120),
+            iban: s.texteOptionnel(50)
+                .refine((x) => x === null || ibanValide(x), 'invalide : vérifiez les chiffres (la clé de contrôle ne correspond pas).')
+                .transform((x) => (x === null ? null : ibanNormalise(x))),
+            bic: s.texteOptionnel(11)
+                .refine((x) => x === null || bicValide(x), 'code SWIFT / BIC invalide (8 ou 11 caractères).')
+                .transform((x) => (x === null ? null : x.toUpperCase())),
+            bankily: numeroMobile(),
+            sedad: numeroMobile(),
+        }).superRefine((c, ctx) => {
+            if (c.iban && !c.titulaire) ctx.addIssue({ code: 'custom', path: ['titulaire'], message: 'indiquez le titulaire du compte qui reçoit les virements.' });
+        }),
+        donnees,
+    );
+    const ref = coordonneesPaiementRef();
+    await db.runTransaction(async (tx) => {
+        const document = await tx.get(ref);
+        const avant = document.exists ? Object.fromEntries(CHAMPS_COORDONNEES.map((c) => [c, document.get(c) ?? null])) : null;
+        tx.set(ref, { ...v, modifieLe: FieldValue.serverTimestamp(), modifiePar: acteur.uid });
+        auditerModele(tx, acteur, 'Paramètre financier', ref.id, document.exists ? 'updated' : 'created', avant, { ...v });
+    });
+    return { coordonnees: v, modifieLe: new Date().toISOString(), message: 'Coordonnées de paiement enregistrées : elles figurent désormais sur les factures.' };
 });

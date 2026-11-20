@@ -463,3 +463,68 @@ export function numeroFormate(prefixe: string, numero: number, date?: Date): str
     const periode = date ? `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}-` : '';
     return `${prefixe}-${periode}${String(numero).padStart(6, '0')}`;
 }
+
+// ---------------------------------------------------------------------------
+// Moyens de paiement imprimés sur les factures (virement, Bankily, Sedad).
+// Les coordonnées sont un réglage (parametres/coordonneesPaiement), pas une constante du code :
+// le dépôt est public et seul le super-administrateur peut les changer.
+// ---------------------------------------------------------------------------
+
+/** Modification des coordonnées de paiement imprimées sur les factures : super-administrateur uniquement. */
+export const ROLES_COORDONNEES_PAIEMENT: readonly Role[] = ['super_admin'];
+
+export interface CoordonneesPaiement {
+    /** Titulaire du compte bancaire (ex. BUMEX SA). */
+    titulaire: string | null;
+    /** Nom de la banque. */
+    banque: string | null;
+    /** Agence qui tient le compte. */
+    domiciliation: string | null;
+    iban: string | null;
+    /** Code SWIFT / BIC de la banque. */
+    bic: string | null;
+    /** Numéro Bankily (8 chiffres). */
+    bankily: string | null;
+    /** Numéro Sedad (8 chiffres). */
+    sedad: string | null;
+}
+
+export const COORDONNEES_PAIEMENT_VIDES: CoordonneesPaiement = {
+    titulaire: null, banque: null, domiciliation: null, iban: null, bic: null, bankily: null, sedad: null,
+};
+
+/** IBAN sans espaces, en majuscules. */
+export const ibanNormalise = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
+
+/** Contrôle de l'IBAN (format et clé ISO 13616 « modulo 97 »), pour éviter une faute de frappe sur les factures. */
+export function ibanValide(iban: string): boolean {
+    const v = ibanNormalise(iban);
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(v)) return false;
+    if (v.startsWith('MR') && v.length !== 27) return false;
+    const chiffres = (v.slice(4) + v.slice(0, 4)).replace(/[A-Z]/g, (l) => String(l.charCodeAt(0) - 55));
+    let reste = 0;
+    for (const c of chiffres) reste = (reste * 10 + Number(c)) % 97;
+    return reste === 1;
+}
+
+/** IBAN lisible, par groupes de quatre caractères. */
+export const ibanFormate = (iban: string) => ibanNormalise(iban).replace(/(.{4})(?=.)/g, '$1 ');
+
+/** Relevé d'identité bancaire (banque, agence, compte, clé) tiré d'un IBAN mauritanien ; null pour un autre pays. */
+export function ribDepuisIban(iban: string): { banque: string; agence: string; compte: string; cle: string } | null {
+    const v = ibanNormalise(iban);
+    if (!v.startsWith('MR') || v.length !== 27) return null;
+    return { banque: v.slice(4, 9), agence: v.slice(9, 14), compte: v.slice(14, 25), cle: v.slice(25, 27) };
+}
+
+/** Code SWIFT / BIC : 8 ou 11 caractères. */
+export const bicValide = (bic: string) => /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic.trim().toUpperCase());
+
+/** Numéro mauritanien de paiement mobile : 8 chiffres, commençant par 2, 3 ou 4. */
+export const numeroMobileValide = (numero: string) => /^[234]\d{7}$/.test(numero.replace(/\s+/g, ''));
+
+/** Numéro mobile lisible : 44 43 10 43. */
+export const numeroMobileFormate = (numero: string) => numero.replace(/\s+/g, '').replace(/(\d{2})(?=\d)/g, '$1 ');
+
+/** Vrai quand au moins un moyen de paiement à distance (virement ou mobile) est renseigné. */
+export const coordonneesRenseignees = (c: CoordonneesPaiement) => Boolean(c.iban || c.bankily || c.sedad);

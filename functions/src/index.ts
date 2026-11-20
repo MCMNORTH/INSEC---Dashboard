@@ -14,7 +14,7 @@ export {
     creerExamen, enregistrerPresencesExamen, enregistrerResultat, mettreAJourPreparationExamen, modifierExamen, publierResultatsExamen,
 } from './handlers/examens.js';
 export {
-    ajouterEcheance, ajouterVersement, annulerVersement, confirmerReglementBumex2024, enregistrerReglementBumex, genererEcheancier, lireTauxEuroMru, modifierEcheance,
+    ajouterEcheance, ajouterVersement, annulerVersement, confirmerReglementBumex2024, enregistrerReglementBumex, genererEcheancier, lireCoordonneesPaiement, lireTauxEuroMru, modifierCoordonneesPaiement, modifierEcheance,
     modifierSituationFinanciere, modifierTauxEuroMru, supprimerEcheance, traiterVersement,
 } from './handlers/finances.js';
 export { relancerPaiement, relancerTousLesRetards } from './handlers/relances.js';
