@@ -48,7 +48,8 @@ describe('Corriger une erreur en Finances', () => {
         expect((await inscription()).totalVerse).toBe(30000);
         await attendreErreur(appeler(traiterVersement, { id, statut: 'Validée' }, finance), 'failed-precondition');
         expect((await inscription()).totalVerse).toBe(30000);
-        expect((await liste('journalEmails')).some((e) => e.type === 'Paiement')).toBe(true);
+        // La validation n'envoie aucun e-mail : le reçu s'envoie à la main.
+        expect(await liste('journalEmails')).toHaveLength(0);
     });
 
     it('rejette un versement en attente avec un motif obligatoire, sans toucher au solde', async () => {

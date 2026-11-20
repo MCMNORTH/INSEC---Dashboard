@@ -103,6 +103,10 @@ export interface Versement {
     numeroRecu: string;
     motifRejet?: string | null;
     motifAnnulation?: string | null;
+    /** Dernier envoi manuel du reçu par e-mail. */
+    recuEnvoyeLe?: { toDate(): Date } | null;
+    recuEnvoyeA?: string | null;
+    nbEnvoisRecu?: number;
 }
 
 export interface Examen {

@@ -11,7 +11,7 @@ import BadgeStatut from '../composants/BadgeStatut.vue';
 import Chargement from '../composants/Chargement.vue';
 import DocumentsFinanciers from '../composants/DocumentsFinanciers.vue';
 import { useRequete } from '../donnees';
-import { telecharger } from '../fichiers';
+import { ouvrir as ouvrirPdf, telecharger } from '../fichiers';
 import { db } from '../firebase';
 import { aujourdhui, date, montant } from '../format';
 import { confirmer, demanderMotif } from '../dialogue';
@@ -153,8 +153,34 @@ const majSituation = () => executer('modifierSituationFinanciere', {
 }, () => Object.assign(situationLue, { id: inscription.value!.id, ...situation }));
 const ajouterEcheance = () =>
     executer('ajouterEcheance', { inscriptionId: inscription.value!.id, ...echeance }, () => Object.assign(echeance, { libelle: '', montant: null, dateEcheance: '' }));
-const ajouterVersement = () =>
-    executer('ajouterVersement', { inscriptionId: inscription.value!.id, ...versement }, () => Object.assign(versement, { montant: null, reference: '', note: '' }));
+async function ajouterVersement() {
+    const valide = versement.statut === 'Validée';
+    const resultat = await soumettre(() => appeler<{ id: string; numeroRecu: string; message: string }>('ajouterVersement', { inscriptionId: inscription.value!.id, ...versement }));
+    if (!resultat) return;
+    notifier(resultat.message);
+    const enregistre = { id: resultat.id, montant: versement.montant ?? 0, dateVersement: versement.dateVersement, numeroRecu: resultat.numeroRecu };
+    Object.assign(versement, { montant: null, reference: '', note: '' });
+    if (valide) await proposerEnvoiRecu(enregistre);
+}
+// Le reçu n'est jamais envoyé automatiquement : on propose l'envoi juste après l'enregistrement.
+async function proposerEnvoiRecu(v: { id: string; montant: number; dateVersement: string; numeroRecu?: string | null }) {
+    if (!estAdmin.value || !emailEtudiantValide.value) return;
+    const ok = await confirmer({
+        titre: 'Versement enregistré. Envoyer le reçu ?',
+        message: `Aucun e-mail n’est parti. Vous pouvez envoyer le reçu maintenant à ${selectionne.value?.email?.trim()}, ou plus tard depuis la liste des versements.`,
+        details: { Reçu: v.numeroRecu ?? '—', Montant: `${montant(v.montant)} MRU`, Date: date(v.dateVersement) },
+        libelle: 'Envoyer le reçu',
+        libelleAnnuler: 'Plus tard',
+        ton: 'envoi',
+    });
+    if (ok) await expedierRecu(v.id);
+}
+async function expedierRecu(id: string) {
+    const resultat = await soumettre(() => appeler('envoyerDocumentParEmail', { type: 'recu', id }));
+    if (resultat) notifier(resultat.message ?? 'Reçu envoyé par e-mail.');
+}
+const voirRecu = (v: Versement) => soumettre(() => ouvrirPdf('genererPdf', { type: 'recu', id: v.id }));
+const dateEnvoi = (v: Versement) => (v.recuEnvoyeLe ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(v.recuEnvoyeLe.toDate()) : null);
 const genererEcheancier = () => executer('genererEcheancier', { inscriptionId: inscription.value!.id, ...echeancier }, () => (echeancier.remplacer = false));
 function editerEcheance(e: { id: string; libelle: string; montant: number; dateEcheance: string }) {
     echeanceEnCours.value = e.id;
@@ -175,8 +201,12 @@ async function supprimerEcheance(e: { id: string; libelle: string; montant: numb
 async function traiterVersement(v: Versement, statut: 'Validée' | 'Rejetée') {
     const details = { Montant: `${montant(v.montant)} MRU`, Date: date(v.dateVersement), Mode: v.modePaiement };
     if (statut === 'Validée') {
-        const ok = await confirmer({ titre: 'Valider ce versement ?', message: 'Il sera ajouté au total versé.', details, libelle: 'Valider le versement' });
-        if (ok) void executer('traiterVersement', { id: v.id, statut });
+        const ok = await confirmer({ titre: 'Valider ce versement ?', message: 'Il sera ajouté au total versé. Aucun e-mail n’est envoyé automatiquement.', details, libelle: 'Valider le versement' });
+        if (!ok) return;
+        const resultat = await soumettre(() => appeler('traiterVersement', { id: v.id, statut }));
+        if (!resultat) return;
+        notifier(resultat.message ?? 'Versement validé.');
+        await proposerEnvoiRecu(v);
         return;
     }
     const motif = await demanderMotif({
@@ -236,13 +266,29 @@ const couleurStatut = (statut: string) =>
 // Année clôturée : ce qui n'a pas été payé ne le sera plus, on ne relance pas.
 const etudiantsAnneeCloturee = computed(() => anneeCloturee(anneeEtudiants.value));
 const retardsAnnee = computed(() => etudiantsAnneeCloturee.value ? 0 : lignesEtudiants.value.filter(({ dossier }) => montantEnRetard(dossier) > 0).length);
+// Rappel de paiement : uniquement à la demande, possible dès qu'il reste un montant à payer (année en cours).
+const peutEnvoyerRappel = computed(() => {
+    const i = inscription.value;
+    return !!i && peutModifier.value && !etudiantsAnneeCloturee.value && i.financeur !== 'bumex' && i.statut !== 'annulée' && soldeRestant(i) > 0;
+});
 async function relancer() {
     const i = inscription.value!;
     const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim();
+    const retard = montantEnRetard(i);
+    const prochaine = [...(i.echeances ?? [])].sort((a, b) => a.dateEcheance.localeCompare(b.dateEcheance)).find((e) => e.dateEcheance >= aujourdhui());
     const ok = await confirmer({
-        titre: 'Envoyer une relance de paiement ?',
-        details: { Étudiant: nom, 'E-mail': selectionne.value?.email ?? '—', 'Montant en retard': `${montant(montantEnRetard(i))} MRU` },
-        libelle: 'Envoyer la relance',
+        titre: retard > 0 ? 'Envoyer un rappel de paiement ?' : 'Envoyer un point sur les paiements ?',
+        message: 'L’étudiant recevra par e-mail ce qu’il a déjà payé et ce qu’il lui reste à payer.',
+        details: {
+            Étudiant: nom,
+            'E-mail': selectionne.value?.email ?? '—',
+            'Montant total': `${montant(montantNet(i))} MRU`,
+            'Déjà payé': `${montant(Math.min(i.totalVerse ?? 0, montantNet(i)))} MRU`,
+            'Reste à payer': `${montant(soldeRestant(i))} MRU`,
+            ...(retard > 0 ? { 'Dont en retard': `${montant(retard)} MRU` } : {}),
+            ...(prochaine ? { 'Prochaine échéance': `${date(prochaine.dateEcheance)} · ${montant(prochaine.montant)} MRU` } : {}),
+        },
+        libelle: 'Envoyer le rappel',
         ton: 'envoi',
     });
     if (!ok) return;
@@ -270,12 +316,7 @@ const confirmerVersement = async () => {
     const valide = versement.statut === 'Validée';
     if (!valide && excedent <= 0 && !doublon) return ajouterVersement();
     const nom = `${selectionne.value?.prenom ?? ''} ${selectionne.value?.nom ?? ''}`.trim() || 'étudiant';
-    const email = selectionne.value?.email?.trim() ?? '';
-    const notification = !valide
-        ? ''
-        : emailEtudiantValide.value
-            ? ` Une confirmation sera envoyée à ${email}.`
-            : ' Aucune adresse e-mail valide : le paiement sera enregistré sans notification par e-mail.';
+    const notification = valide ? ' Aucun e-mail n’est envoyé automatiquement : vous pourrez envoyer le reçu ensuite.' : '';
     const avertissements = [
         ...(doublon ? [`Un versement de ${montant(doublon.montant)} MRU à cette date est déjà enregistré (reçu ${doublon.numeroRecu ?? '—'}) : vérifiez qu’il ne s’agit pas d’une double saisie.`] : []),
         ...(excedent > 0 ? [`Ce versement dépasse le reste à payer de ${montant(excedent)} MRU : cette somme sera à rembourser à l’étudiant.`] : []),
@@ -782,12 +823,13 @@ const rouge = (v: number | null) => v !== null && v < 0;
                                                 ><i class="fa-regular fa-envelope text-xs"></i>Envoyer la facture</button>
                                             </template>
                                             <button
-                                                v-if="montantEnRetard(inscription) > 0 && peutModifier && !etudiantsAnneeCloturee"
+                                                v-if="peutEnvoyerRappel"
                                                 type="button"
-                                                class="bouton-danger max-sm:w-full"
+                                                :class="[montantEnRetard(inscription) > 0 ? 'bouton-danger' : 'bouton-secondaire', 'max-sm:w-full']"
                                                 :disabled="envoi || !emailEtudiantValide || inscription.derniereRelanceLe === aujourdhui()"
+                                                :title="emailEtudiantValide ? `Envoyer à ${selectionne.email}` : 'Adresse e-mail absente ou invalide'"
                                                 @click="relancer"
-                                            ><i class="fa-regular fa-bell text-xs"></i>{{ inscription.derniereRelanceLe === aujourdhui() ? 'Déjà relancé aujourd’hui' : 'Relancer par e-mail' }}</button>
+                                            ><i class="fa-regular fa-bell text-xs"></i>{{ inscription.derniereRelanceLe === aujourdhui() ? 'Rappel déjà envoyé aujourd’hui' : 'Envoyer un rappel' }}</button>
                                         </div>
                                         <p class="mt-2 text-xs text-gray-500">
                                             <template v-if="emailEtudiantValide"><i class="fa-regular fa-envelope mr-1"></i>{{ selectionne.email }}</template>
@@ -796,7 +838,7 @@ const rouge = (v: number | null) => v !== null && v < 0;
                                                 <RouterLink v-if="aRole('admin', 'super_admin')" :to="`/etudiants/${selectionne.id}/modifier`" class="lien">corriger la fiche</RouterLink>
                                                 <template v-else>à corriger par l’administration</template>.
                                             </template>
-                                            <template v-if="inscription.derniereRelanceLe"> · Dernière relance le {{ date(inscription.derniereRelanceLe) }}<template v-if="inscription.nbRelances"> ({{ inscription.nbRelances }} au total)</template></template>
+                                            <template v-if="inscription.derniereRelanceLe"> · Dernier rappel le {{ date(inscription.derniereRelanceLe) }}<template v-if="inscription.nbRelances"> ({{ inscription.nbRelances }} au total)</template></template>
                                         </p>
                                     </section>
 
@@ -841,14 +883,27 @@ const rouge = (v: number | null) => v !== null && v < 0;
                                                         <BadgeStatut :statut="v.statut" />
                                                     </div>
                                                     <p v-if="v.motifAnnulation || v.motifRejet" class="mt-2 text-xs text-red-600">Motif : {{ v.motifAnnulation || v.motifRejet }}</p>
+                                                    <p v-if="voitAdmin && v.statut === 'Validée'" class="mt-2 flex items-center gap-1.5 text-xs" :class="v.recuEnvoyeLe ? 'text-emerald-700' : 'text-gray-500'">
+                                                        <i :class="v.recuEnvoyeLe ? 'fa-solid fa-circle-check' : 'fa-regular fa-envelope'"></i>
+                                                        <template v-if="v.recuEnvoyeLe">Reçu envoyé le {{ dateEnvoi(v) }}<template v-if="v.recuEnvoyeA"> à {{ v.recuEnvoyeA }}</template><template v-if="(v.nbEnvoisRecu ?? 0) > 1"> ({{ v.nbEnvoisRecu }} envois)</template></template>
+                                                        <template v-else>Reçu pas encore envoyé à l’étudiant</template>
+                                                    </p>
                                                     <p class="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 pt-2.5 text-xs">
                                                         <template v-if="v.statut === 'En attente' && peutModifier">
                                                             <button type="button" class="cursor-pointer font-semibold text-emerald-700 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Validée')">Valider</button>
                                                             <button type="button" class="cursor-pointer font-semibold text-red-600 hover:underline" :disabled="envoi" @click="traiterVersement(v, 'Rejetée')">Rejeter</button>
                                                         </template>
                                                         <template v-if="voitAdmin && v.statut === 'Validée'">
-                                                            <button type="button" class="lien" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))">Reçu PDF</button>
-                                                            <button v-if="estAdmin" type="button" class="lien disabled:cursor-not-allowed disabled:opacity-50" :disabled="envoi || !emailEtudiantValide" @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')">Envoyer le reçu</button>
+                                                            <button type="button" class="inline-flex cursor-pointer items-center gap-1.5 font-semibold text-insec-700 hover:underline disabled:opacity-50" :disabled="envoi" @click="voirRecu(v)"><i class="fa-regular fa-eye"></i>Voir le reçu</button>
+                                                            <button type="button" class="inline-flex cursor-pointer items-center gap-1.5 font-medium text-gray-600 hover:underline disabled:opacity-50" :disabled="envoi" @click="soumettre(() => telecharger('genererPdf', { type: 'recu', id: v.id }))"><i class="fa-solid fa-download"></i>Télécharger</button>
+                                                            <button
+                                                                v-if="estAdmin"
+                                                                type="button"
+                                                                class="inline-flex cursor-pointer items-center gap-1.5 font-semibold text-emerald-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                                                                :disabled="envoi || !emailEtudiantValide"
+                                                                :title="emailEtudiantValide ? `Envoyer à ${selectionne.email}` : 'Adresse e-mail absente ou invalide'"
+                                                                @click="envoyerDocument('recu', v.id, 'le reçu', selectionne.email ?? '')"
+                                                            ><i class="fa-regular fa-paper-plane"></i>{{ v.recuEnvoyeLe ? 'Renvoyer le reçu' : 'Envoyer le reçu' }}</button>
                                                         </template>
                                                         <button v-if="v.statut === 'Validée' && peutModifier" type="button" class="ml-auto cursor-pointer font-medium text-gray-400 hover:text-red-600" :disabled="envoi" @click="annulerVersement(v)">Annuler</button>
                                                     </p>

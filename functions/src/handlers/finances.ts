@@ -1,21 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { auditerModele, trace } from '../lib/audit.js';
 import { operation, refuser } from '../lib/contexte.js';
-import { col, controlerModificationConcurrente, exiger, nomComplet, prochainNumero, type Doc } from '../lib/donnees.js';
-import { mettreEnFileEmail } from '../lib/email.js';
+import { col, controlerModificationConcurrente, exiger, prochainNumero } from '../lib/donnees.js';
 import { db, FieldValue } from '../lib/firebase.js';
 import { erreurChamp, s, valider, valeursAttendues, z } from '../lib/validation.js';
 import {
     dateDuJour, decouperEcheancier, estRecouvrable, formaterMontant, MODES_PAIEMENT, montantNet, numeroFormate, ROLES_ADMIN, ROLES_FINANCE, ROLES_LECTURE, ROLES_VISION_ADMIN,
     soldeRestant, STATUT_VERSEMENT_ANNULE, STATUTS_VERSEMENT, type Echeance, type SituationFinanciere,
 } from '../shared/domaine.js';
-
-const formaterDate = (iso: string) => iso.split('-').reverse().join('/');
-
-// Texte de l'e-mail de confirmation de paiement (versement enregistré validé ou validé ensuite).
-const messagePaiement = (etudiant: Doc) =>
-    `Bonjour ${String(etudiant.prenom ?? '').trim() || nomComplet(etudiant)}, nous confirmons la bonne réception de votre paiement. `
-    + 'Merci pour votre règlement.';
 
 /** Enregistre la prise en charge BUMEX sans fabriquer de versement ou reçu étudiant. */
 export const confirmerReglementBumex2024 = operation('confirmerReglementBumex2024', ROLES_ADMIN, async (_donnees, acteur) => {
@@ -112,13 +104,12 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
     );
     const ref = col.versements().doc();
     let numeroRecu = '';
-    let confirmationMiseEnFile = false;
     await db.runTransaction(async (tx) => {
         const inscriptionRef = col.inscriptions().doc(v.inscriptionId);
         const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
         if (inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : aucun versement étudiant ne peut y être enregistré.');
         if (inscription.statut === 'annulée') refuser('Cette inscription est annulée : aucun versement ne peut y être enregistré.');
-        const etudiant = await exiger(tx, col.etudiants().doc(inscription.etudiantId), 'Étudiant introuvable.');
+        await exiger(tx, col.etudiants().doc(inscription.etudiantId), 'Étudiant introuvable.');
         const [numero, incrementer] = await prochainNumero(tx, 'recus');
         numeroRecu = numeroFormate('REC', numero, new Date());
         const versement = {
@@ -134,29 +125,13 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
         };
         incrementer();
         tx.set(ref, { ...versement, ...trace(acteur, true) });
-        if (v.statut === 'Validée') {
-            tx.update(inscriptionRef, { totalVerse: FieldValue.increment(v.montant), ...trace(acteur) });
-            const email = String(etudiant.email ?? '').trim();
-            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                mettreEnFileEmail(tx, {
-                    destinataire: email,
-                    nomDestinataire: nomComplet(etudiant),
-                    type: 'Paiement',
-                    sujet: 'Confirmation de votre paiement INSEC',
-                    titre: 'Paiement validé',
-                    message: messagePaiement(etudiant),
-                    details: { Reçu: numeroRecu, Montant: `${formaterMontant(v.montant)} MRU`, Date: formaterDate(v.dateVersement), Mode: v.modePaiement },
-                });
-                confirmationMiseEnFile = true;
-            }
-        }
+        // Aucun e-mail automatique : le reçu est envoyé à la main, depuis le dossier, quand la finance le décide.
+        if (v.statut === 'Validée') tx.update(inscriptionRef, { totalVerse: FieldValue.increment(v.montant), ...trace(acteur) });
         auditerModele(tx, acteur, 'Versement', ref.id, 'created', null, versement);
     });
     const message = v.statut !== 'Validée'
         ? 'Versement en attente enregistré avec un numéro de reçu.'
-        : confirmationMiseEnFile
-          ? 'Versement validé et enregistré. La confirmation de paiement a été mise en file d’envoi.'
-          : 'Versement validé et enregistré. Aucune adresse e-mail valide : aucune notification n’a été mise en file d’envoi.';
+        : `Versement enregistré (reçu ${numeroRecu}). Aucun e-mail n’a été envoyé.`;
     return { id: ref.id, numeroRecu, message };
 });
 
@@ -164,51 +139,25 @@ export const ajouterVersement = operation('ajouterVersement', ROLES_FINANCE, asy
 export const traiterVersement = operation('traiterVersement', ROLES_FINANCE, async (donnees, acteur) => {
     const v = valider(z.object({ id: s.id(), statut: s.choix(['Validée', 'Rejetée'] as const), motif: s.texteOptionnel(500) }), donnees);
     if (v.statut === 'Rejetée' && !v.motif?.trim()) erreurChamp('motif', 'Un motif est obligatoire pour rejeter un versement.');
-    let confirmationMiseEnFile = false;
     await db.runTransaction(async (tx) => {
         const versementRef = col.versements().doc(v.id);
         const versement = await exiger(tx, versementRef, 'Versement introuvable.');
         if (versement.statut !== 'En attente') refuser('Seul un versement en attente peut être validé ou rejeté.');
         const inscriptionRef = col.inscriptions().doc(versement.inscriptionId);
         const inscription = await exiger(tx, inscriptionRef, 'Inscription introuvable.');
-        const etudiant = await exiger(tx, col.etudiants().doc(versement.etudiantId ?? inscription.etudiantId), 'Étudiant introuvable.');
         if (v.statut === 'Validée' && inscription.financeur === 'bumex') refuser('Cette inscription est prise en charge par BUMEX : le versement ne peut pas être validé.');
         if (v.statut === 'Validée' && inscription.statut === 'annulée') refuser('Cette inscription est annulée : le versement ne peut pas être validé. Rejetez-le si besoin.');
-        const situation = inscription as unknown as SituationFinanciere;
-        const soldeApresPaiement = v.statut === 'Validée' ? Math.max(soldeRestant(situation) - versement.montant, 0) : null;
         const avant = { statut: versement.statut };
         const apres = { statut: v.statut, motifRejet: v.statut === 'Rejetée' ? v.motif!.trim() : null };
         tx.update(versementRef, { ...apres, ...trace(acteur) });
-        if (v.statut === 'Validée') {
-            tx.update(inscriptionRef, { totalVerse: FieldValue.increment(versement.montant), ...trace(acteur) });
-            const email = String(etudiant.email ?? '').trim();
-            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                mettreEnFileEmail(tx, {
-                    destinataire: email,
-                    nomDestinataire: nomComplet(etudiant),
-                    type: 'Paiement',
-                    sujet: 'Confirmation de votre paiement INSEC',
-                    titre: 'Paiement validé',
-                    message: messagePaiement(etudiant),
-                    details: {
-                        Reçu: String(versement.numeroRecu ?? '—'),
-                        Montant: `${formaterMontant(versement.montant)} MRU`,
-                        Date: formaterDate(String(versement.dateVersement)),
-                        Mode: String(versement.modePaiement ?? '—'),
-                        'Solde restant après paiement': `${formaterMontant(soldeApresPaiement ?? 0)} MRU`,
-                    },
-                });
-                confirmationMiseEnFile = true;
-            }
-        }
+        // Aucun e-mail automatique : le reçu s'envoie à la main depuis le dossier.
+        if (v.statut === 'Validée') tx.update(inscriptionRef, { totalVerse: FieldValue.increment(versement.montant), ...trace(acteur) });
         auditerModele(tx, acteur, 'Versement', v.id, 'updated', avant, apres);
     });
     return {
         message: v.statut === 'Rejetée'
             ? 'Versement rejeté. Le motif est enregistré et le solde reste inchangé.'
-            : confirmationMiseEnFile
-              ? 'Versement validé et solde actualisé. La confirmation de paiement a été mise en file d’envoi.'
-              : 'Versement validé et solde actualisé. Aucune adresse e-mail valide : aucun e-mail envoyé.',
+            : 'Versement validé et solde actualisé. Aucun e-mail n’a été envoyé.',
     };
 });
 

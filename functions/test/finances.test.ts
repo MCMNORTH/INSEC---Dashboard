@@ -35,10 +35,8 @@ describe('Suivi financier', () => {
         expect(statutPaiement(inscription)).toBe('Partiel');
         const maintenant = new Date();
         expect(numeroRecu).toBe(`REC-${maintenant.getUTCFullYear()}${String(maintenant.getUTCMonth() + 1).padStart(2, '0')}-000001`);
-        const [email] = await liste('journalEmails');
-        expect(email).toMatchObject({ destinataire: 'awa@example.com', type: 'Paiement', statut: 'En attente' });
-        expect(email.details.Montant).toBe('30 000 MRU');
-        expect(email.message).toBe('Bonjour Awa, nous confirmons la bonne réception de votre paiement. Merci pour votre règlement.');
+        // Aucun e-mail automatique : le reçu s'envoie à la main depuis le dossier.
+        expect(await liste('journalEmails')).toHaveLength(0);
     });
 
     it('ne compte pas un versement en attente comme payé', async () => {
