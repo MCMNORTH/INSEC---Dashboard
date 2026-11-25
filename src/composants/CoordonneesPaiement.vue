@@ -65,7 +65,7 @@ function annuler() {
 }
 
 const CHAMPS: { cle: keyof CoordonneesPaiement; libelle: string; aide?: string; classe?: string }[] = [
-    { cle: 'titulaire', libelle: 'Titulaire du compte', aide: 'Tel qu’il figure sur le RIB.' },
+    { cle: 'titulaire', libelle: 'Titulaire du compte', aide: 'Tel qu’il figure sur le RIB. Usage interne : il n’est pas imprimé sur les factures.' },
     { cle: 'banque', libelle: 'Banque' },
     { cle: 'domiciliation', libelle: 'Agence (domiciliation)' },
     { cle: 'iban', libelle: 'IBAN', aide: 'Le RIB (banque, agence, compte, clé) en est tiré automatiquement.', classe: 'sm:col-span-2' },
