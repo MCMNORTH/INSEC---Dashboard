@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant } from '../src/handlers/etudiants.js';
 import { lireCoordonneesPaiement, modifierCoordonneesPaiement } from '../src/handlers/finances.js';
-import { blocMoyensPaiement, genererPdf } from '../src/handlers/pdf.js';
+import { blocMoyensPaiement, genererPdf, numeroIntec } from '../src/handlers/pdf.js';
 import {
     bicValide, COORDONNEES_PAIEMENT_VIDES, ibanFormate, ibanValide, numeroMobileFormate, numeroMobileValide, ribDepuisIban,
 } from '../src/shared/domaine.js';
@@ -49,6 +49,13 @@ describe('Moyens de paiement : règles partagées', () => {
         const deux = JSON.stringify(blocMoyensPaiement({ ...COORDONNEES_PAIEMENT_VIDES, bankily: '22000001', sedad: '33000002' }, 'FAC-1', 'BA Awa'));
         expect(deux).toContain('"Bankily"');
         expect(deux).toContain('"Sedad"');
+    });
+
+    it('n’imprime le N° INTEC que s’il est connu', () => {
+        expect(numeroIntec({ numeroIntec: 'INT-001' })).toBe('INT-001');
+        expect(numeroIntec({})).toBeNull();
+        expect(numeroIntec({ numeroIntec: null })).toBeNull();
+        expect(numeroIntec({ numeroIntec: '   ' })).toBeNull();
     });
 });
 

@@ -92,6 +92,9 @@ const ROUGE = '#d90014';
 const GRIS = '#6b7280';
 const FILET = '#e5e7eb';
 
+/** N° INTEC de l'inscription, ou null s'il n'est pas connu : il n'est alors pas imprimé du tout. */
+export const numeroIntec = (inscription: Doc): string | null => String(inscription.numeroIntec ?? '').trim() || null;
+
 async function contexteInscription(id: string) {
     const inscription = await exiger(null, col.inscriptions().doc(id), 'Inscription introuvable.');
     const [etudiant, formation, annee] = await db.getAll(
@@ -112,7 +115,7 @@ async function attestation(id: string) {
         encadre([
             { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, bold: true },
             `E-mail : ${etudiant.email}`,
-            `N° INTEC : ${inscription.numeroIntec ?? 'Non renseigné'}`,
+            ...(numeroIntec(inscription) ? [`N° INTEC : ${numeroIntec(inscription)}`] : []),
         ]),
         {
             text: [
@@ -153,7 +156,7 @@ async function releve(id: string) {
         encadre([
             { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, bold: true },
             `${formation.code} · ${annee.libelle} · Année ${inscription.anneeParcours}`,
-            `N° INTEC : ${inscription.numeroIntec ?? 'Non renseigné'}`,
+            ...(numeroIntec(inscription) ? [`N° INTEC : ${numeroIntec(inscription)}`] : []),
         ]),
         grille(lignes, ['UE', 'Session', 'Date', 'Note', 'Résultat']),
         { text: `Crédits validés : ${credits} ECTS`, fontSize: 15, bold: true, color: BLEU, margin: [0, 10, 0, 0] },
@@ -174,7 +177,7 @@ async function convocation(id: string) {
         { text: 'Étudiant(e) :' },
         encadre([
             { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, bold: true },
-            `${formation.code} · N° INTEC ${inscription.numeroIntec ?? 'Non renseigné'}`,
+            numeroIntec(inscription) ? `${formation.code} · N° INTEC ${numeroIntec(inscription)}` : String(formation.code),
         ]),
         grille([
             [cle('UE'), `${ue.code} · ${ue.libelle}`],
@@ -198,7 +201,7 @@ const COULEURS_STATUT: Record<string, string> = {
     Partiel: '#b45309',
     Impayé: ROUGE,
     'À chiffrer': GRIS,
-    'Pris en charge BUMEX': MARINE,
+    'Pris en charge': MARINE,
     Annulée: GRIS,
 };
 const VERT = '#047857';
@@ -293,8 +296,8 @@ function partiesFinancieres(libelleDestinataire: string, etudiant: Doc, inscript
                 stack: [
                     etiquette(libelleDestinataire),
                     { text: `${maj(etudiant.nom)} ${etudiant.prenom}`, bold: true, fontSize: 11 },
-                    { text: etudiant.email ?? 'E-mail non renseigné', color: GRIS, margin: [0, 2, 0, 0] },
-                    { text: `N° INTEC : ${inscription.numeroIntec ?? 'non renseigné'}`, color: GRIS, margin: [0, 2, 0, 0] },
+                    ...(etudiant.email ? [{ text: etudiant.email, color: GRIS, margin: [0, 2, 0, 0] }] : []),
+                    ...(numeroIntec(inscription) ? [{ text: `N° INTEC : ${numeroIntec(inscription)}`, color: GRIS, margin: [0, 2, 0, 0] }] : []),
                 ],
             },
             {
@@ -584,8 +587,10 @@ async function facture(id: string, acteur?: Acteur) {
     const solde = soldeRestant(situation);
     const statut = statutPaiement(situation);
     const echeances = etatEcheances(situation);
+    // Le financeur (BUMEX) n'est jamais nommé sur la facture remise à l'étudiant.
+    const statutImprime = statut === 'Pris en charge BUMEX' ? 'Pris en charge' : statut;
     const mentionStatut = statut === 'Pris en charge BUMEX'
-        ? 'Frais pris en charge par BUMEX : aucun montant n’est dû par l’étudiant.'
+        ? 'Frais pris en charge : aucun montant n’est dû par l’étudiant.'
         : statut === 'Annulée'
             ? 'Inscription annulée : aucun montant n’est dû au titre de cette inscription.'
             : null;
@@ -646,7 +651,7 @@ async function facture(id: string, acteur?: Acteur) {
     ];
 
     const contenu = [
-        ...enteteFinancier('Facture', reference, statut, COULEURS_STATUT[statut] ?? GRIS),
+        ...enteteFinancier('Facture', reference, statutImprime, COULEURS_STATUT[statutImprime] ?? GRIS),
         partiesFinancieres('Facturé à', etudiant, inscription, [
             ['Émise le', dateFr(emiseLe)],
             ['Année scolaire', String(annee.libelle)],
