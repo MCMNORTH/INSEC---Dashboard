@@ -358,42 +358,39 @@ function totauxFinanciers(lignes: [string, string][], final: [string, string]) {
 // Page A4 et marges des documents financiers (en points).
 const PAGE_A4 = { largeur: 595.28, hauteur: 841.89 };
 const MARGES_FINANCIERES = { gauche: 48, haut: 56, droite: 48, bas: 64 };
-const HAUTEUR_CACHET = 128;
 
 /**
- * Mention finale à gauche, cachet et signature de l’INSEC à droite, ancrés en bas de la dernière page,
- * à l’emplacement habituel des signatures. Un espace réservé de même hauteur dans le flux garantit
- * qu’aucun contenu ne passe dessous : s’il ne reste pas assez de place, le bloc passe en bas de la page suivante.
+ * Mention finale (ou moyens de paiement) à gauche, cachet et signature de l’INSEC à droite,
+ * placés dans le flux juste après les totaux, avec un espacement régulier : plus de grand vide
+ * au milieu de la page. Le bloc est insécable : s’il ne tient pas, il passe entier à la page suivante.
  */
-function blocCachet(mention: string | Record<string, unknown>, hauteur = HAUTEUR_CACHET): unknown[] {
+function blocCachet(mention: string | Record<string, unknown>): unknown[] {
     const largeur = PAGE_A4.largeur - MARGES_FINANCIERES.gauche - MARGES_FINANCIERES.droite;
     return [
-        // Espace réservé dans le flux, de la hauteur du bloc ancré (passe à la page suivante s'il ne tient pas).
-        { canvas: [{ type: 'rect', x: 0, y: 0, w: 1, h: hauteur, color: '#ffffff' }] },
         {
-            absolutePosition: { x: MARGES_FINANCIERES.gauche, y: PAGE_A4.hauteur - MARGES_FINANCIERES.bas - hauteur },
-            columns: [
-                typeof mention === 'string'
-                    ? { width: largeur - 154, text: mention, fontSize: 8.5, color: GRIS, margin: [0, 40, 0, 0] }
-                    : { width: largeur - 154, ...mention },
-                {
-                    width: 130,
-                    stack: [
-                        { ...etiquette('Cachet et signature'), alignment: 'center' },
-                        { image: CACHET, width: 120, alignment: 'center', margin: [0, 2, 0, 0] },
-                    ],
-                },
-            ],
-            columnGap: 24,
+            unbreakable: true,
+            margin: [0, 28, 0, 0],
+            stack: [{
+                columns: [
+                    typeof mention === 'string'
+                        ? { width: largeur - 154, text: mention, fontSize: 8.5, color: GRIS, margin: [0, 40, 0, 0] }
+                        : { width: largeur - 154, ...mention },
+                    {
+                        width: 130,
+                        stack: [
+                            { ...etiquette('Cachet et signature'), alignment: 'center' },
+                            { image: CACHET, width: 120, alignment: 'center', margin: [0, 2, 0, 0] },
+                        ],
+                    },
+                ],
+                columnGap: 24,
+            }],
         },
     ];
 }
 
-/** Hauteur du pied de facture quand l'encadré des moyens de paiement accompagne le cachet. */
-const HAUTEUR_PIED_PAIEMENT = 150;
-
 /**
- * Encadré « Moyens de paiement » de la facture, placé en bas de la dernière page à gauche du cachet :
+ * Encadré « Moyens de paiement » de la facture, placé sous les totaux, à gauche du cachet :
  * virement (banque, RIB, IBAN, SWIFT ; le titulaire n'est pas imprimé), Bankily / Sedad, espèces au secrétariat,
  * puis le motif à indiquer pour retrouver le paiement. Seuls les moyens renseignés sont imprimés.
  */
@@ -694,9 +691,9 @@ async function facture(id: string, acteur?: Acteur) {
                   ),
               ]
             : []),
-        // Comment payer (seulement s'il reste quelque chose à régler) : en bas de page, à gauche du cachet.
+        // Comment payer (seulement s'il reste quelque chose à régler) : sous les totaux, à gauche du cachet.
         ...(solde > 0 && !mentionStatut
-            ? blocCachet(blocMoyensPaiement(coordonnees, reference, nomEtudiant(etudiant)), HAUTEUR_PIED_PAIEMENT)
+            ? blocCachet(blocMoyensPaiement(coordonnees, reference, nomEtudiant(etudiant)))
             : blocCachet('Seuls les versements validés sont déduits. Merci de rappeler le numéro de la facture lors de chaque règlement.')),
     ];
     return {
