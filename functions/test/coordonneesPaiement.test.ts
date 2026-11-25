@@ -35,7 +35,10 @@ describe('Moyens de paiement : règles partagées', () => {
 
     it('imprime virement, mobile, espèces et le motif ; un numéro commun n’apparaît qu’une fois', () => {
         const bloc = JSON.stringify(blocMoyensPaiement({ ...coordonnees, iban: IBAN, bic: 'TESTMRMR', bankily: '22000001', sedad: '22000001' }, 'FAC-202611-000001', 'BA Awa'));
-        for (const texte of ['MOYENS DE PAIEMENT', 'VIREMENT BANCAIRE', 'Société Test SA', 'Banque Test · Agence Centrale NKC', '00099 00001 12345678901 00',
+        // Le titulaire du compte n'est jamais imprimé.
+        expect(bloc).not.toContain('Société Test SA');
+        expect(bloc).not.toContain('Titulaire');
+        for (const texte of ['MOYENS DE PAIEMENT', 'VIREMENT BANCAIRE', 'Banque Test · Agence Centrale NKC', '00099 00001 12345678901 00',
             'MR85 0009 9000 0112 3456 7890 100', 'TESTMRMR', 'Bankily · Sedad', 'ESPÈCES', 'FAC-202611-000001 · BA Awa']) {
             expect(bloc).toContain(texte);
         }

@@ -394,7 +394,7 @@ const HAUTEUR_PIED_PAIEMENT = 150;
 
 /**
  * Encadré « Moyens de paiement » de la facture, placé en bas de la dernière page à gauche du cachet :
- * virement (titulaire, banque, RIB, IBAN, SWIFT), Bankily / Sedad, espèces au secrétariat,
+ * virement (banque, RIB, IBAN, SWIFT ; le titulaire n'est pas imprimé), Bankily / Sedad, espèces au secrétariat,
  * puis le motif à indiquer pour retrouver le paiement. Seuls les moyens renseignés sont imprimés.
  */
 export function blocMoyensPaiement(c: CoordonneesPaiement, reference: string, etudiant: string): Record<string, unknown> {
@@ -410,7 +410,7 @@ export function blocMoyensPaiement(c: CoordonneesPaiement, reference: string, et
     const virement = c.iban
         ? [
               petiteEtiquette('Virement bancaire'),
-              ...(c.titulaire ? [ligne('Titulaire', c.titulaire, true)] : []),
+              // Le titulaire (le financeur) reste dans le réglage mais n'est jamais imprimé sur la facture.
               ...(c.banque || c.domiciliation ? [ligne('Banque', [c.banque, c.domiciliation].filter(Boolean).join(' · '))] : []),
               ...(rib ? [ligne('RIB', `${rib.banque} ${rib.agence} ${rib.compte} ${rib.cle}`)] : []),
               ligne('IBAN', ibanFormate(c.iban), true),
