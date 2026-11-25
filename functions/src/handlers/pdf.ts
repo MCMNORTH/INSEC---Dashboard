@@ -469,8 +469,29 @@ const mentionEnLettres = (debut: string, montant: number) => ({
     margin: [0, 16, 0, 0],
 });
 
+/**
+ * Espace élastique entre deux sections d’un document financier. Quand le document tient sur une page,
+ * la place libre est partagée entre ces espaces (au prorata de leur poids) au lieu de rester en bas de page.
+ */
+type EspaceElastique = { espaceElastique: number };
+export const espace = (poids = 1): EspaceElastique => ({ espaceElastique: poids });
+const estEspace = (noeud: unknown): noeud is EspaceElastique =>
+    typeof noeud === 'object' && noeud !== null && 'espaceElastique' in noeud;
+/** Hauteur maximale (en points) d’un espace de poids 1 : au-delà, la page reste aérée mais sans trou. */
+const ESPACE_MAXIMAL = 60;
+
+/**
+ * Hauteur de chaque unité d’espace pour remplir la page : place libre sous le contenu, divisée par
+ * la somme des poids, plafonnée. Rien n’est ajouté si le contenu déborde déjà sur une deuxième page.
+ */
+export function uniteEspace(finDuContenu: number | null, poidsTotal: number): number {
+    if (finDuContenu === null || poidsTotal <= 0) return 0;
+    const libre = PAGE_A4.hauteur - MARGES_FINANCIERES.bas - finDuContenu - 4;
+    return libre > 0 ? Math.min(ESPACE_MAXIMAL, libre / poidsTotal) : 0;
+}
+
 // Mise en page commune : filet d’accent aux couleurs du logo (marine puis rouge) et pied de page paginé.
-function documentFinancier(contenu: unknown[], reference: string, titreDocument: string) {
+async function documentFinancier(contenu: unknown[], reference: string, titreDocument: string) {
     const pied = (page: number, pages: number) => ({
         columns: [
             { text: 'INSEC · Centre associé de l’INTEC – CNAM Paris · Nouakchott, Mauritanie', fontSize: 7.5, color: GRIS },
@@ -484,13 +505,40 @@ function documentFinancier(contenu: unknown[], reference: string, titreDocument:
             { type: 'rect', x: 430, y: 0, w: 166, h: 5, color: ROUGE },
         ],
     });
-    return document(contenu, pied, 'portrait', {
-        pageSize: 'A4',
-        pageMargins: [MARGES_FINANCIERES.gauche, MARGES_FINANCIERES.haut, MARGES_FINANCIERES.droite, MARGES_FINANCIERES.bas],
-        defaultStyle: { font: 'Roboto', fontSize: 9.5, color: '#111827', lineHeight: 1.15 },
-        background: bandeau,
-        info: { title: `${titreDocument} ${reference}`, author: 'INSEC' },
-    });
+    const poidsTotal = contenu.reduce<number>((total, noeud) => total + (estEspace(noeud) ? noeud.espaceElastique : 0), 0);
+    // Mise en page à une hauteur donnée par unité d’espace ; mesure la fin du contenu (null s’il dépasse la première page).
+    // pdfmake modifie la définition qu'on lui donne (images remplacées par des références) : copie fraîche à chaque rendu.
+    const copier = (valeur: unknown): unknown => (Array.isArray(valeur)
+        ? valeur.map(copier)
+        : valeur && typeof valeur === 'object'
+            ? Object.fromEntries(Object.entries(valeur).map(([cle, v]) => [cle, copier(v)]))
+            : valeur);
+    const rendre = (unite: number) => {
+        let finDuContenu: number | null = null;
+        const noeuds = [
+            ...(copier(contenu) as unknown[]).map((noeud) => (estEspace(noeud)
+                ? { canvas: [{ type: 'rect', x: 0, y: 0, w: 1, h: Math.max(0.01, noeud.espaceElastique * unite), color: '#ffffff' }] }
+                : noeud)),
+            { text: '​', fontSize: 1, lineHeight: 1, id: 'finDuContenu' },
+        ];
+        const pdf = document(noeuds, pied, 'portrait', {
+            pageSize: 'A4',
+            pageMargins: [MARGES_FINANCIERES.gauche, MARGES_FINANCIERES.haut, MARGES_FINANCIERES.droite, MARGES_FINANCIERES.bas],
+            defaultStyle: { font: 'Roboto', fontSize: 9.5, color: '#111827', lineHeight: 1.15 },
+            background: bandeau,
+            info: { title: `${titreDocument} ${reference}`, author: 'INSEC' },
+            pageBreakBefore: (noeud: { id?: string; pages: number; startPosition: { pageNumber: number; top: number } }) => {
+                if (noeud.id === 'finDuContenu') {
+                    finDuContenu = noeud.pages === 1 && noeud.startPosition.pageNumber === 1 ? noeud.startPosition.top : null;
+                }
+                return false;
+            },
+        });
+        return pdf.then((base64) => ({ base64, finDuContenu: finDuContenu as number | null }));
+    };
+    const premier = await rendre(0);
+    const unite = uniteEspace(premier.finDuContenu, poidsTotal);
+    return unite > 0 ? (await rendre(unite)).base64 : premier.base64;
 }
 
 async function recu(id: string) {
@@ -540,11 +588,14 @@ async function recu(id: string) {
 
     const contenu = [
         ...enteteFinancier('Reçu', reference, 'Payé', VERT),
+        espace(0.5),
         partiesFinancieres('Reçu de', etudiant, inscription, [
             ['Date du paiement', dateFr(String(versement.dateVersement))],
             ['Année scolaire', String(annee.libelle)],
         ]),
+        espace(),
         montantRecu,
+        espace(0.5),
         tableauEpure(['Désignation', 'Montant'], [[
             {
                 stack: [
@@ -556,11 +607,13 @@ async function recu(id: string) {
             mru(versement.montant),
         ]], ['*', 110]),
         mentionEnLettres('Arrêté le présent reçu à la somme de', Number(versement.montant ?? 0)),
+        espace(),
         sousTitre(`Situation du dossier au ${jourFr(new Date())}`),
         totauxFinanciers(
             [['Total net dû', mru(montantNet(inscription as never))], ['Total versé', mru(totalVerse)]],
             ['Reste à payer', mru(soldeRestant(situation))],
         ),
+        espace(1.5),
         ...blocCachet('Ce reçu atteste que le paiement ci-dessus a été reçu et validé par l’INSEC. Conservez-le comme justificatif.'),
     ];
     return {
@@ -648,12 +701,16 @@ async function facture(id: string, acteur?: Acteur) {
     ];
 
     const contenu = [
+        // Les espaces élastiques répartissent la place libre de la page entre les sections.
         ...enteteFinancier('Facture', reference, statutImprime, COULEURS_STATUT[statutImprime] ?? GRIS),
+        espace(0.5),
         partiesFinancieres('Facturé à', etudiant, inscription, [
             ['Émise le', dateFr(emiseLe)],
             ['Année scolaire', String(annee.libelle)],
         ]),
+        espace(),
         tableauEpure(['Désignation', 'Quantité', 'Prix unitaire', 'Montant'], lignesFacture, ['*', 60, 85, 95], 3),
+        espace(0.5),
         totauxFinanciers(
             [['Total net', mru(net)], [`Déjà réglé au ${jourFr(new Date())}`, montantEncaisse > 0 ? `− ${mru(montantEncaisse)}` : mru(0)]],
             ['Reste à payer', mru(solde)],
@@ -662,6 +719,7 @@ async function facture(id: string, acteur?: Acteur) {
         ...(mentionStatut ? [{ text: mentionStatut, alignment: 'right', color: MARINE, bold: true, fontSize: 9, margin: [0, 8, 0, 0] }] : []),
         ...(echeances.length
             ? [
+                  espace(),
                   sousTitre('Échéancier'),
                   tableauEpure(
                       ['Échéance', 'Date limite', 'État', 'Montant'],
@@ -677,6 +735,7 @@ async function facture(id: string, acteur?: Acteur) {
             : []),
         ...(versements.length
             ? [
+                  espace(),
                   sousTitre('Versements'),
                   tableauEpure(
                       ['Date', 'Reçu', 'Mode', 'Statut', 'Montant'],
@@ -691,6 +750,7 @@ async function facture(id: string, acteur?: Acteur) {
                   ),
               ]
             : []),
+        espace(1.5),
         // Comment payer (seulement s'il reste quelque chose à régler) : sous les totaux, à gauche du cachet.
         ...(solde > 0 && !mentionStatut
             ? blocCachet(blocMoyensPaiement(coordonnees, reference, nomEtudiant(etudiant)))
