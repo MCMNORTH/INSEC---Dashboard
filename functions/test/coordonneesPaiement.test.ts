@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { creerEtudiant } from '../src/handlers/etudiants.js';
 import { lireCoordonneesPaiement, modifierCoordonneesPaiement } from '../src/handlers/finances.js';
-import { blocMoyensPaiement, genererPdf, numeroIntec } from '../src/handlers/pdf.js';
+import { blocMoyensPaiement, genererPdf, numeroIntec, uniteEspace } from '../src/handlers/pdf.js';
 import {
     bicValide, COORDONNEES_PAIEMENT_VIDES, ibanFormate, ibanValide, numeroMobileFormate, numeroMobileValide, ribDepuisIban,
 } from '../src/shared/domaine.js';
@@ -52,6 +52,15 @@ describe('Moyens de paiement : règles partagées', () => {
         const deux = JSON.stringify(blocMoyensPaiement({ ...COORDONNEES_PAIEMENT_VIDES, bankily: '22000001', sedad: '33000002' }, 'FAC-1', 'BA Awa'));
         expect(deux).toContain('"Bankily"');
         expect(deux).toContain('"Sedad"');
+    });
+
+    it('répartit la place libre de la page entre les sections, sans dépasser le plafond', () => {
+        // Bas de la zone utile : 841,89 − 64 = 777,89 pt.
+        expect(uniteEspace(577.89, 5)).toBeCloseTo(39.2, 1);
+        expect(uniteEspace(200, 2)).toBe(60);
+        expect(uniteEspace(null, 5)).toBe(0);
+        expect(uniteEspace(800, 5)).toBe(0);
+        expect(uniteEspace(500, 0)).toBe(0);
     });
 
     it('n’imprime le N° INTEC que s’il est connu', () => {
